@@ -64,8 +64,10 @@ BeaconServer::ScheduleBeaconing (Time last_beaconing_event_time)
     {
       if (parallel_scheduler)
         {
+          Time updateStatePeriodicDelay = TimeStep (1);
           if (as->GetPathServer () != NULL)
             {
+              updateStatePeriodicDelay = updateStatePeriodicDelay + as->latency_between_path_server_and_beacon_server;
               Simulator::Schedule (t + as->latency_between_path_server_and_beacon_server,
                                    &RunParallelEvents<void (BeaconServer::*) ()>,
                                    &BeaconServer::RegisterToLocalPathServer);
@@ -73,7 +75,7 @@ BeaconServer::ScheduleBeaconing (Time last_beaconing_event_time)
           Simulator::Schedule (t, &RunParallelEvents<void (BeaconServer::*) ()>,
                                &BeaconServer::UpdateStateBeforeBeaconing);
 
-          Simulator::Schedule (t + TimeStep (1), &RunParallelEvents<void (BeaconServer::*) ()>,
+          Simulator::Schedule (t + updateStatePeriodicDelay, &RunParallelEvents<void (BeaconServer::*) ()>,
                                &BeaconServer::UpdateStatePeriodic);
         }
 
