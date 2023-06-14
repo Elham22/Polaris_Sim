@@ -27,6 +27,8 @@
 #include "scion-core-as.h"
 #include "scion-host.h"
 #include "apps/app.h"
+#include "apps/general-traffic-app.h"
+#include "apps/video-conference-app.h"
 
 namespace ns3 {
 NS_LOG_COMPONENT_DEFINE ("ScionHost");
@@ -390,7 +392,7 @@ ScionHost::SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host)
 }
 
 void
-ScionHost::StartApplication (ia_t dst_ia, host_addr_t dst_host)
+ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host)
 {
   std::vector<const PathSegment *> the_path;
   /*ScionHost::active_path = the_path;
@@ -406,14 +408,26 @@ ScionHost::StartApplication (ia_t dst_ia, host_addr_t dst_host)
 
   if (dst_ia == ia_addr || all_paths.size() != 0)
     {
-      App *app = new App(this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
+      App *app;
+      if (app_type == "video conference")
+        {
+          app = new VideoConferenceApp (this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
+        }
+      else if (app_type == "general traffic")
+        {
+          app = new GeneralTrafficApp (this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
+        }
+      else
+        {
+          app = new App (this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
+        }
       apps.push_back(app);
       app->StartAppTraffic();
     }
   else
     {
       RequestForPathSegments (dst_ia);
-      Simulator::Schedule (MilliSeconds (300), &ScionHost::StartApplication, this, dst_ia,
+      Simulator::Schedule (MilliSeconds (300), &ScionHost::StartApplication, this, app_type, dst_ia,
                             dst_host);
     }
 }

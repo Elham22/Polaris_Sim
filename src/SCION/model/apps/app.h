@@ -23,6 +23,7 @@
 
 #include "src/SCION/model/scion-packet.h"
 #include "src/SCION/model/scion-host.h"
+#include "src/core/model/simulator.h"
 
 namespace ns3 {
 class PathInfo
@@ -65,7 +66,7 @@ public:
   
   void StartAppTraffic ();
   void ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr, ProbeResp probe_resp);
-  void PrintResults ();
+  virtual void PrintResults ();
 
 protected:
   ScionHost *host;
@@ -78,15 +79,15 @@ protected:
   bool first_probe_returned = false;
   int32_t best_path_id = -1;
   int32_t best_path_id_old = -1;
-  std::vector<PathInfo> *path_infos;
-  std::vector<PathInfo> *path_infos_old;
+  std::vector<PathInfo> *path_infos = NULL;
+  std::vector<PathInfo> *path_infos_old = NULL;
 
-  void GenerateAppTraffic ();
+  virtual void GenerateAppTraffic ();
   uint32_t ComputeExpectedBandwidth ();
   void SendProbes ();
   void CheckResendProbes ();
   void ComputeAllScores ();
-  double ComputeScore (PathInfo path_info);
+  virtual double ComputeScore (PathInfo path_info);
   std::vector<const ns3::PathSegment *> GetPath ();
   void SendData (uint32_t size, std::vector<const ns3::PathSegment *> path);
 };

@@ -156,14 +156,15 @@ UserDefinedEvents::SendPacketBatch (std::string src_isd_number, std::string real
 
 void
 UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as_no,
-                              std::string src_local_address, std::string dst_isd_number,
-                              std::string real_dst_as_no, std::string dst_local_address)
+                              std::string src_local_address,std::string dst_isd_number,
+                              std::string real_dst_as_no, std::string dst_local_address,
+                              std::string app_type)
 {
   uint16_t alias_as_no = real_to_alias_as_no.at (std::stoi (real_src_as_no));
   ScionAs *src_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_as_no)));
   ScionHost *src_host = dynamic_cast<ScionHost *> (src_as->GetHost (std::stoi (src_local_address)));
   ia_t dst_ia = MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
-  src_host->StartApplication(dst_ia, std::stoi(dst_local_address));
+  src_host->StartApplication(app_type, dst_ia, std::stoi(dst_local_address));
 }
 
 void

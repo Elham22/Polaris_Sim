@@ -131,6 +131,12 @@ main (int argc, char *argv[])
       InstantiateTimeServers (config, nodes);
     }
 
+  if (config["end_user"])
+    {
+      InstantiateEndUsers (config, nodes);
+    }
+  
+
   InstantiateLinksFromTopo (xml_root, nodes, real_to_alias_as_no, config);
   InitializeASesAttributes (nodes, real_to_alias_as_no, xml_root, config);
 
