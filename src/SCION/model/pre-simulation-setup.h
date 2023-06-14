@@ -76,6 +76,8 @@ void GetTimeServiceAlgVersions (const ns3::NodeContainer &as_nodes, const YAML::
 
 void InstantiateTimeServers (const YAML::Node &config, const ns3::NodeContainer &as_nodes);
 
+void InstantiateEndUsers (const YAML::Node &config, const ns3::NodeContainer &as_nodes);
+
 void InstantiateLinksFromTopo (rapidxml::xml_node<> *xml_root, ns3::NodeContainer &as_nodes,
                                const std::map<int32_t, uint16_t> &real_to_alias_as_no,
                                const YAML::Node &config);

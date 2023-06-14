@@ -76,6 +76,8 @@ UserDefinedEvents::ConstructFuncMap ()
       FunctionFactory (&UserDefinedEvents::SendAPacket, this);
   function_name_to_function["send_packet_batch"] =
       FunctionFactory (&UserDefinedEvents::SendPacketBatch, this);
+  function_name_to_function["start_application"] =
+      FunctionFactory (&UserDefinedEvents::StartApp, this);
   function_name_to_function["time_references_down"] =
       FunctionFactory (&UserDefinedEvents::TimeReferencesDown, this);
   function_name_to_function["time_references_up"] =
@@ -125,16 +127,43 @@ void
 UserDefinedEvents::SendAPacket (std::string src_isd_number, std::string real_src_as_no,
                                   std::string src_local_address, std::string dst_isd_number,
                                   std::string real_dst_as_no, std::string dst_local_address,
-                                  std::string pyload_size)
+                                  std::string payload_size)
 {
+  SendPacketBatch(src_isd_number, real_src_as_no, src_local_address, dst_isd_number, real_dst_as_no,
+                  dst_local_address, payload_size, "1");
 }
 
 void
 UserDefinedEvents::SendPacketBatch (std::string src_isd_number, std::string real_src_as_no,
                                       std::string src_local_address, std::string dst_isd_number,
                                       std::string real_dst_as_no, std::string dst_local_address,
-                                      std::string pyload_size, std::string no_pkts)
+                                      std::string payload_size, std::string no_pkts)
 {
+  uint16_t alias_as_no = real_to_alias_as_no.at (std::stoi (real_src_as_no));
+  ScionAs *src_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_as_no)));
+  ScionHost *src_host = dynamic_cast<ScionHost *> (src_as->GetHost (std::stoi (src_local_address)));
+  ia_t dst_ia = MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
+
+  for (int i = 0; i < std::stoi (no_pkts); ++i)
+    {
+      src_host->SendArbitraryPacket(dst_ia, std::stoi(dst_local_address));
+    }
+
+  std::cout << no_pkts << " packets to send from " << real_src_as_no << "(" << alias_as_no << "):"
+            << src_local_address << " to " << real_dst_as_no << "(" << real_to_alias_as_no.at (std::stoi (real_dst_as_no))
+            << "):" << dst_local_address << std::endl;
+}
+
+void
+UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as_no,
+                              std::string src_local_address, std::string dst_isd_number,
+                              std::string real_dst_as_no, std::string dst_local_address)
+{
+  uint16_t alias_as_no = real_to_alias_as_no.at (std::stoi (real_src_as_no));
+  ScionAs *src_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_as_no)));
+  ScionHost *src_host = dynamic_cast<ScionHost *> (src_as->GetHost (std::stoi (src_local_address)));
+  ia_t dst_ia = MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
+  src_host->StartApplication(dst_ia, std::stoi(dst_local_address));
 }
 
 void

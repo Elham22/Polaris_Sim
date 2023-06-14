@@ -153,6 +153,10 @@ private:
                           std::string real_dst_as_no, std::string dst_local_address,
                           std::string pyload_size, std::string no_pkts);
 
+  void StartApp (std::string src_isd_number, std::string real_src_as_no,
+                          std::string src_local_address, std::string dst_isd_number,
+                          std::string real_dst_as_no, std::string dst_local_address);
+
   void TimeReferencesDown ();
   void TimeReferencesUp ();
 };

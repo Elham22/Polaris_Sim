@@ -6,7 +6,8 @@ def build(bld):
     env = bld.env
     sim = bld.create_ns3_module('SCION', ['core', 'network'])
 
-    sim.source = [ 'model/beaconing/baseline.cc',
+    sim.source = [ 'model/apps/app.cc',
+                   'model/beaconing/baseline.cc',
                    'model/beaconing/beacon.cc',
                    'model/beaconing/beacon-server.cc',
                    'model/beaconing/diversity-age-based.cc',
@@ -33,7 +34,8 @@ def build(bld):
     headers = bld(features='ns3header')
     headers.module = 'SCION'
 
-    headers.source = ['model/beaconing/baseline.h',
+    headers.source = ['model/apps/app.h',
+                         'model/beaconing/baseline.h',
                          'model/beaconing/beacon.h',
                          'model/beaconing/beacon-server.h',
                          'model/beaconing/diversity-age-based.h',

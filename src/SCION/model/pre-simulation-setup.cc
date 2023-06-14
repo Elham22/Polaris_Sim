@@ -330,6 +330,30 @@ InstantiateTimeServers (const YAML::Node &config, const NodeContainer &as_nodes)
 }
 
 void
+InstantiateEndUsers (const YAML::Node &config, const NodeContainer &as_nodes)
+{
+  uint16_t amount_per_as = 1;
+  if (config["end_user"]["number_per_as"])
+    {
+      amount_per_as = config["end_user"]["number_per_as"].as<uint16_t> ();
+    }
+
+  for (uint32_t i = 0; i < as_nodes.GetN (); ++i)
+    {
+      ScionAs *as_node = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (i)));
+      uint16_t alias_as_no = as_node->as_number;
+      assert (alias_as_no == i);
+      uint16_t isd_number = as_node->isd_number;
+
+      for (uint16_t j = 0; j < amount_per_as; ++j)
+        {
+          ScionHost *host = new ScionHost(0, isd_number, alias_as_no, j + 2, 0.0, 0.0, as_node);
+          as_node->AddHost(host);
+        }
+    }
+}
+
+void
 InstantiateLinksFromTopo (rapidxml::xml_node<> *xml_root, NodeContainer &as_nodes,
                           const std::map<int32_t, uint16_t> &real_to_alias_as_no,
                           const YAML::Node &config)

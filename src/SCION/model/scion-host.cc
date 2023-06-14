@@ -26,6 +26,7 @@
 #include "path-server.h"
 #include "scion-core-as.h"
 #include "scion-host.h"
+#include "apps/app.h"
 
 namespace ns3 {
 NS_LOG_COMPONENT_DEFINE ("ScionHost");
@@ -65,6 +66,8 @@ void
 ScionHost::RequestForPathSegments (ia_t dst_ia)
 {
   uint16_t dst_isd = GET_ISDN (dst_ia);
+
+  //std::cout << std::endl << "Host " << as_number << ":" << local_address << " requesting path segments" << std::endl;
 
   SendRequestForPathSegments (PathSegmentType::UP_SEG, ia_addr, 0);
   if (dst_isd == isd_number)
@@ -130,9 +133,31 @@ ScionHost::SendRequestForPathSegments (PathSegmentType seg_type, ia_t src_ia, ia
 }
 
 void
+ScionHost::SearchAllInCachedSegments(ia_t dst_ia, std::vector<std::vector <const PathSegment*>> &paths)
+{
+  if (dst_ia == ia_addr)
+    {
+      return;
+    }
+  if (cached_core_path_segments.find (dst_ia) != cached_core_path_segments.end () &&
+      cached_core_path_segments.at(dst_ia)->find(ia_addr) != cached_core_path_segments.at (dst_ia)->end ())
+    {
+      // currently only considers only-core topologies
+      auto const segments = cached_core_path_segments.at(dst_ia)->at(ia_addr);
+      for (auto const seg: *segments)
+      {
+        std::vector<const PathSegment *> the_path;
+        the_path.push_back(seg.second);
+        paths.push_back(the_path);
+      }
+    }
+}
+
+void
 ScionHost::SearchInCachedSegments (ia_t dst_ia, std::vector<const PathSegment *> &path,
                                       std::vector<uint8_t> &shortcuts)
 {
+  //std::cout << "Searching cached path segements from " << ia_addr << " to " << dst_ia << std::endl;
   if (dst_ia == ia_addr)
     {
       return;
@@ -255,6 +280,10 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
   NS_LOG_FUNCTION ("I am host " << isd_number << ":" << as_number << ":" << local_address
                                 << ". Packet received from " << GET_ISDN (packet->src_ia) << ":"
                                 << GET_ASN (packet->src_ia) << ":" << packet->src_host);
+  std::cout << "I am host " << isd_number << ":" << as_number << ":" << local_address
+                                << ". Packet received from " << GET_ISDN (packet->src_ia) << ":"
+                                << GET_ASN (packet->src_ia) << ":" << packet->src_host
+                                << ", type " << packet->payload_type << std::endl;
 
   ScionCapableNode::ProcessReceivedPacket (local_if, packet, receive_time);
 
@@ -266,6 +295,18 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
                                      registered_paths_from_local_ps.src_ia,
                                      registered_paths_from_local_ps.dst_ia,
                                      registered_paths_from_local_ps.registered_path_segments);
+      packet->packet_originator->DestroyScionPacket (packet);
+      return;
+    }
+  if (packet->payload_type == PayloadType::QOS_PROBE_REQ)
+    {
+      ReceiveProbeRequest (packet->src_ia, packet->src_host, packet->path, packet->payload.probe_req);
+      packet->packet_originator->DestroyScionPacket (packet);
+      return;
+    }
+  if (packet->payload_type == PayloadType::QOS_PROBE_RESP)
+    {
+      ReceiveProbeResponse (packet->src_ia, packet->src_host, packet->payload.probe_resp);
       packet->packet_originator->DestroyScionPacket (packet);
       return;
     }
@@ -281,6 +322,24 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
             ReturnScionPacket(packet);
         }
 */
+}
+
+void ScionHost::PrintPath(std::vector<const PathSegment *> the_path)
+{
+  std::cout << "Printing path: ";
+  for (auto const seg: the_path)
+  {
+    std::cout << "[";
+    for (link_information const hop: seg->hops)
+    {
+      std::cout << "(" << GET_HOP_ISD (hop) << ":"
+                                << GET_HOP_AS (hop) << ", ing: "
+                                << GET_HOP_ING_IF (hop) << ", eg: "
+                                << GET_HOP_EG_IF (hop) << "), ";
+    }
+    std::cout << "], ";
+  }
+  std::cout << std::endl;
 }
 
 void
@@ -300,6 +359,7 @@ ScionHost::SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host)
       std::vector<uint8_t> shortcuts;
 
       SearchInCachedSegments (dst_ia, the_path, shortcuts);
+      PrintPath(the_path);
 
       if (the_path.size () != 0)
         {
@@ -314,6 +374,66 @@ ScionHost::SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host)
                                dst_host);
         }
     }
+}
+
+void
+ScionHost::StartApplication (ia_t dst_ia, host_addr_t dst_host)
+{
+  std::vector<const PathSegment *> the_path;
+  /*ScionHost::active_path = the_path;
+  ScionHost::app_dst_ia = dst_ia;
+  ScionHost::app_dst_host = dst_host;*/
+
+  std::vector<std::vector<const PathSegment *>> all_paths;
+  SearchAllInCachedSegments (dst_ia, all_paths);
+  std::cout << "Paths found: " << std::endl; 
+  for (auto const path: all_paths) {
+    PrintPath(path);
+  }
+
+  if (dst_ia == ia_addr || all_paths.size() != 0)
+    {
+      App *app = new App(this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
+      apps.push_back(app);
+      app->StartAppTraffic();
+    }
+  else
+    {
+      RequestForPathSegments (dst_ia);
+      Simulator::Schedule (MilliSeconds (300), &ScionHost::StartApplication, this, dst_ia,
+                            dst_host);
+    }
+}
+
+void
+ScionHost::ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr, std::vector<const ns3::PathSegment *> path, ProbeReq probe_req)
+{
+  PayloadType payload_type = PayloadType::QOS_PROBE_RESP;
+  Payload payload;
+  payload.probe_resp.app_id = probe_req.app_id;
+  payload.probe_resp.probe_id = probe_req.probe_id;
+  payload.probe_resp.score = 0;
+  payload.probe_resp.src_host_addr = local_address;
+  payload.probe_resp.src_ia = ia_addr;
+
+  ScionPacket *packet = CreateScionPacket(payload, payload_type, src_ia, src_addr, 0, path);
+  packet->path_reversed = true;
+  packet->curr_inf = path.size() - 1;
+  packet->cur_hopf = path.at(packet->curr_inf)->hops.size() - 1;
+  SendScionPacket(packet);
+}
+
+void
+ScionHost::ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr, ProbeResp probe_resp) 
+{
+  apps.at(probe_resp.app_id)->ReceiveProbeResponse(src_ia, src_addr, probe_resp);
+}
+
+void
+ScionHost::SendAppPacket (App *app, Payload payload, PayloadType payload_type, uint32_t size, std::vector<const ns3::PathSegment *> path)
+{
+  ScionPacket *packet = CreateScionPacket(payload, payload_type, app->dst_ia, app->dst_host_addr, size, path);
+  SendScionPacket(packet);
 }
 
 void
