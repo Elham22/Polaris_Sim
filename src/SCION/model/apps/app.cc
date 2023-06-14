@@ -207,4 +207,10 @@ App::GetPath ()
     }
 }
 
+void
+App::PrintResults ()
+{
+  std::cout << "App id " << app_id << ": Basic app has no evaluation." << std::endl;
+}
+
 } // namespace ns3

@@ -42,11 +42,12 @@ public:
   {
   }
 
-  void PrintPath(std::vector<const PathSegment *> the_path);
+  void PrintPath (std::vector<const PathSegment *> the_path);
   void SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host);
   void StartApplication (ia_t dst_ia, host_addr_t dst_host);
   void SendProbes (uint32_t expected_bandwidth);
   void SendAppPacket (App *app, Payload payload, PayloadType payload_type, uint32_t size, std::vector<const ns3::PathSegment *> path);
+  void PrintAppsEval ();
 
 protected:
   cached_path_segs_dataset_t cached_up_path_segments;

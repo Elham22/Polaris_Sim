@@ -1351,6 +1351,26 @@ PostSimulationEvaluations::PrintNumberOfValidBeaconEntriesInBeaconStore ()
 }
 
 void
+PostSimulationEvaluations::PrintHostApps ()
+{
+  std::cout << "########################### Host Apps evaluation "
+               "#####################################"
+            << std::endl;
+  for (uint32_t i = 0; i < as_nodes.GetN (); ++i)
+    {
+      ScionAs *node = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (i)));
+      for (uint32_t j = 0; j < node->GetNHosts (); ++j)
+        {
+          ScionHost *host = dynamic_cast<ScionHost *> (node->GetHost (j+2));
+          if (host != NULL)
+            {
+              host->PrintAppsEval ();
+            }
+        }
+    }
+}
+
+void
 PostSimulationEvaluations::InvestigateAffectedTimeServers ()
 {
   std::cout << "########################### InvestigateAffectedTimeServers "

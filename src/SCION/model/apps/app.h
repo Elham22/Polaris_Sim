@@ -65,6 +65,7 @@ public:
   
   void StartAppTraffic ();
   void ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr, ProbeResp probe_resp);
+  void PrintResults ();
 
 protected:
   ScionHost *host;

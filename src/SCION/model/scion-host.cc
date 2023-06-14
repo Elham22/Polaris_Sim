@@ -324,7 +324,8 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
 */
 }
 
-void ScionHost::PrintPath(std::vector<const PathSegment *> the_path)
+void
+ScionHost::PrintPath (std::vector<const PathSegment *> the_path)
 {
   std::cout << "Printing path: ";
   for (auto const seg: the_path)
@@ -340,6 +341,18 @@ void ScionHost::PrintPath(std::vector<const PathSegment *> the_path)
     std::cout << "], ";
   }
   std::cout << std::endl;
+}
+
+
+void
+ScionHost::PrintAppsEval ()
+{
+  std::cout << "Host at " << isd_number << ":" << as_number << ":" << local_address
+            << " has " << apps.size () << " applications." << std::endl;
+  for (auto app : apps)
+    {
+      app->PrintResults ();
+    }
 }
 
 void
