@@ -81,12 +81,16 @@ protected:
   int32_t best_path_id_old = -1;
   std::vector<PathInfo> *path_infos = NULL;
   std::vector<PathInfo> *path_infos_old = NULL;
+  // bonus is added to active paths' scores to create a margin, preventing too frequent path switching
+  // depending on the score function, subclasses can define a different bonus
+  double active_path_bonus = 50;
 
   virtual void GenerateAppTraffic ();
   uint32_t ComputeExpectedBandwidth ();
   void SendProbes ();
   void CheckResendProbes ();
   void ComputeAllScores ();
+  virtual bool isActivePath (int32_t path_id);
   virtual double ComputeScore (PathInfo path_info);
   std::vector<const ns3::PathSegment *> GetPath ();
   void SendData (uint32_t size, std::vector<const ns3::PathSegment *> path);

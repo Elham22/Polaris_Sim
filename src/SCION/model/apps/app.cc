@@ -148,6 +148,19 @@ App::CheckResendProbes ()
     }
 }
 
+bool
+App::isActivePath (int32_t path_id)
+{
+  if (probes_pending)
+    {
+      return best_path_id_old == path_id;
+    }
+  else
+    {
+      return best_path_id == path_id;
+    }
+}
+
 void
 App::ComputeAllScores ()
 {
@@ -157,6 +170,10 @@ App::ComputeAllScores ()
   {
     auto path_info = path_infos->at (i);
     path_info.score = ComputeScore (path_info);
+    if (isActivePath (i))
+      {
+        path_info.score += active_path_bonus;
+      }
     std::cout << "path_id " << i << " score: " << path_info.score;
 
     if (path_info.score > max_score)
