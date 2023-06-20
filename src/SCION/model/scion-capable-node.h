@@ -87,7 +87,20 @@ protected:
   Time processing_delay, processing_throughput_delay;
 
   std::vector<uint32_t> transmission_queues_lengths; // In bytes
+  std::vector<uint32_t> max_transmission_queues_lengths; // In bytes
   uint32_t processing_queue_length; // In packets
+
+  /**
+   * Following datastructures are used for throughput/loss estimations.
+   * For each time unit, the number of bytes is collected in current and after
+   * the period expired it is written to the estimation.
+  */
+  Time collection_period = MilliSeconds (500);
+  std::vector<uint64_t> current_throughput_bytes; // throughput of arriving bytes
+  std::vector<uint64_t> current_loss_bytes;
+  std::vector<Time> last_update;
+  std::vector<uint64_t> estimated_throughput; // throughput of arriving bytes
+  std::vector<double> estimated_loss;
 
   packet_id_t next_packet_id;
 
@@ -102,9 +115,11 @@ protected:
 
   void Receive (uint16_t local_if, ScionPacket *packet);
   void Send (uint16_t local_if, ScionPacket *packet);
+  void Drop (ScionPacket *packet);
   virtual void ModifyPktUponSend (ScionPacket *packet);
   virtual void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time receive_time);
   void ScheduleForSend (uint16_t local_if, ScionPacket *packet);
+  void UpdateInterfaceEstimation (uint16_t local_if);
 
   void SendScionPacket (ScionPacket *packet);
   ScionPacket *CreateScionPacket (

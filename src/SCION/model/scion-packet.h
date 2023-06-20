@@ -84,9 +84,18 @@ struct ProbeResp
 {
   uint32_t app_id;
   uint32_t probe_id;
-  ia_t src_ia;
-  host_addr_t src_host_addr;
-  uint64_t score; // placeholder
+  ia_t src_ia; // ia_addr of the machine creating the response
+  host_addr_t src_host_addr; // local addr of the machine creating the response
+  int32_t raw_bwd; // total bandwidth available in Gbps
+  double expected_loss; // expected loss rate if this path is chosen
+  int64_t time_recv;
+  
+  /*  machines may give the proposed path a score based on their own view on the
+      current network state. Allows for the ASes to run more sophisticated methods and
+      send it back to the host.
+      hosts can take these scores into consideration when choosing paths but don't have to.
+  */
+  double score;
 };
 
 union Payload {

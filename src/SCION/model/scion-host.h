@@ -81,7 +81,7 @@ protected:
   void CachePathSegment (PathSegmentType seg_type, ia_t src_ia, ia_t dst_ia,
                            PathSegment *path_seg);
 
-  void ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr, std::vector<const ns3::PathSegment *> path, ProbeReq probe_req);
+  void ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr, std::vector<const ns3::PathSegment *> path, ProbeReq probe_req, Time receive_time);
   void ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr, ProbeResp probe_resp); // TODO score is just a placeholder
 };
 } // namespace ns3

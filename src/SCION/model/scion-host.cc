@@ -302,7 +302,7 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
     }
   if (packet->payload_type == PayloadType::QOS_PROBE_REQ)
     {
-      ReceiveProbeRequest (packet->src_ia, packet->src_host, packet->path, packet->payload.probe_req);
+      ReceiveProbeRequest (packet->src_ia, packet->src_host, packet->path, packet->payload.probe_req, receive_time);
       packet->packet_originator->DestroyScionPacket (packet);
       return;
     }
@@ -433,12 +433,14 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
 }
 
 void
-ScionHost::ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr, std::vector<const ns3::PathSegment *> path, ProbeReq probe_req)
+ScionHost::ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr, std::vector<const ns3::PathSegment *> path,
+                                ProbeReq probe_req, Time receive_time)
 {
   PayloadType payload_type = PayloadType::QOS_PROBE_RESP;
   Payload payload;
   payload.probe_resp.app_id = probe_req.app_id;
   payload.probe_resp.probe_id = probe_req.probe_id;
+  payload.probe_resp.time_recv = receive_time.ToInteger(Time::Unit::MS);
   payload.probe_resp.score = 0;
   payload.probe_resp.src_host_addr = local_address;
   payload.probe_resp.src_ia = ia_addr;
@@ -453,7 +455,7 @@ ScionHost::ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr, std::vector<c
 void
 ScionHost::ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr, ProbeResp probe_resp) 
 {
-  apps.at(probe_resp.app_id)->ReceiveProbeResponse(src_ia, src_addr, probe_resp);
+  apps.at(probe_resp.app_id)->ReceiveProbeResponse(probe_resp);
 }
 
 void

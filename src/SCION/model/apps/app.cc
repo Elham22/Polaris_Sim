@@ -106,30 +106,32 @@ App::SendProbes ()
       payload.probe_req.expected_bandwidth = expected_bandwidth;
       
       path_infos->push_back(PathInfo(all_paths.at (i)));
-      host->SendAppPacket(this, payload, payload_type, 0, all_paths.at (i));
+      host->SendAppPacket(this, payload, payload_type, sizeof (ProbeReq), all_paths.at (i));
     }
   
   Simulator::Schedule (Seconds(3), &App::CheckResendProbes, this);
 }
 
 void
-App::ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr, ProbeResp probe_resp) 
+App::ReceiveProbeResponse (ProbeResp probe_resp) 
 {
-  if (src_ia == dst_ia && src_addr == dst_host_addr)
+  if (probe_resp.src_ia == dst_ia && probe_resp.src_host_addr == dst_host_addr)
     {
-      Time current_time = Simulator::Now ();
-      path_infos->at(probe_resp.probe_id).latency = current_time - path_infos->at(probe_resp.probe_id).probe_sent_time;
+      path_infos->at(probe_resp.probe_id).latency = Time::FromInteger(probe_resp.time_recv, Time::Unit::MS) - path_infos->at(probe_resp.probe_id).probe_sent_time;
     }
   else
     {
-      path_infos->at(probe_resp.probe_id).probe_responses[probe_resp.src_ia] = probe_resp;
+      path_infos->at(probe_resp.probe_id).probe_responses.push_back(probe_resp);
     }
 
   if (!App::first_probe_returned)
     {
-      // wait a bit for other probes before computing the score
-      Simulator::Schedule(MilliSeconds(300), &App::ComputeAllScores, this);
-      first_probe_returned = true;
+      if (probe_resp.src_ia == dst_ia && probe_resp.src_host_addr == dst_host_addr)
+        {
+          // wait a bit for other probes before computing the score
+          Simulator::Schedule(Seconds(3), &App::ComputeAllScores, this);
+          first_probe_returned = true;
+        }
     }
   else if (!probes_pending)
     {
@@ -200,9 +202,21 @@ App::ComputeAllScores ()
 double
 App::ComputeScore (PathInfo path_info)
 {
+  double punish = 0.0;
+  if (path_info.num_expected_responses > path_info.probe_responses.size())
+    {
+      /*std::cout << path_info.probe_responses.size() << "/" << path_info.num_expected_responses << " probe responses arrived [";
+      for (auto probe : path_info.probe_responses)
+        {
+          std::cout << probe.src_ia << ":" << probe.src_host_addr << ", ";
+        }
+      std::cout << "]" << std::endl;*/
+      punish = -100.0;
+    }
+
   if (path_info.latency != 0)
     {
-      return - path_info.latency.ToDouble(Time::Unit::MS);
+      return punish - path_info.latency.ToDouble(Time::Unit::MS);
     }
   return - INFINITY;
 }

@@ -37,11 +37,13 @@ public:
       n_hops += seg->hops.size ();
     }
     num_hops = n_hops;
+    num_expected_responses = n_hops * 2 - 2; // probe passes through 2 border router per hop, except for src & target AS, there only 1
     probe_sent_time = Simulator::Now ();
   }
 
   u_int32_t num_hops;
-  std::unordered_map<ia_t, ProbeResp> probe_responses;
+  u_int32_t num_expected_responses;
+  std::vector<ProbeResp> probe_responses;
   Time probe_sent_time;
   Time latency;
   double score = -INFINITY;
@@ -65,7 +67,7 @@ public:
   host_addr_t dst_host_addr;
   
   void StartAppTraffic ();
-  void ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr, ProbeResp probe_resp);
+  void ReceiveProbeResponse (ProbeResp probe_resp);
   virtual void PrintResults ();
 
 protected:

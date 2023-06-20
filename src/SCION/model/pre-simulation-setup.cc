@@ -453,8 +453,8 @@ InstantiateLinksFromTopo (rapidxml::xml_node<> *xml_root, NodeContainer &as_node
           else
             {
               to_transmission_delay =
-                  PicoSeconds (20); //Per byte transmission delay assuming 400 Gbps link
-              from_transmission_delay = PicoSeconds (20);
+                  PicoSeconds (8000 / bwd); //Per byte transmission delay assuming bwd Gbps link
+              from_transmission_delay = PicoSeconds (8000 / bwd);
 
               to_processing_delay = NanoSeconds (10);
               from_processing_delay = NanoSeconds (10);

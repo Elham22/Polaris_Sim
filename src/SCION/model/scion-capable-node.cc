@@ -60,7 +60,22 @@ void
 ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
 {
   NS_LOG_FUNCTION (packet);
-  transmission_queues_lengths.at (local_if) += packet->size;
+  UpdateInterfaceEstimation (local_if);
+  current_throughput_bytes.at (local_if) += packet->size;
+  auto new_size = transmission_queues_lengths.at (local_if) + packet->size;
+  if (new_size > max_transmission_queues_lengths.at (local_if)
+      && packet->payload_type != PayloadType::QOS_PROBE_REQ && packet->payload_type != PayloadType::QOS_PROBE_RESP)
+    {
+      std::cout << "Node " << isd_number << ":" << as_number << ":" << local_address << ", dropping packet "
+                << packet->id << ", type " << packet->payload_type << ", if " << local_if << ", queue length: " 
+                << new_size << "/" << max_transmission_queues_lengths.at (local_if) << std::endl;
+      // TODO probes are never dropped to make probe logic easier. Probe dropping should be added later.
+      current_loss_bytes.at (local_if) += packet->size;
+      Drop (packet);
+      return;
+    }
+
+  transmission_queues_lengths.at (local_if) = new_size;
   Time delay = transmission_delays.at (local_if) * transmission_queues_lengths.at (local_if);
   Simulator::Schedule (delay, &ScionCapableNode::Send, this, local_if, packet);
 }
@@ -75,6 +90,13 @@ ScionCapableNode::Send (uint16_t local_if, ScionPacket *packet)
   uint16_t remote_if = std::get<1> (remote_nodes_info.at (local_if));
   ModifyPktUponSend (packet);
   remote_node->ScheduleReceive (remote_if, packet, propagation_delays.at (local_if));
+}
+
+void
+ScionCapableNode::Drop (ScionPacket *packet)
+{
+  NS_LOG_FUNCTION (packet);
+  packet->packet_originator->DestroyScionPacket (packet);
 }
 
 void
@@ -140,7 +162,32 @@ ScionCapableNode::AddToRemoteNodesInfo (ScionCapableNode *remote_node, uint16_t 
 void
 ScionCapableNode::InitializeTransmissionQueues ()
 {
-  transmission_queues_lengths.resize (GetNDevices ());
+  auto n_devices = GetNDevices ();
+  NS_ASSERT (transmission_delays.size () == n_devices && propagation_delays.size () == n_devices);
+  transmission_queues_lengths.resize (n_devices);
+  max_transmission_queues_lengths.resize (n_devices);
+  current_throughput_bytes.resize (n_devices);
+  current_loss_bytes.resize (n_devices);
+  last_update.resize (n_devices);
+  estimated_throughput.resize (n_devices);
+  estimated_loss.resize (n_devices);
+
+  // set the max_queue sizes to the bwd-delay product
+  for (uint32_t i = 0; i < n_devices; ++i)
+    {
+      uint64_t bwd_Gbit = 400; // default 400 Gbps
+      auto transmission_delay = transmission_delays.at (i);
+      if (transmission_delay != 0)
+      {
+        bwd_Gbit = 8000 / transmission_delay.ToInteger (Time::Unit::PS);
+      }
+      auto propagation_delay = propagation_delays.at (i).ToInteger (Time::Unit::NS);
+      if (propagation_delay < 100000)
+        {
+          propagation_delay = 100000; // 0.1ms delay minimum
+        }
+      max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay; // units cancel out, 1Gbit = 10^9bit, 1NS = 10^(-9)s
+    }
 }
 
 void
@@ -271,5 +318,19 @@ Time
 ScionCapableNode::GetLocalTime (void) const
 {
   return local_time;
+}
+
+void
+ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
+{
+  auto time_passed = local_time - last_update.at (local_if);
+  if (time_passed > collection_period)
+    {
+      estimated_loss.at (local_if) = ((double) current_loss_bytes.at (local_if)) / current_throughput_bytes.at (local_if);
+      estimated_throughput.at (local_if) = current_throughput_bytes.at (local_if) * 1000 / time_passed.ToInteger (Time::Unit::MS);
+      current_loss_bytes.at (local_if) = 0;
+      current_throughput_bytes.at (local_if) = 0;
+      last_update.at (local_if) = local_time;
+    }
 }
 } // namespace ns3
