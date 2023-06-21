@@ -23,8 +23,7 @@ namespace ns3 {
 void
 GeneralTrafficApp::GenerateAppTraffic ()
 {
-  // TODO
-  App::GenerateAppTraffic ();
+  PPBP ();
 }
 
 double
@@ -40,4 +39,67 @@ GeneralTrafficApp::PrintResults ()
   // TODO
   std::cout << "General traffic print results not implemented" << std::endl;
 }
+
+void
+GeneralTrafficApp::PPBP() // Poisson Pareto Burst 
+{		
+  double inter_burst_intervals;
+  inter_burst_intervals = 1/m_burstArrivals->GetValue();
+
+  Ptr<ExponentialRandomVariable> exp = CreateObjectWithAttributes<ExponentialRandomVariable> ("Mean", DoubleValue (inter_burst_intervals));
+  Time t_poisson_arrival = Seconds (exp->GetValue());
+  Simulator::Schedule(t_poisson_arrival,&GeneralTrafficApp::PoissonArrival, this);
+  
+  // Pareto
+  m_shape = 3 - 2 * m_h;
+  double scale = m_burstLength->GetValue() * (m_shape - 1.0) / m_shape;
+  m_timeSlot = Seconds(scale);
+  
+  Ptr<ParetoRandomVariable> pareto = CreateObjectWithAttributes<ParetoRandomVariable> ("Scale", DoubleValue (scale), "Shape", DoubleValue (m_shape));
+  
+  Simulator::Schedule(t_poisson_arrival + Seconds (pareto->GetValue()),&GeneralTrafficApp::ParetoDeparture, this);
+  
+  Simulator::Schedule(t_poisson_arrival,&GeneralTrafficApp::PPBP, this);
+}
+
+void
+GeneralTrafficApp::PoissonArrival()
+{
+  ++m_activebursts;
+  if (m_offPeriod) ScheduleNextTx();
+}
+
+void
+GeneralTrafficApp::ParetoDeparture()
+{
+  --m_activebursts;
+}
+	
+void
+GeneralTrafficApp::ScheduleNextTx()
+{
+  uint32_t bits = (m_pktSize + 30) * 8;
+  Time nextTime(Seconds (bits / 
+                static_cast<double>(m_cbrRate.GetBitRate())));
+  
+  if (m_activebursts != 0)
+  {
+    m_offPeriod = false;
+    double data_rate = (double) nextTime.GetSeconds() / m_activebursts;
+    Simulator::Schedule(Seconds(data_rate),&GeneralTrafficApp::SendPacket, this);
+  }
+  else
+  {
+    m_offPeriod = true;
+  }
+
+}	
+
+void
+GeneralTrafficApp::SendPacket()
+{
+  SendData (m_pktSize, GetPath ());
+  ScheduleNextTx();
+}
+	
 } // namespace ns3

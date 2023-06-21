@@ -21,9 +21,25 @@
 #ifndef SCION_SIMULATOR_GENERAL_TRAFFIC_APP_H
 #define SCION_SIMULATOR_GENERAL_TRAFFIC_APP_H
 
+#include "ns3/random-variable-stream.h"
+#include "ns3/data-rate.h"
+#include "ns3/double.h"
 #include "app.h"
 
 namespace ns3 {
+/**
+ * Realistic internet traffic generate according to a Poisson Pareto Burst Process (PPBP).
+ * Propsed by and implemented by [1], implementation adapted for this use case, original
+ * code at [2].
+ * 
+ * References:
+ * - - - - - -
+ * [1]	A new tool for generating realistic Internet traffic in NS-3,
+ *		D. Ammar, T. Begin and I. Guerin Lassous.
+ *		4th International ICST Conference on Simulation Tools and Techniques (SIMUTools),
+ *		Barcelona, Spain, March 21-25, 2011, Poster.
+ * [2]  http://perso.ens-lyon.fr/thomas.begin/NS3-PPBP.zip
+*/
 class GeneralTrafficApp : public App
 {
 public:
@@ -37,6 +53,33 @@ public:
 protected:
   void GenerateAppTraffic () override;
   double ComputeScore (PathInfo path_info) override;
+
+  // PPBP
+  uint32_t		    m_pktSize = 1470;       // Size of packets	
+  Ptr<RandomVariableStream> m_burstArrivals = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (20)); // Mean rate of burst arrivals
+	Ptr<RandomVariableStream> m_burstLength = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (0.2)); // Mean burst time length
+	DataRate m_cbrRate = DataRate ("1Mb/s");// Burst intensity (constant bit-rate)
+
+	double			    m_h = 0.7;							// Hurst parameter	(Pareto distribution)
+	double			    m_shape;						    // Shape			(Pareto distribution)
+	Time			      m_timeSlot;						  // The time slot
+	int				      m_activebursts;					// Number of active bursts at time t
+	bool			      m_offPeriod = true;;
+  
+	/**
+   * \ Functions that allows to keep track of the current number of active bursts at time t, nt,
+	 * taking into account that their arrival process follows a Poisson process and that their
+	 * length is determined by a Pareto distribution.
+	 */
+	void PPBP();
+	void PoissonArrival();
+	void ParetoDeparture();
+	
+	/**
+	 * \ Function thet generates the packets departure at a constant bit-rate nt x r.
+	 */
+	void ScheduleNextTx();
+	void SendPacket();
 };
 
 } // namespace ns3
