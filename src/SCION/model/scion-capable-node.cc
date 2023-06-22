@@ -64,12 +64,13 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
   current_throughput_bytes.at (local_if) += packet->size;
   auto new_size = transmission_queues_lengths.at (local_if) + packet->size;
   if (new_size > max_transmission_queues_lengths.at (local_if)
-      && packet->payload_type != PayloadType::QOS_PROBE_REQ && packet->payload_type != PayloadType::QOS_PROBE_RESP)
+      && packet->payload_type != PayloadType::QOS_PROBE_REQ && packet->payload_type != PayloadType::QOS_PROBE_RESP
+      && packet->payload_type != PayloadType::APPLICATION_RESP)
     {
-      std::cout << "Node " << isd_number << ":" << as_number << ":" << local_address << ", dropping packet "
+      std::cout << local_time.ToDouble (Time::Unit::MS) << ": Node " << isd_number << ":" << as_number << ":" << local_address << ", dropping packet "
                 << packet->id << ", type " << packet->payload_type << ", if " << local_if << ", queue length: " 
                 << new_size << "/" << max_transmission_queues_lengths.at (local_if) << std::endl;
-      // TODO probes are never dropped to make probe logic easier. Probe dropping should be added later.
+      // TODO some packets are never dropped to make their transmission reliable. Handling loss of these packets should be implemented later.
       current_loss_bytes.at (local_if) += packet->size;
       Drop (packet);
       return;

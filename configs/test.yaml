@@ -21,3 +21,4 @@ end_user:
   number_per_as: 2
 post_eval:
   - func: PrintAllDiscoveredPaths
+  - func: PrintHostApps

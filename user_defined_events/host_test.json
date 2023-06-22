@@ -16,7 +16,7 @@
     "args": ["0", "3356", "2", "0", "6453", "2", "basic"]
   },
   {
-    "time": "104.9min",
+    "time": "104.8min",
     "type": "start_application",
     "args": ["0", "3356", "2", "0", "6453", "3", "general traffic"]
   }

@@ -32,6 +32,9 @@
 namespace ns3 {
 typedef uint16_t host_addr_t;
 typedef uint32_t packet_id_t;
+typedef uint32_t app_packet_id_t;
+typedef uint32_t app_id_t;
+
 
 class ScionCapableNode;
 
@@ -48,6 +51,7 @@ enum PayloadType {
   QOS_PROBE_REQ = 9,
   QOS_PROBE_RESP = 10,
   APPLICATION_DATA = 11,
+  APPLICATION_RESP = 12,
 };
 
 struct PathReqFromHost
@@ -75,14 +79,14 @@ struct NtpReqOrResp
 
 struct ProbeReq
 {
-  uint32_t app_id;
+  app_id_t app_id;
   uint32_t probe_id; 
   uint64_t expected_bandwidth;
 };
 
 struct ProbeResp
 {
-  uint32_t app_id;
+  app_id_t app_id;
   uint32_t probe_id;
   ia_t src_ia; // ia_addr of the machine creating the response
   host_addr_t src_host_addr; // local addr of the machine creating the response
@@ -98,6 +102,21 @@ struct ProbeResp
   double score;
 };
 
+struct AppData
+{
+  app_id_t app_id;
+  app_packet_id_t app_packet_id;
+  int64_t timestamp; // timestamp of sending in US
+};
+
+struct AppResp
+{
+  app_id_t app_id;
+  double avg_latency;
+  double loss;
+  uint64_t bytes_received;
+};
+
 union Payload {
   PathReqFromHost path_req_from_host;
   RegPathsFromLocalPs registered_paths_from_local_ps;
@@ -105,6 +124,8 @@ union Payload {
   NtpReqOrResp ntp_req_or_resp;
   ProbeReq probe_req;
   ProbeResp probe_resp;
+  AppData app_data;
+  AppResp app_resp;
 };
 
 struct ScionPacket

@@ -68,11 +68,13 @@ public:
   
   void StartAppTraffic ();
   void ReceiveProbeResponse (ProbeResp probe_resp);
+  void ReceiveAppResponse (AppResp app_resp);
   virtual void PrintResults ();
 
 protected:
   ScionHost *host;
   uint32_t app_id;
+  app_packet_id_t packet_id = 0;
   ia_t ia_addr;
   //std::vector<const PathSegment *> active_path;
   std::vector<std::vector <const PathSegment *>> all_paths;
@@ -83,9 +85,12 @@ protected:
   int32_t best_path_id_old = -1;
   std::vector<PathInfo> *path_infos = NULL;
   std::vector<PathInfo> *path_infos_old = NULL;
+  std::vector<std::pair<Time, AppResp>> app_responses;
   // bonus is added to active paths' scores to create a margin, preventing too frequent path switching
   // depending on the score function, subclasses can define a different bonus
   double active_path_bonus = 50;
+  double active_latency = INFINITY;
+  double active_loss = 1.0;
 
   virtual void GenerateAppTraffic ();
   uint32_t ComputeExpectedBandwidth ();

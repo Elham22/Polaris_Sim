@@ -282,10 +282,10 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
   NS_LOG_FUNCTION ("I am host " << isd_number << ":" << as_number << ":" << local_address
                                 << ". Packet received from " << GET_ISDN (packet->src_ia) << ":"
                                 << GET_ASN (packet->src_ia) << ":" << packet->src_host);
-  std::cout << "I am host " << isd_number << ":" << as_number << ":" << local_address
+  /*std::cout << "I am host " << isd_number << ":" << as_number << ":" << local_address
                                 << ". Packet received from " << GET_ISDN (packet->src_ia) << ":"
                                 << GET_ASN (packet->src_ia) << ":" << packet->src_host
-                                << ", type " << packet->payload_type << std::endl;
+                                << ", type " << packet->payload_type << std::endl;*/
 
   ScionCapableNode::ProcessReceivedPacket (local_if, packet, receive_time);
 
@@ -297,21 +297,25 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
                                      registered_paths_from_local_ps.src_ia,
                                      registered_paths_from_local_ps.dst_ia,
                                      registered_paths_from_local_ps.registered_path_segments);
-      packet->packet_originator->DestroyScionPacket (packet);
-      return;
     }
   if (packet->payload_type == PayloadType::QOS_PROBE_REQ)
     {
       ReceiveProbeRequest (packet->src_ia, packet->src_host, packet->path, packet->payload.probe_req, receive_time);
-      packet->packet_originator->DestroyScionPacket (packet);
-      return;
     }
   if (packet->payload_type == PayloadType::QOS_PROBE_RESP)
     {
       ReceiveProbeResponse (packet->src_ia, packet->src_host, packet->payload.probe_resp);
-      packet->packet_originator->DestroyScionPacket (packet);
-      return;
     }
+  if (packet->payload_type == PayloadType::APPLICATION_DATA)
+    {
+      ReceiveAppData (packet);
+    }
+  if (packet->payload_type == PayloadType::APPLICATION_RESP)
+    {
+      ReceiveAppResp (packet->payload.app_resp);
+    }
+
+  packet->packet_originator->DestroyScionPacket (packet);
   /*
         if (packet->packet_originator == this) {
             NS_ASSERT(on_the_flight_packets.find(packet->id) != on_the_flight_packets.end());
@@ -463,6 +467,77 @@ ScionHost::SendAppPacket (App *app, Payload payload, PayloadType payload_type, u
 {
   ScionPacket *packet = CreateScionPacket(payload, payload_type, app->dst_ia, app->dst_host_addr, size, path);
   SendScionPacket(packet);
+}
+
+void
+ScionHost::ReceiveAppData (ScionPacket *packet)
+{
+  auto key = std::make_tuple (packet->src_ia, packet->src_host, packet->payload.app_data.app_id);
+  if (app_infos.find (key) == app_infos.end ())
+    {
+      AppInfo info;
+      info.packet_id_start = packet->payload.app_data.app_packet_id;
+      info.path = packet->path;
+      app_infos[key] = info;
+      Simulator::Schedule (Seconds (app_info_period_s), &ScionHost::SendAppResp, this, key);
+    }
+  auto info = app_infos.at (key);
+  info.num_packets++;
+  info.bytes_received += packet->size;
+  if (info.packet_id_last < packet->payload.app_data.app_packet_id)
+  {
+    info.packet_id_last = packet->payload.app_data.app_packet_id;
+  }
+  auto latency = local_time.ToInteger (Time::Unit::US) - packet->payload.app_data.timestamp;
+  info.aggregated_latencies += latency;
+  app_infos[key] = info;
+}
+
+void
+ScionHost::SendAppResp (std::tuple <ia_t, host_addr_t, app_id_t> key)
+{
+  if (app_infos.find (key) == app_infos.end ())
+    {
+      return;
+    }
+  auto info = app_infos.at (key);
+  PayloadType payload_type = PayloadType::APPLICATION_RESP;
+  Payload payload;
+  auto num_packets_expected = info.packet_id_last - info.packet_id_start + 1; // +1 because id_start is id of first packet in period
+  if (num_packets_expected == 0)
+    {
+      // no packets arrived in interval. Stop sending updates.
+      app_infos.erase (key);
+      return;
+    }
+  payload.app_resp.app_id = std::get<2> (key);
+  payload.app_resp.loss = ((double) num_packets_expected - info.num_packets) / num_packets_expected;
+  payload.app_resp.avg_latency = ((double) info.aggregated_latencies) / info.num_packets;
+  payload.app_resp.bytes_received = info.bytes_received;
+  
+  /*std::cout << "Sending app resp for app_id " << payload.app_resp.app_id << ", exp_num_packets " << num_packets_expected << ", packets arrived "
+            << info.num_packets << ", loss " << payload.app_resp.loss << ", latency " << payload.app_resp.avg_latency << std::endl;*/
+
+  ScionPacket *packet = CreateScionPacket (payload, payload_type, std::get<0> (key), std::get<1> (key), sizeof (AppResp), info.path);
+  packet->path_reversed = true;
+  packet->curr_inf = packet->path.size() - 1;
+  packet->cur_hopf = packet->path.at(packet->curr_inf)->hops.size() - 1;
+  SendScionPacket(packet);
+
+  info.aggregated_latencies = 0;
+  info.num_packets = 0;
+  info.bytes_received = 0;
+  info.packet_id_start = info.packet_id_last + 1;
+  app_infos[key] = info;
+
+  Simulator::Schedule (Seconds (app_info_period_s), &ScionHost::SendAppResp, this, key);
+}
+
+
+void
+ScionHost::ReceiveAppResp (AppResp app_resp)
+{
+  apps.at (app_resp.app_id)->ReceiveAppResponse (app_resp);
 }
 
 void

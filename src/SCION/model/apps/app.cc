@@ -63,6 +63,9 @@ App::SendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
 {
   // sends the data as a single packet. Large data should be split into multiple packets in this function.
   Payload payload;
+  payload.app_data.app_id = app_id;
+  payload.app_data.app_packet_id = packet_id++;
+  payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
   PayloadType payload_type = PayloadType::APPLICATION_DATA;
   host->SendAppPacket(this, payload, payload_type, size, path);
 }
@@ -171,10 +174,15 @@ App::ComputeAllScores ()
   for (uint32_t i = 0; i < path_infos->size (); i++)
   {
     auto path_info = path_infos->at (i);
-    path_info.score = ComputeScore (path_info);
     if (isActivePath (i))
       {
+        path_info.latency = Time::FromDouble(active_latency, Time::Unit::US);
+        path_info.score = ComputeScore (path_info);
         path_info.score += active_path_bonus;
+      }
+    else
+      {
+        path_info.score = ComputeScore (path_info);
       }
     std::cout << "path_id " << i << " score: " << path_info.score;
 
@@ -239,9 +247,22 @@ App::GetPath ()
 }
 
 void
+App::ReceiveAppResponse (AppResp app_resp)
+{
+  active_latency = app_resp.avg_latency;
+  active_loss = app_resp.loss;
+  app_responses.push_back (std::make_pair (Simulator::Now (), app_resp));
+}
+
+void
 App::PrintResults ()
 {
-  std::cout << "App id " << app_id << ": Basic app has no evaluation." << std::endl;
+  std::cout << "----- App id " << app_id << ": Timestamp, latency, loss, bytes ------- " << std::endl;
+  for (auto entry : app_responses)
+  {
+    std::cout << entry.first.ToInteger (Time::Unit::MS) << ", " << entry.second.avg_latency / 1000. << ", "
+              << entry.second.loss << ", " << entry.second.bytes_received << std::endl;
+  }
 }
 
 } // namespace ns3

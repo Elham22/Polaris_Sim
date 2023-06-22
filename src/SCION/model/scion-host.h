@@ -33,6 +33,16 @@ namespace ns3 {
 
 class App;
 
+struct AppInfo
+{
+  std::vector<const ns3::PathSegment *> path; // path over which to send response
+  app_packet_id_t packet_id_start = 0;
+  app_packet_id_t packet_id_last = 0;
+  uint32_t num_packets = 0;
+  uint64_t bytes_received = 0;
+  int64_t aggregated_latencies = 0;
+};
+
 class ScionHost : public ScionCapableNode
 {
 public:
@@ -55,13 +65,8 @@ protected:
   cached_path_segs_dataset_t cached_down_path_segments;
 
   std::vector<App *> apps;
-  /*ia_t app_dst_ia;
-  host_addr_t app_dst_host;
-  std::vector<const PathSegment *> active_path;
-  std::vector<std::vector <const PathSegment *>> all_paths;
-  std::vector<std::vector<ProbeResp *>> probe_responses;
-  bool probes_pending;
-  bool first_probe_returned;*/
+  uint32_t app_info_period_s = 3;
+  std::map<std::tuple<ia_t, host_addr_t, app_id_t>, AppInfo> app_infos;
 
   virtual void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet,
                                         Time receive_time) override;
@@ -83,6 +88,9 @@ protected:
 
   void ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr, std::vector<const ns3::PathSegment *> path, ProbeReq probe_req, Time receive_time);
   void ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr, ProbeResp probe_resp); // TODO score is just a placeholder
+  void ReceiveAppData (ScionPacket *packet);
+  void ReceiveAppResp (AppResp app_resp);
+  void SendAppResp (std::tuple <ia_t, host_addr_t, app_id_t> key);
 };
 } // namespace ns3
 

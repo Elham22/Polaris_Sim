@@ -36,8 +36,8 @@ GeneralTrafficApp::ComputeScore (PathInfo path_info)
 void
 GeneralTrafficApp::PrintResults ()
 {
-  // TODO
-  std::cout << "General traffic print results not implemented" << std::endl;
+  App::PrintResults ();
+  std::cout << "General traffic specific print results not implemented" << std::endl;
 }
 
 void
