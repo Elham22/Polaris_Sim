@@ -20,11 +20,40 @@
 #include "video-conference-app.h"
 
 namespace ns3 {
+double LaplaceRV::GetValue ()
+{
+  // Laplace can be computed as the difference of two i.i.d. samples of the exp distribution.
+  double x = exp->GetValue ();
+  double y = exp->GetValue ();
+  return x - y;
+}
+
+/**
+ * Video conference traffic modeled after rfc8593 ([1]), example implemetation at [2].
+ * References:
+ * - - - - - -
+ * [1]	https://www.rfc-editor.org/rfc/rfc8593.html#section-5
+ * [2]  https://www.rfc-editor.org/rfc/rfc8593.html#section-8
+*/
 void
 VideoConferenceApp::GenerateAppTraffic ()
 {
-  // TODO
-  App::GenerateAppTraffic ();
+  double frameBytes = selected_bitrate / (fps * 8.);
+  frameBytes += frame_size_noise.GetValue () * frameBytes;
+  if (frameBytes <= 0)
+    {
+      frameBytes = 64; // small minimum, chosen arbitrarily
+    }
+  SendData ((uint32_t) frameBytes, GetPath ());
+
+  double interval = 1. / fps;
+  interval += frame_interval_noise.GetValue () * interval;
+  if (interval <= 0)
+    {
+      interval = 0.001; // minimal interval of 1ms
+    }
+  Simulator::Schedule (Seconds (interval), &VideoConferenceApp::GenerateAppTraffic, this);
+  //std::cout << "VCA sent packet " << packet_id-1 << " at " << Simulator::Now ().ToInteger (Time::Unit::MS) - 6274000 << " with " << frameBytes << " bytes, next frame in " << interval * 1000 << " ms" << std::endl;
 }
 
 double
@@ -37,7 +66,7 @@ VideoConferenceApp::ComputeScore (PathInfo path_info)
 void
 VideoConferenceApp::PrintResults ()
 {
-  // TODO
-  std::cout << "VCA print results not implemented" << std::endl;
+  std::cout << "VCA app" << std::endl;
+  App::PrintResults ();
 }
 } // namespace ns3

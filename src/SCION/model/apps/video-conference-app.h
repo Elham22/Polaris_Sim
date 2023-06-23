@@ -22,8 +22,31 @@
 #define SCION_SIMULATOR_VIDEO_CONFERENCE_APP_H
 
 #include "app.h"
+#include "ns3/random-variable-stream.h"
+#include "ns3/double.h"
 
 namespace ns3 {
+
+/**
+ * Laplace random variable with mean 0.
+ * There does not seem to exist a Laplace random variable in ns3 by default.
+*/
+class LaplaceRV
+{
+public:
+  LaplaceRV (double scale)
+  : scale (scale)
+  {
+    exp = CreateObjectWithAttributes<ExponentialRandomVariable> ("Mean", DoubleValue (scale));
+  }
+
+  double GetValue ();
+
+protected:
+  double scale;
+  Ptr<RandomVariableStream> exp;
+};
+
 class VideoConferenceApp : public App
 {
 public:
@@ -35,6 +58,15 @@ public:
   void PrintResults () override;
 
 protected:
+  // parameters
+  const uint32_t bitrate_low = 0; // TODO
+  const uint32_t bitrate_medium = 1.5e6; // TODO
+  const uint32_t bitrate_high = 0; // TODO
+  const uint16_t fps = 30;
+  uint32_t selected_bitrate = bitrate_medium;
+  LaplaceRV frame_size_noise = LaplaceRV (0.15); // noise of the packet sizes, modeled after rfc8593
+  LaplaceRV frame_interval_noise = LaplaceRV (0.15); // noise of the interval between packets, modeled after rfc8593
+  
   void GenerateAppTraffic () override;
   double ComputeScore (PathInfo path_info) override;
 };

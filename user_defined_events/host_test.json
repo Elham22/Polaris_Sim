@@ -19,6 +19,11 @@
     "time": "104.8min",
     "type": "start_application",
     "args": ["0", "3356", "2", "0", "6453", "3", "general traffic"]
+  },
+  {
+    "time": "104.5min",
+    "type": "start_application",
+    "args": ["0", "3356", "2", "0", "6453", "3", "video conference"]
   }
 ]
 }
