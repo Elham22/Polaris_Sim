@@ -58,12 +58,12 @@ protected:
   uint32_t		    m_pktSize = 1470;       // Size of packets	
   Ptr<RandomVariableStream> m_burstArrivals = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (20)); // Mean rate of burst arrivals
 	Ptr<RandomVariableStream> m_burstLength = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (0.2)); // Mean burst time length
-	DataRate m_cbrRate = DataRate ("1Mb/s");// Burst intensity (constant bit-rate)
+	DataRate m_cbrRate = DataRate ("10Mb/s");// Burst intensity (constant bit-rate)
 
 	double			    m_h = 0.7;							// Hurst parameter	(Pareto distribution)
 	double			    m_shape;						    // Shape			(Pareto distribution)
 	Time			      m_timeSlot;						  // The time slot
-	int				      m_activebursts;					// Number of active bursts at time t
+	int				      m_activebursts = 0;			// Number of active bursts at time t
 	bool			      m_offPeriod = true;;
   
 	/**

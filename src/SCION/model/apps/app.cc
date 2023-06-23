@@ -61,13 +61,13 @@ App::GenerateAppTraffic ()
 void
 App::SendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
 {
-  // sends the data as a single packet. Large data should be split into multiple packets in this function.
+  uint16_t scale = 1; // scaling factor for app data packets
   Payload payload;
   payload.app_data.app_id = app_id;
   payload.app_data.app_packet_id = packet_id++;
   payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
   PayloadType payload_type = PayloadType::APPLICATION_DATA;
-  host->SendAppPacket(this, payload, payload_type, size, path);
+  host->SendAppPacket(this, payload, payload_type, size * scale, path);
 }
 
 /**
