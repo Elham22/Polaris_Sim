@@ -41,7 +41,7 @@ BorderRouter::ProcessReceivedPacket (uint16_t if_rcv, ScionPacket *packet, Time 
       << ", eg:" << GET_HOP_EG_IF (packet->path.at (packet->curr_inf)->hops.at (packet->cur_hopf)));
 
   ScionCapableNode::ProcessReceivedPacket (if_rcv, packet, Time ());
-
+  
   if (packet->src_ia == packet->dst_ia)
     {
       return;
@@ -204,6 +204,7 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
     {
       // ProcessReceivedPacket is called here because the hop & interface fields have to be advanced by one. Easier to just call ProcessReceivedPacket
       // instead of copying the logic of advancing the fields.
+      processing_queue_length++;
       ProcessReceivedPacket (local_if, response_packet, Simulator::Now());
     }
   
