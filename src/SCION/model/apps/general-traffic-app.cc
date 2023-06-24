@@ -17,9 +17,30 @@
  *
  * Author: Pascal Suter passuter@student.ethz.ch
  */
+#include "src/SCION/model/externs.h"
+#include "src/SCION/model/scion-core-as.h"
 #include "general-traffic-app.h"
 
 namespace ns3 {
+
+void 
+GeneralTrafficApp::SetBurstArrivals (double val)
+{
+  m_burstArrivals = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (val));
+}
+
+void 
+GeneralTrafficApp::SetBurstLength (double val)
+{
+  m_burstLength = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (val));
+}
+
+void 
+GeneralTrafficApp::SetDataRate (double val_Mbit)
+{
+  m_cbrRate = DataRate (std::to_string (val_Mbit) + "Mb/s");
+}
+
 void
 GeneralTrafficApp::GenerateAppTraffic ()
 {
@@ -78,7 +99,7 @@ GeneralTrafficApp::ParetoDeparture()
 void
 GeneralTrafficApp::ScheduleNextTx()
 {
-  uint32_t bits = (m_pktSize + 30) * 8;
+  uint32_t bits = (m_pktSize + 30) * 8 * scale;
   Time nextTime(Seconds (bits / 
                 static_cast<double>(m_cbrRate.GetBitRate())));
   
@@ -98,8 +119,67 @@ GeneralTrafficApp::ScheduleNextTx()
 void
 GeneralTrafficApp::SendPacket()
 {
+  // note, pktSize doesn't have to be scaled here because scaling is made in SendData
   SendData (m_pktSize, GetPath ());
   ScheduleNextTx();
 }
-	
+
+void
+BackgroundTrafficApp::StartAppTraffic ()
+{
+  // as link is fixed, directly start sending.
+  GenerateAppTraffic ();
+}
+
+void
+BackgroundTrafficApp::SendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
+{
+  br->SendBackgroundPacket (size * scale, dst_ia, path, inf, hopf);
+}
+
+std::map<std::pair<BorderRouter *, uint16_t>, BackgroundTrafficApp *>
+BackgroundTrafficApp::backgroundTrafficApps = {};
+
+void
+BackgroundTrafficApp::AddBackgroundTraffic (std::vector<std::vector<const PathSegment *>> all_paths, double bwdFactor)
+{
+  //std::cout << "Adding background traffic" << std::endl;
+
+  for (uint32_t i = 0; i < all_paths.size (); ++i)
+    {
+      auto path = all_paths.at (i);
+      //ScionHost::PrintPath (path);
+      for (uint16_t inf = 0; inf < path.size (); ++inf)
+        {
+          auto seg = path.at (inf);
+          for (uint16_t hopf = 0; hopf < seg->hops.size () - 1; ++hopf)
+            {
+              //std::cout << "Path " << i << ", hop " << hopf << std::endl;
+              auto hop_from = seg->hops.at (hopf);
+              auto hop_to = seg->hops.at (hopf+1);
+              // auto isd = GET_HOP_ISD (hop_from);
+              auto as_num = GET_HOP_AS (hop_from);
+              ScionAs *as_node = dynamic_cast<ScionAs *> (PeekPointer (nodes.Get (as_num))); // TODO currently only supports one ISD
+              //std::cout << as_node->isd_number << ":" << as_node->as_number << std::endl;
+              auto ing = GET_HOP_ING_IF (hop_from);
+              BorderRouter *br = as_node->GetBr (ing);
+              uint16_t local_if = br->GetLocalIfFromASIf (GET_HOP_EG_IF (hop_from));
+              double avail_bwd_Mbit = br->GetBwdGbit (local_if) * 1000.;
+              double background_bwd = avail_bwd_Mbit * bwdFactor / 4; // divide by four as with default values for PPBP 4 is just above mean of bursts.
+              auto key = std::make_pair (br, local_if);
+              if (backgroundTrafficApps.find (key) == backgroundTrafficApps.end ())
+                {
+                  BackgroundTrafficApp *app = new BackgroundTrafficApp (br, GET_HOP_IA (hop_to), local_if, all_paths, i, inf, hopf);
+                  app->SetDataRate (background_bwd);
+                  backgroundTrafficApps[key] = app;
+                  app->StartAppTraffic ();
+                }
+              
+              //std::cout << "BR " << br->GetLogitude () << ", " << br->GetLatitude () << ", if " << local_if << std::endl;
+            }
+        }
+
+
+    }
+}
 } // namespace ns3

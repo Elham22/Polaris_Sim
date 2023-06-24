@@ -36,6 +36,7 @@ App::StartAppTraffic ()
 
   if (best_path_id != -1)
     {
+      // path selection ran once, can start to generate traffic.
       GenerateAppTraffic();
     }
   else
@@ -61,7 +62,6 @@ App::GenerateAppTraffic ()
 void
 App::SendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
 {
-  uint16_t scale = 1; // scaling factor for app data packets
   Payload payload;
   payload.app_data.app_id = app_id;
   payload.app_data.app_packet_id = packet_id++;

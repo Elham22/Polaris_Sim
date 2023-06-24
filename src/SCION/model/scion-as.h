@@ -137,6 +137,8 @@ public:
   BorderRouter *AddBr (double latitude, double longitude, Time processing_delay,
                        Time processing_throughput_delay);
 
+  BorderRouter *GetBr (uint16_t i);
+
   void AddToRemoteAsInfo (uint16_t remote_if, ScionAs *remote_as);
 
   friend class UserDefinedEvents;

@@ -164,6 +164,12 @@ ScionAs::AddBr (double latitude, double longitude, Time processing_delay,
   return the_br;
 }
 
+BorderRouter *
+ScionAs::GetBr (uint16_t i)
+{
+  return border_routers.at (i);
+}
+
 void
 ScionAs::ConnectInternalNodes (bool only_propagation_delay)
 {

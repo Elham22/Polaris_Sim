@@ -396,7 +396,7 @@ ScionHost::SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host)
 }
 
 void
-ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host)
+ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host, double backgroundBwdFactor)
 {
   std::vector<const PathSegment *> the_path;
   /*ScionHost::active_path = the_path;
@@ -405,10 +405,10 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
 
   std::vector<std::vector<const PathSegment *>> all_paths;
   SearchAllInCachedSegments (dst_ia, all_paths);
-  std::cout << "Paths found: " << std::endl; 
+  /*std::cout << "Paths found: " << std::endl; 
   for (auto const path: all_paths) {
     PrintPath(path);
-  }
+  }*/
 
   if (dst_ia == ia_addr || all_paths.size() != 0)
     {
@@ -426,13 +426,17 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
           app = new App (this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
         }
       apps.push_back(app);
+      if (backgroundBwdFactor > 0)
+        {
+          BackgroundTrafficApp::AddBackgroundTraffic (all_paths, backgroundBwdFactor);
+        }
       app->StartAppTraffic();
     }
   else
     {
       RequestForPathSegments (dst_ia);
       Simulator::Schedule (MilliSeconds (300), &ScionHost::StartApplication, this, app_type, dst_ia,
-                            dst_host);
+                            dst_host, backgroundBwdFactor);
     }
 }
 

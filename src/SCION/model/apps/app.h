@@ -65,8 +65,9 @@ public:
 
   ia_t dst_ia;
   host_addr_t dst_host_addr;
+  static const uint16_t scale = 2; // scaling factor for app data packets
   
-  void StartAppTraffic ();
+  virtual void StartAppTraffic ();
   void ReceiveProbeResponse (ProbeResp probe_resp);
   void ReceiveAppResponse (AppResp app_resp);
   virtual void PrintResults ();
@@ -100,7 +101,7 @@ protected:
   virtual bool isActivePath (int32_t path_id);
   virtual double ComputeScore (PathInfo path_info);
   std::vector<const ns3::PathSegment *> GetPath ();
-  void SendData (uint32_t size, std::vector<const ns3::PathSegment *> path);
+  virtual void SendData (uint32_t size, std::vector<const ns3::PathSegment *> path);
 };
 } // namespace ns3
 

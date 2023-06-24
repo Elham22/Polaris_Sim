@@ -25,6 +25,7 @@
 #include "ns3/data-rate.h"
 #include "ns3/double.h"
 #include "app.h"
+#include "src/SCION/model/border-router.h"
 
 namespace ns3 {
 /**
@@ -49,6 +50,10 @@ public:
   {
   }
   void PrintResults () override;
+
+void SetBurstArrivals (double val);
+void SetBurstLength (double val);
+void SetDataRate (double val_mbit);
 
 protected:
   void GenerateAppTraffic () override;
@@ -80,6 +85,36 @@ protected:
 	 */
 	void ScheduleNextTx();
 	void SendPacket();
+};
+
+/**
+ * Generates background traffic on a per link basis.
+*/
+class BackgroundTrafficApp : public GeneralTrafficApp
+{
+public:
+  BackgroundTrafficApp (BorderRouter *br, ia_t dst_ia, uint16_t local_if, std::vector<std::vector<const PathSegment *>> all_paths,
+                        int32_t path_id, uint16_t inf, uint16_t hopf)
+  : GeneralTrafficApp (NULL, 0, 0, dst_ia, 0, all_paths),
+  br (br),
+  inf (inf),
+  hopf (hopf)
+  {
+    best_path_id = path_id;
+  }
+
+  void StartAppTraffic () override;
+
+  // storing the background infos
+  static std::map<std::pair<BorderRouter *, uint16_t>, BackgroundTrafficApp *> backgroundTrafficApps;
+  static void AddBackgroundTraffic (std::vector<std::vector<const PathSegment *>> all_paths, double bwdFactor);
+
+protected:
+  BorderRouter *br;
+  uint16_t inf;
+  uint16_t hopf;
+
+  void SendData (uint32_t size, std::vector<const ns3::PathSegment *> path) override;
 };
 
 } // namespace ns3

@@ -52,9 +52,9 @@ public:
   {
   }
 
-  void PrintPath (std::vector<const PathSegment *> the_path);
+  static void PrintPath (std::vector<const PathSegment *> the_path);
   void SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host);
-  void StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host);
+  void StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host, double backgroundBwdFactor);
   void SendProbes (uint32_t expected_bandwidth);
   void SendAppPacket (App *app, Payload payload, PayloadType payload_type, uint32_t size, std::vector<const ns3::PathSegment *> path);
   void PrintAppsEval ();

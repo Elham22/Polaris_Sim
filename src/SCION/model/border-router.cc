@@ -47,6 +47,12 @@ BorderRouter::ProcessReceivedPacket (uint16_t if_rcv, ScionPacket *packet, Time 
       return;
     }
 
+  if (packet->payload_type == PayloadType::BACKGROUND_TRAFFIC)
+    {
+      packet->packet_originator->DestroyScionPacket (packet);
+      return;
+    }
+
   if (packet->dst_ia == ia_addr)
     {
       /*std::cout << packet->id << " src " << packet->src_ia << ":" << packet->src_host << " Hop AS "
@@ -62,6 +68,7 @@ BorderRouter::ProcessReceivedPacket (uint16_t if_rcv, ScionPacket *packet, Time 
           forwarding_table_to_addresses_inside_as.end ())
         {
           NS_LOG_FUNCTION ("Address not in the forwarding table");
+          std::cout << "BR process received: Address not in the forwarding table" << std::endl;
           return;
         }
 
@@ -163,7 +170,7 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
                                   uint16_t as_if_to_send, uint16_t old_hopf, uint16_t old_inf)
 {
 
-  //std::cout << "Process probe " << packet->payload.probe_req.probe_id << std::endl;
+  // std::cout << "BR " << ia_addr << " (" << longitude << ", " << latitude << "), Process probe " << packet->payload.probe_req.probe_id << std::endl;
 
   PayloadType payload_type = PayloadType::QOS_PROBE_RESP;
   ProbeReq request = packet->payload.probe_req;
@@ -172,15 +179,8 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
   payload.probe_resp.probe_id = request.probe_id;
   payload.probe_resp.time_recv = local_time.ToInteger(Time::Unit::MS);
 
-  int64_t transmission_delay = transmission_delays.at (local_if).ToInteger (Time::Unit::PS);
-  if (transmission_delay == 0)
-    {
-      std::cout << "Transmission delay was 0. Transmission delays should be set for bandwidth estimation. Assuming bwd = 400Gbps."
-                << " Note that a too large time resolution might result in transmission delay 0." << std::endl;
-      transmission_delay = 20;
-    }
-  auto avail_bwd = 8000 / transmission_delay;
-  payload.probe_resp.raw_bwd = 8000 / avail_bwd;
+  int64_t avail_bwd = GetBwdGbit (local_if);
+  payload.probe_resp.raw_bwd = avail_bwd;
   //std::cout << "Raw bwd " << payload.probe_resp.raw_bwd  << " Gbps" << std::endl;
   int64_t new_bwd = estimated_throughput.at (local_if) + request.expected_bandwidth;
   double new_loss = new_bwd < avail_bwd ? 0 : ((double) new_bwd - avail_bwd) / new_bwd;
@@ -208,6 +208,39 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
       ProcessReceivedPacket (local_if, response_packet, Simulator::Now());
     }
   
+}
+
+int64_t
+BorderRouter::GetBwdGbit (uint16_t local_if)
+{
+  int64_t transmission_delay = transmission_delays.at (local_if).ToInteger (Time::Unit::PS);
+  if (transmission_delay <= 0)
+    {
+      std::cout << "Transmission delay was 0. Transmission delays should be set for bandwidth estimation. Assuming bwd = 400Gbps."
+                << " Note that a too large time resolution might result in transmission delay 0." << std::endl;
+      transmission_delay = 20;
+    }
+  return 8000 / transmission_delay;
+}
+
+
+uint16_t
+BorderRouter::GetLocalIfFromASIf (uint16_t as_if)
+{
+  return forwarding_table_to_other_as_ifaces.at (as_if);
+}
+
+void
+BorderRouter::SendBackgroundPacket (uint32_t size, ia_t dst_ia, std::vector<const ns3::PathSegment *> path,
+                                    uint16_t inf, uint16_t hopf)
+{
+  Payload payload;
+  PayloadType payload_type = PayloadType::BACKGROUND_TRAFFIC;
+  ScionPacket *packet = CreateScionPacket (payload, payload_type, dst_ia, 0, size, path);
+  packet->curr_inf = inf;
+  packet->cur_hopf = hopf;
+  SendScionPacket (packet);
+
 }
 
 } // namespace ns3

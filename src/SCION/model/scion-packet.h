@@ -52,6 +52,7 @@ enum PayloadType {
   QOS_PROBE_RESP = 10,
   APPLICATION_DATA = 11,
   APPLICATION_RESP = 12,
+  BACKGROUND_TRAFFIC = 13,
 };
 
 struct PathReqFromHost

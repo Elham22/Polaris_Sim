@@ -44,7 +44,7 @@ VideoConferenceApp::GenerateAppTraffic ()
     {
       frameBytes = 64; // small minimum, chosen arbitrarily
     }
-  SendData ((uint32_t) frameBytes, GetPath ());
+  SendData ((uint32_t) frameBytes / scale, GetPath ());
 
   double interval = 1. / fps;
   interval += frame_interval_noise.GetValue () * interval;
