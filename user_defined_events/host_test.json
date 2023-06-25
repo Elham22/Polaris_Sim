@@ -13,12 +13,22 @@
   {
     "time": "103min",
     "type": "start_application",
-    "args": ["0", "3356", "2", "0", "6453", "2", "basic", "0.0"]
+    "args": ["0", "3356", "2", "0", "6453", "3", "video conference", "0.0"]
   },
   {
-    "time": "104min",
-    "type": "start_application",
-    "args": ["0", "3356", "2", "0", "6453", "3", "video conference", "0.1"]
+    "time": "103.01min",
+    "type": "set_link_rate",
+    "args": ["0", "0", "8", "0", "0.4"]
+  },
+  {
+    "time": "103.7min",
+    "type": "set_link_rate",
+    "args": ["0", "0", "8", "0", "0.0"]
+  },
+  {
+    "time": "104.3min",
+    "type": "set_link_rate",
+    "args": ["0", "0", "10", "0", "0.4"]
   }
 ]
 }

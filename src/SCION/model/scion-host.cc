@@ -426,11 +426,8 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
           app = new App (this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
         }
       apps.push_back(app);
-      if (backgroundBwdFactor > 0)
-        {
-          BackgroundTrafficApp::AddBackgroundTraffic (all_paths, backgroundBwdFactor);
-        }
-      app->StartAppTraffic();
+      BackgroundTrafficApp::AddBackgroundTraffic (all_paths, backgroundBwdFactor);
+      app->StartAppTrafficDelayed(Seconds (30)); // 30s delay to allow background traffic to reach steady state
     }
   else
     {

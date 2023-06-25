@@ -38,7 +38,12 @@ GeneralTrafficApp::SetBurstLength (double val)
 void 
 GeneralTrafficApp::SetDataRate (double val_Mbit)
 {
+  double old_bitrate = static_cast<double>(m_cbrRate.GetBitRate());
   m_cbrRate = DataRate (std::to_string (val_Mbit) + "Mb/s");
+  if (old_bitrate <= 0 && val_Mbit > 0)
+  {
+    PPBP ();
+  }
 }
 
 void
@@ -63,7 +68,15 @@ GeneralTrafficApp::PrintResults ()
 
 void
 GeneralTrafficApp::PPBP() // Poisson Pareto Burst 
-{		
+{  
+  double bitrate = static_cast<double>(m_cbrRate.GetBitRate());
+  if (bitrate <= 0)
+    {
+      // stop sending packets and no longer schedule anything.
+      m_activebursts = 1;
+      return;
+    }	
+
   double inter_burst_intervals;
   inter_burst_intervals = 1/m_burstArrivals->GetValue();
 
@@ -99,9 +112,16 @@ GeneralTrafficApp::ParetoDeparture()
 void
 GeneralTrafficApp::ScheduleNextTx()
 {
+  double bitrate = static_cast<double>(m_cbrRate.GetBitRate());
+  if (bitrate <= 0)
+    {
+      // stop sending packets and no longer schedule anything.
+      m_offPeriod = true;
+      return;
+    }
+
   uint32_t bits = (m_pktSize + 30) * 8 * scale;
-  Time nextTime(Seconds (bits / 
-                static_cast<double>(m_cbrRate.GetBitRate())));
+  Time nextTime(Seconds (bits / bitrate));
   
   if (m_activebursts != 0)
   {
@@ -128,7 +148,12 @@ void
 BackgroundTrafficApp::StartAppTraffic ()
 {
   // as link is fixed, directly start sending.
-  GenerateAppTraffic ();
+  // 7 seconds delay to allow user defined events to overwrite bitrate
+  double bitrate = static_cast<double>(m_cbrRate.GetBitRate());
+  if (bitrate > 0)
+    {
+      Simulator::Schedule (Seconds (7), &BackgroundTrafficApp::GenerateAppTraffic, this);
+    }
 }
 
 void
@@ -165,7 +190,7 @@ BackgroundTrafficApp::AddBackgroundTraffic (std::vector<std::vector<const PathSe
               BorderRouter *br = as_node->GetBr (ing);
               uint16_t local_if = br->GetLocalIfFromASIf (GET_HOP_EG_IF (hop_from));
               double avail_bwd_Mbit = br->GetBwdGbit (local_if) * 1000.;
-              double background_bwd = avail_bwd_Mbit * bwdFactor / 4; // divide by four as with default values for PPBP 4 is just above mean of bursts.
+              double background_bwd = avail_bwd_Mbit * bwdFactor / 10.; // divide by ten to not have to enter too small values in configs
               auto key = std::make_pair (br, local_if);
               if (backgroundTrafficApps.find (key) == backgroundTrafficApps.end ())
                 {

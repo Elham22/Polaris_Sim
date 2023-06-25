@@ -70,6 +70,7 @@ public:
   static const uint16_t scale = 2; // scaling factor for app data packets
   
   virtual void StartAppTraffic ();
+  void StartAppTrafficDelayed (Time delay);
   void ReceiveProbeResponse (ProbeResp probe_resp);
   void ReceiveAppResponse (AppResp app_resp);
   virtual void PrintResults ();
@@ -85,7 +86,6 @@ protected:
   bool probes_pending = false;
   bool first_probe_returned = false;
   int32_t best_path_id = -1;
-  int32_t best_path_id_old = -1;
   std::vector<PathInfo> *path_infos = NULL;
   std::vector<PathInfo> *path_infos_old = NULL;
   std::vector<std::pair<Time, AppResp>> app_responses;

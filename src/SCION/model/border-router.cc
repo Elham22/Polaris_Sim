@@ -184,8 +184,8 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
   //std::cout << "Raw bwd " << payload.probe_resp.raw_bwd  << " Gbps" << std::endl;
   int64_t new_bwd = estimated_throughput.at (local_if) + request.expected_bandwidth;
   double new_loss = new_bwd < avail_bwd_bytes ? 0 : ((double) new_bwd - avail_bwd_bytes) / new_bwd;
-  /*std::cout << "Loss estimation, id " << request.app_id << "|" << request.probe_id << ", raw_bwd " << avail_bwd_bytes << ", est " << estimated_throughput.at (local_if) << ", req "
-            << request.expected_bandwidth << ", new " << new_bwd << ", loss " << new_loss << std::endl;*/
+  std::cout << "Loss estimation, id " << request.app_id << "|" << request.probe_id << ", raw_bwd " << avail_bwd_bytes << ", est " << estimated_throughput.at (local_if) << ", req "
+            << request.expected_bandwidth << ", new " << new_bwd << ", loss " << new_loss << std::endl;
   payload.probe_resp.expected_loss = new_loss;
   
   // TODO additional score is currently not implemented

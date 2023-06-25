@@ -66,12 +66,17 @@ public:
       }
     
     App::all_paths = copies;
+    for (uint32_t i = 0; i < copies.size (); ++i)
+      {
+        std::cout << "Path_id " << i << ", ";
+        ScionHost::PrintPath (copies.at (i));
+      }
   }
   void PrintResults () override;
 
 protected:
   uint32_t num_paths;
-  std::vector<std::pair<int64_t, uint32_t>> selected_qualities;
+  std::vector<std::tuple<int64_t, uint32_t, int32_t>> selected_qualities;
 
   // parameters
   std::vector<double> bitrates {0.7e6, 1.5e6, 5e6};

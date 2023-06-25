@@ -158,6 +158,9 @@ private:
                           std::string real_dst_as_no, std::string dst_local_address,
                           std::string app_type, std::string backgroundBwdFactor);
 
+  void SetLinkTraffic (std::string src_isd_number, std::string src_as_no, std::string ing_if,
+                        std::string eg_if, std::string bwdFactor);
+
   void TimeReferencesDown ();
   void TimeReferencesUp ();
 };

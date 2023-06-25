@@ -66,6 +66,7 @@ VideoConferenceApp::ComputeExpectedBandwidth (uint32_t path_id)
 double
 VideoConferenceApp::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id)
 {
+  std::cout << " VCA::ComputeScore (" << latency << ", " << loss << ", " << additional_scoring << ") ";
   uint32_t quality = path_id / num_paths;
   double penalty_latency = latency < 50 ? 0 : latency;
   double penalty_loss = loss < 0.02 ? loss * 1e4 : loss * 5e4;
@@ -78,25 +79,26 @@ VideoConferenceApp::ComputeAllScores ()
   App::ComputeAllScores ();
   uint32_t quality = best_path_id / num_paths;
   selected_bitrate = bitrates.at (quality);
-  selected_qualities.push_back (std::make_pair (host->GetLocalTime ().ToInteger (Time::Unit::MS), quality));
+  selected_qualities.push_back (std::make_tuple (host->GetLocalTime ().ToInteger (Time::Unit::MS), quality, best_path_id));
 }
 
 void
 VideoConferenceApp::PrintResults ()
 {
-  std::cout << "----- VCA id " << app_id << ": Timestamp, latency, loss, bytes, quality, score ------- " << std::endl;
+  std::cout << "----- VCA id " << app_id << ": Timestamp, latency, loss, bytes, path, quality, score ------- " << std::endl;
   uint i = 0;
   for (auto entry : app_responses)
   {
     int64_t timestamp = entry.first.ToInteger (Time::Unit::MS);
-    if (i+1 < selected_qualities.size () && timestamp > selected_qualities.at (i+1).first)
+    if (i+1 < selected_qualities.size () && timestamp > std::get<0> (selected_qualities.at (i+1)))
       {
         ++i;
       }
-    uint32_t quality = selected_qualities.at (i).second;
+    uint32_t quality = std::get<1> (selected_qualities.at (i));
     double score = ComputeScore (entry.second.avg_latency / 1000., entry.second.loss, 0, quality * num_paths);
     std::cout << timestamp << ", " << entry.second.avg_latency / 1000. << ", "
-              << entry.second.loss << ", " << entry.second.bytes_received << ", " << quality << ", " 
+              << entry.second.loss << ", " << entry.second.bytes_received << ", " 
+              << std::get<2> (selected_qualities.at (i)) << ", " << quality << ", " 
               << score << std::endl;
   }
 }

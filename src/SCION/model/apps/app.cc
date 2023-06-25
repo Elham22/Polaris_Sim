@@ -42,6 +42,12 @@ PathInfo::GetLoss (double *additional_scoring)
 }
 
 void
+App::StartAppTrafficDelayed (Time delay)
+{
+  Simulator::Schedule (delay, &App::StartAppTraffic, this);
+}
+
+void
 App::StartAppTraffic ()
 {
   if (dst_ia == ia_addr)
@@ -61,7 +67,7 @@ App::StartAppTraffic ()
         {
           SendProbes();
         }
-      Simulator::Schedule (MilliSeconds (100), &App::StartAppTraffic, this);
+      Simulator::Schedule (Seconds (1), &App::StartAppTraffic, this);
     }
 }
 
@@ -166,14 +172,7 @@ App::CheckResendProbes ()
 bool
 App::isActivePath (int32_t path_id)
 {
-  if (probes_pending)
-    {
-      return best_path_id_old == path_id;
-    }
-  else
-    {
-      return best_path_id == path_id;
-    }
+  return best_path_id == path_id;
 }
 
 void
@@ -189,7 +188,7 @@ App::ComputeAllScores ()
     if (isActivePath (i))
       {
         path_info.latency = Time::FromDouble(active_latency, Time::Unit::US);
-        path_info.score = ComputeScore (active_latency / 1000., active_loss, 900, i); // 900 bonus for being the active path
+        path_info.score = ComputeScore (active_latency / 1000., active_loss, 700, i); // 700 bonus for being the active path
       }
     else
       {

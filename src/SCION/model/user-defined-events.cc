@@ -20,6 +20,7 @@
 
 #include "user-defined-events.h"
 #include "time-server.h"
+#include "apps/general-traffic-app.h"
 
 namespace ns3 {
 void
@@ -78,6 +79,8 @@ UserDefinedEvents::ConstructFuncMap ()
       FunctionFactory (&UserDefinedEvents::SendPacketBatch, this);
   function_name_to_function["start_application"] =
       FunctionFactory (&UserDefinedEvents::StartApp, this);
+  function_name_to_function["set_link_rate"] =
+      FunctionFactory (&UserDefinedEvents::SetLinkTraffic, this);
   function_name_to_function["time_references_down"] =
       FunctionFactory (&UserDefinedEvents::TimeReferencesDown, this);
   function_name_to_function["time_references_up"] =
@@ -160,11 +163,36 @@ UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as
                               std::string real_dst_as_no, std::string dst_local_address,
                               std::string app_type, std::string backgroundBwdFactor)
 {
+  if (std::stoi (src_isd_number) != 0)
+    {
+      std::cout << "Error: Setting link traffic isd != 0 not implemented" << std::endl;
+      return;
+    }
   uint16_t alias_as_no = real_to_alias_as_no.at (std::stoi (real_src_as_no));
   ScionAs *src_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_as_no)));
   ScionHost *src_host = dynamic_cast<ScionHost *> (src_as->GetHost (std::stoi (src_local_address)));
   ia_t dst_ia = MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
   src_host->StartApplication(app_type, dst_ia, std::stoi(dst_local_address), std::stod (backgroundBwdFactor));
+}
+
+void
+UserDefinedEvents::SetLinkTraffic (std::string src_isd_number, std::string src_as_no, std::string ing_if,
+                                    std::string eg_if, std::string bwdFactor)
+{
+  if (std::stoi (src_isd_number) != 0)
+    {
+      std::cout << "Error: Setting link traffic isd != 0 not implemented" << std::endl;
+      return;
+    }
+  uint16_t alias_as_no = std::stoi (src_as_no);
+  ScionAs *src_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_as_no)));
+  BorderRouter *br = src_as->GetBr (std::stoi (ing_if));
+  uint16_t local_if = br->GetLocalIfFromASIf (std::stoi (eg_if));
+  double avail_bwd_Mbit = br->GetBwdGbit (local_if) * 1000.;
+  double new_bitrate_mbit = avail_bwd_Mbit * std::stod (bwdFactor) / 10.;
+  BackgroundTrafficApp::backgroundTrafficApps.at (std::make_pair (br, local_if))
+            ->SetDataRate (new_bitrate_mbit);
+
 }
 
 void

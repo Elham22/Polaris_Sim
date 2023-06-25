@@ -68,7 +68,7 @@ protected:
 	double			    m_h = 0.7;							// Hurst parameter	(Pareto distribution)
 	double			    m_shape;						    // Shape			(Pareto distribution)
 	Time			      m_timeSlot;						  // The time slot
-	int				      m_activebursts = 0;			// Number of active bursts at time t
+	int				      m_activebursts = 1;			// Number of active bursts at time t. Initialized to 1 to speed up reaching steady state
 	bool			      m_offPeriod = true;;
   
 	/**
