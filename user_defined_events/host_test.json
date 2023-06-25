@@ -16,9 +16,9 @@
     "args": ["0", "3356", "2", "0", "6453", "2", "basic", "0.0"]
   },
   {
-    "time": "104.5min",
+    "time": "104min",
     "type": "start_application",
-    "args": ["0", "3356", "2", "0", "6453", "3", "video conference", "0.2"]
+    "args": ["0", "3356", "2", "0", "6453", "3", "video conference", "0.1"]
   }
 ]
 }

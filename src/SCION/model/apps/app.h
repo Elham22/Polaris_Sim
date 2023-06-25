@@ -48,6 +48,8 @@ public:
   Time latency;
   double score = -INFINITY;
 
+  double GetLoss (double *additional_score);
+
 };
 class App
 {
@@ -94,12 +96,12 @@ protected:
   double active_loss = 1.0;
 
   virtual void GenerateAppTraffic ();
-  uint32_t ComputeExpectedBandwidth ();
-  void SendProbes ();
+  virtual uint32_t ComputeExpectedBandwidth (uint32_t path_id); // bytes per second
+  virtual void SendProbes ();
   void CheckResendProbes ();
-  void ComputeAllScores ();
+  virtual void ComputeAllScores ();
   virtual bool isActivePath (int32_t path_id);
-  virtual double ComputeScore (PathInfo path_info);
+  virtual double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id);
   std::vector<const ns3::PathSegment *> GetPath ();
   virtual void SendData (uint32_t size, std::vector<const ns3::PathSegment *> path);
 };

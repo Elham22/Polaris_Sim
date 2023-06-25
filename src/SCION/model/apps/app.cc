@@ -25,6 +25,22 @@
 
 namespace ns3 {
 
+double
+PathInfo::GetLoss (double *additional_scoring)
+{
+  double max_loss = 0.;
+  for (auto probe : probe_responses)
+    {
+      if (probe.expected_loss > max_loss)
+        {
+          max_loss = probe.expected_loss;
+        }
+    }
+  uint32_t missing_probes = num_expected_responses - probe_responses.size ();
+  *additional_scoring -= missing_probes * 1000; // punish missing probes
+  return max_loss;
+}
+
 void
 App::StartAppTraffic ()
 {
@@ -75,7 +91,7 @@ App::SendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
  * Subclasses should override this function.
 */
 uint32_t
-App::ComputeExpectedBandwidth ()
+App::ComputeExpectedBandwidth (uint32_t path_id)
 {
   return 10*1024;
 }
@@ -98,7 +114,6 @@ App::SendProbes ()
   path_infos = new std::vector<PathInfo>();
   
   std::vector<uint8_t> shortcuts;
-  auto expected_bandwidth = ComputeExpectedBandwidth ();
 
   for (uint i = 0; i < all_paths.size(); i++)
     {
@@ -106,7 +121,7 @@ App::SendProbes ()
       Payload payload;
       payload.probe_req.app_id = app_id;
       payload.probe_req.probe_id = i; // TODO use unique probe_ids and map them to the paths
-      payload.probe_req.expected_bandwidth = expected_bandwidth;
+      payload.probe_req.expected_bandwidth = ComputeExpectedBandwidth (i);
       
       path_infos->push_back(PathInfo(all_paths.at (i)));
       host->SendAppPacket(this, payload, payload_type, sizeof (ProbeReq), all_paths.at (i));
@@ -132,14 +147,9 @@ App::ReceiveProbeResponse (ProbeResp probe_resp)
       if (probe_resp.src_ia == dst_ia && probe_resp.src_host_addr == dst_host_addr)
         {
           // wait a bit for other probes before computing the score
-          Simulator::Schedule(Seconds(3), &App::ComputeAllScores, this);
+          Simulator::Schedule(Seconds(1), &App::ComputeAllScores, this);
           first_probe_returned = true;
         }
-    }
-  else if (!probes_pending)
-    {
-      // recompute path scores. If probes are pending and this probe is not the first, no need to recompute as ComputeAllScores should be scheduled.
-      path_infos->at(probe_resp.probe_id).score = ComputeScore (path_infos->at(probe_resp.probe_id));
     }
 }
 
@@ -169,22 +179,25 @@ App::isActivePath (int32_t path_id)
 void
 App::ComputeAllScores ()
 {
+  std::cout << "app " << app_id << " computing all scores" << std::endl;
   double max_score = - INFINITY;
   uint32_t max_id = 0;
   for (uint32_t i = 0; i < path_infos->size (); i++)
   {
     auto path_info = path_infos->at (i);
+    std::cout << "path_id " << i;
     if (isActivePath (i))
       {
         path_info.latency = Time::FromDouble(active_latency, Time::Unit::US);
-        path_info.score = ComputeScore (path_info);
-        path_info.score += active_path_bonus;
+        path_info.score = ComputeScore (active_latency / 1000., active_loss, 900, i); // 900 bonus for being the active path
       }
     else
       {
-        path_info.score = ComputeScore (path_info);
+        double additional_score = 0.;
+        double loss = path_info.GetLoss (&additional_score);
+        path_info.score = ComputeScore (path_info.latency.ToDouble (Time::Unit::MS), loss, additional_score, i);
       }
-    std::cout << "path_id " << i << " score: " << path_info.score;
+    std::cout << ", score: " << path_info.score;
 
     if (path_info.score > max_score)
       {
@@ -198,35 +211,22 @@ App::ComputeAllScores ()
   if (probes_pending)
     {
       probes_pending = false;
-      Simulator::Schedule (Minutes(5), &App::SendProbes, this);
+      Simulator::Schedule (Seconds(30), &App::SendProbes, this);
     }
 }
 
 /**
- * Computes the score for a path given it's path info.
+ * Computes the score for a path given it's latency, loss & additional scoring.
+ * Additional scoring can be negative e.g. if not all probes returned (i.e. incomplete loss estimation),
+ * bonus for being the active path etc.
  * Basic implementation gives highest score for path with least latency.
  * Subclasses should implement score functions that work best for their applications.
 */
 double
-App::ComputeScore (PathInfo path_info)
+App::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id)
 {
-  double punish = 0.0;
-  if (path_info.num_expected_responses > path_info.probe_responses.size())
-    {
-      /*std::cout << path_info.probe_responses.size() << "/" << path_info.num_expected_responses << " probe responses arrived [";
-      for (auto probe : path_info.probe_responses)
-        {
-          std::cout << probe.src_ia << ":" << probe.src_host_addr << ", ";
-        }
-      std::cout << "]" << std::endl;*/
-      punish = -100.0;
-    }
-
-  if (path_info.latency != 0)
-    {
-      return punish - path_info.latency.ToDouble(Time::Unit::MS);
-    }
-  return - INFINITY;
+  std::cout << "(" << latency << ", " << loss << ", " << additional_scoring << ")";
+  return additional_scoring - latency;
 }
 
 /**
@@ -236,14 +236,7 @@ App::ComputeScore (PathInfo path_info)
 std::vector<const ns3::PathSegment *>
 App::GetPath ()
 {
-  if (probes_pending)
-    {
-      return all_paths.at (best_path_id_old);
-    }
-  else
-    {
-      return all_paths.at (best_path_id);
-    }
+  return all_paths.at (best_path_id);
 }
 
 void

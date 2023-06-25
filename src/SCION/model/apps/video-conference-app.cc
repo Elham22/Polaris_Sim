@@ -56,17 +56,48 @@ VideoConferenceApp::GenerateAppTraffic ()
   //std::cout << "VCA sent packet " << packet_id-1 << " at " << Simulator::Now ().ToInteger (Time::Unit::MS) - 6274000 << " with " << frameBytes << " bytes, next frame in " << interval * 1000 << " ms" << std::endl;
 }
 
-double
-VideoConferenceApp::ComputeScore (PathInfo path_info)
+uint32_t
+VideoConferenceApp::ComputeExpectedBandwidth (uint32_t path_id)
 {
-  // TODO
-  return App::ComputeScore (path_info);
+  uint32_t quality = path_id / num_paths;
+  return bitrates.at (quality) / 8;
+}
+
+double
+VideoConferenceApp::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id)
+{
+  uint32_t quality = path_id / num_paths;
+  double penalty_latency = latency < 50 ? 0 : latency;
+  double penalty_loss = loss < 0.02 ? loss * 1e4 : loss * 5e4;
+  return quality * 1000 + additional_scoring - penalty_latency - penalty_loss;
+}
+
+void
+VideoConferenceApp::ComputeAllScores ()
+{
+  App::ComputeAllScores ();
+  uint32_t quality = best_path_id / num_paths;
+  selected_bitrate = bitrates.at (quality);
+  selected_qualities.push_back (std::make_pair (host->GetLocalTime ().ToInteger (Time::Unit::MS), quality));
 }
 
 void
 VideoConferenceApp::PrintResults ()
 {
-  std::cout << "VCA app" << std::endl;
-  App::PrintResults ();
+  std::cout << "----- VCA id " << app_id << ": Timestamp, latency, loss, bytes, quality, score ------- " << std::endl;
+  uint i = 0;
+  for (auto entry : app_responses)
+  {
+    int64_t timestamp = entry.first.ToInteger (Time::Unit::MS);
+    if (i+1 < selected_qualities.size () && timestamp > selected_qualities.at (i+1).first)
+      {
+        ++i;
+      }
+    uint32_t quality = selected_qualities.at (i).second;
+    double score = ComputeScore (entry.second.avg_latency / 1000., entry.second.loss, 0, quality * num_paths);
+    std::cout << timestamp << ", " << entry.second.avg_latency / 1000. << ", "
+              << entry.second.loss << ", " << entry.second.bytes_received << ", " << quality << ", " 
+              << score << std::endl;
+  }
 }
 } // namespace ns3

@@ -48,10 +48,10 @@ GeneralTrafficApp::GenerateAppTraffic ()
 }
 
 double
-GeneralTrafficApp::ComputeScore (PathInfo path_info)
+GeneralTrafficApp::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id)
 {
   // TODO
-  return App::ComputeScore (path_info);
+  return App::ComputeScore (latency, loss, additional_scoring, path_id);
 }
 
 void

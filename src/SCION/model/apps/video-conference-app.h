@@ -21,6 +21,8 @@
 #ifndef SCION_SIMULATOR_VIDEO_CONFERENCE_APP_H
 #define SCION_SIMULATOR_VIDEO_CONFERENCE_APP_H
 
+#include <algorithm>
+
 #include "app.h"
 #include "ns3/random-variable-stream.h"
 #include "ns3/double.h"
@@ -52,23 +54,36 @@ class VideoConferenceApp : public App
 public:
   VideoConferenceApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia, host_addr_t app_dst_host_addr,
       std::vector<std::vector<const PathSegment *>> all_paths)
-      : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths)
+      : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths),
+      num_paths (all_paths.size ())
   {
+    // triples the path vector so we get one path entry per path/quality pair.
+    std::vector<std::vector<const PathSegment *>> copies;
+    copies.resize (3 * num_paths);
+    for (uint i = 0; i < copies.size (); ++i)
+      {
+        copies[i] = all_paths.at (i % num_paths);
+      }
+    
+    App::all_paths = copies;
   }
   void PrintResults () override;
 
 protected:
+  uint32_t num_paths;
+  std::vector<std::pair<int64_t, uint32_t>> selected_qualities;
+
   // parameters
-  const uint32_t bitrate_low = 0; // TODO
-  const uint32_t bitrate_medium = 1.5e6; // TODO
-  const uint32_t bitrate_high = 0; // TODO
+  std::vector<double> bitrates {0.7e6, 1.5e6, 5e6};
   const uint16_t fps = 30;
-  uint32_t selected_bitrate = bitrate_medium;
+  double selected_bitrate = bitrates.at (1);
   LaplaceRV frame_size_noise = LaplaceRV (0.15); // noise of the packet sizes, modeled after rfc8593
   LaplaceRV frame_interval_noise = LaplaceRV (0.15); // noise of the interval between packets, modeled after rfc8593
   
   void GenerateAppTraffic () override;
-  double ComputeScore (PathInfo path_info) override;
+  uint32_t ComputeExpectedBandwidth (uint32_t path_id) override;
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
+  void ComputeAllScores () override;
 };
 
 } // namespace ns3

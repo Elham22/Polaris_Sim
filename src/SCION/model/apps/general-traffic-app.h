@@ -57,7 +57,7 @@ void SetDataRate (double val_mbit);
 
 protected:
   void GenerateAppTraffic () override;
-  double ComputeScore (PathInfo path_info) override;
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
 
   // PPBP
   uint32_t		    m_pktSize = 1470;       // Size of packets	

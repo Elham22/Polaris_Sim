@@ -548,4 +548,10 @@ void
 ScionHost::ModifyPktUponSend (ScionPacket *packet)
 {
 }
+
+void
+ScionHost::PrintAddress ()
+{
+  std::cout << isd_number << ":" << as_number << ":" << local_address;
+}
 } // namespace ns3
