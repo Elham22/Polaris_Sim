@@ -60,12 +60,12 @@ public:
   void PrintAppsEval ();
   void PrintAddress ();
 
+  std::vector<App *> apps;
 protected:
   cached_path_segs_dataset_t cached_up_path_segments;
   cached_path_segs_dataset_t cached_core_path_segments;
   cached_path_segs_dataset_t cached_down_path_segments;
 
-  std::vector<App *> apps;
   uint32_t app_info_period_s = 3;
   std::map<std::tuple<ia_t, host_addr_t, app_id_t>, AppInfo> app_infos;
 

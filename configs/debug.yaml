@@ -1,7 +1,7 @@
 time_resolution: PS
-topology: /cluster/home/passuter/scion-simulator/topology/5_geo_rel.xml
-events_file: /cluster/home/passuter/scion-simulator/user_defined_events/host_test.json
-output: /cluster/scratch/passuter/test_results.txt
+topology: /cluster/home/passuter/scion-simulator/topology/host_qos/debug.xml
+events_file: /cluster/home/passuter/scion-simulator/user_defined_events/debug.json
+output: /cluster/scratch/passuter/debug.txt
 simulation_duration: 105min
 NUM_CORE: 128
 beacon_service:
@@ -11,7 +11,7 @@ beacon_service:
   period: 10min
   expiration_period: 6h
   first_beaconing: 0min
-  last_beaconing: 100min
+  last_beaconing: 50min
 path_service: True
 only_propagation_delay: 0
 border_router:
@@ -22,5 +22,3 @@ end_user:
 post_eval:
   - func: PrintAllDiscoveredPaths
   - func: PrintHostApps
-  - func: PrintLinkStatistics
-  - func: PrintAppPathInfo

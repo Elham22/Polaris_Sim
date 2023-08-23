@@ -161,6 +161,9 @@ private:
   void SetLinkTraffic (std::string src_isd_number, std::string src_as_no, std::string ing_if,
                         std::string eg_if, std::string bwdFactor);
 
+  void StopAppTraffic (std::string src_isd_number, std::string real_src_as_no,
+                          std::string src_local_address, std::string app_id);
+
   void TimeReferencesDown ();
   void TimeReferencesUp ();
 };

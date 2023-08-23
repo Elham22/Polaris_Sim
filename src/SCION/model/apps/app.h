@@ -67,13 +67,15 @@ public:
 
   ia_t dst_ia;
   host_addr_t dst_host_addr;
-  static const uint16_t scale = 2; // scaling factor for app data packets
+  static const uint16_t scale = 1; // scaling factor for app data packets
   
   virtual void StartAppTraffic ();
+  void StopAppTraffic ();
   void StartAppTrafficDelayed (Time delay);
   void ReceiveProbeResponse (ProbeResp probe_resp);
   void ReceiveAppResponse (AppResp app_resp);
   virtual void PrintResults ();
+  virtual void PrintPathInfo ();
 
 protected:
   ScionHost *host;
@@ -94,12 +96,15 @@ protected:
   double active_path_bonus = 50;
   double active_latency = INFINITY;
   double active_loss = 1.0;
+  double acceptable_loss = 1.0;
+  Time last_scoring = Time (0);
+  bool stopped = false;
 
   virtual void GenerateAppTraffic ();
   virtual uint32_t ComputeExpectedBandwidth (uint32_t path_id); // bytes per second
   virtual void SendProbes ();
   void CheckResendProbes ();
-  virtual void ComputeAllScores ();
+  virtual void ComputeAllScores (bool triggered_by_probes);
   virtual bool isActivePath (int32_t path_id);
   virtual double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id);
   std::vector<const ns3::PathSegment *> GetPath ();

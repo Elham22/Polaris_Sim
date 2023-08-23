@@ -413,9 +413,21 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
   if (dst_ia == ia_addr || all_paths.size() != 0)
     {
       App *app;
-      if (app_type == "video conference")
+      if (app_type == "video conference active")
         {
           app = new VideoConferenceApp (this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
+        }
+      else if (app_type == "video conference passive")
+        {
+          app = new VCAPassive (this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
+        }
+      else if (app_type == "video conference naive")
+        {
+          app = new VCANaive (this, apps.size(), ia_addr, dst_ia, dst_host, all_paths);
+        }
+      else if (app_type.find ("video conference given:") == 0)
+        {
+          app = new VCAGiven (this, apps.size(), ia_addr, dst_ia, dst_host, all_paths, app_type.substr (23));
         }
       else if (app_type == "general traffic")
         {
@@ -427,10 +439,11 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
         }
       apps.push_back(app);
       BackgroundTrafficApp::AddBackgroundTraffic (all_paths, backgroundBwdFactor);
-      app->StartAppTrafficDelayed(Seconds (30)); // 30s delay to allow background traffic to reach steady state
+      app->StartAppTrafficDelayed(Seconds (15)); // 15s delay to allow background traffic to reach steady state
     }
   else
     {
+      // no paths registered, request paths
       RequestForPathSegments (dst_ia);
       Simulator::Schedule (MilliSeconds (300), &ScionHost::StartApplication, this, app_type, dst_ia,
                             dst_host, backgroundBwdFactor);
@@ -516,8 +529,8 @@ ScionHost::SendAppResp (std::tuple <ia_t, host_addr_t, app_id_t> key)
   payload.app_resp.avg_latency = ((double) info.aggregated_latencies) / info.num_packets;
   payload.app_resp.bytes_received = info.bytes_received;
   
-  /*std::cout << "Sending app resp for app_id " << payload.app_resp.app_id << ", exp_num_packets " << num_packets_expected << ", packets arrived "
-            << info.num_packets << ", loss " << payload.app_resp.loss << ", latency " << payload.app_resp.avg_latency << std::endl;*/
+  std::cout << "Sending app resp for app_id " << payload.app_resp.app_id << ", exp_num_packets " << num_packets_expected << ", packets arrived "
+            << info.num_packets << ", loss " << payload.app_resp.loss << ", latency " << payload.app_resp.avg_latency << std::endl;
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, std::get<0> (key), std::get<1> (key), sizeof (AppResp), info.path);
   packet->path_reversed = true;

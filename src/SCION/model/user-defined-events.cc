@@ -189,10 +189,25 @@ UserDefinedEvents::SetLinkTraffic (std::string src_isd_number, std::string src_a
   BorderRouter *br = src_as->GetBr (std::stoi (ing_if));
   uint16_t local_if = br->GetLocalIfFromASIf (std::stoi (eg_if));
   double avail_bwd_Mbit = br->GetBwdGbit (local_if) * 1000.;
-  double new_bitrate_mbit = avail_bwd_Mbit * std::stod (bwdFactor) / 10.;
+  //double new_bitrate_mbit = avail_bwd_Mbit * std::stod (bwdFactor) / 10.;
   BackgroundTrafficApp::backgroundTrafficApps.at (std::make_pair (br, local_if))
-            ->SetDataRate (new_bitrate_mbit);
+            ->SetBwdFactor (std::stod (bwdFactor), avail_bwd_Mbit);
 
+}
+
+void
+UserDefinedEvents::StopAppTraffic (std::string src_isd_number, std::string real_src_as_no,
+                std::string src_local_address, std::string app_id)
+{
+  if (std::stoi (src_isd_number) != 0)
+    {
+      std::cout << "Error: Setting link traffic isd != 0 not implemented" << std::endl;
+      return;
+    }
+  uint16_t alias_as_no = real_to_alias_as_no.at (std::stoi (real_src_as_no));
+  ScionAs *src_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_as_no)));
+  ScionHost *src_host = dynamic_cast<ScionHost *> (src_as->GetHost (std::stoi (src_local_address)));
+  src_host->apps.at (std::stoi (app_id))->StopAppTraffic ();
 }
 
 void

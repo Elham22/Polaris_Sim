@@ -51,17 +51,18 @@ public:
   }
   void PrintResults () override;
 
-void SetBurstArrivals (double val);
-void SetBurstLength (double val);
-void SetDataRate (double val_mbit);
+void SetBwdFactor (double factor, double avail_bwd_mbit);
 
 protected:
+  void SetBurstArrivals (double val);
+  void SetBurstLength (double val);
+  void SetDataRate (double val_mbit);
   void GenerateAppTraffic () override;
   double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
 
   // PPBP
-  uint32_t		    m_pktSize = 1470;       // Size of packets	
-  Ptr<RandomVariableStream> m_burstArrivals = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (20)); // Mean rate of burst arrivals
+  uint32_t		    m_pktSize = 1470 * 15;       // Size of packets, rescaled to be similar to VCA packet size
+  Ptr<RandomVariableStream> m_burstArrivals = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (240)); // Mean rate of burst arrivals
 	Ptr<RandomVariableStream> m_burstLength = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (0.2)); // Mean burst time length
 	DataRate m_cbrRate = DataRate ("10Mb/s");// Burst intensity (constant bit-rate)
 
@@ -93,7 +94,7 @@ protected:
 class BackgroundTrafficApp : public GeneralTrafficApp
 {
 public:
-  BackgroundTrafficApp (BorderRouter *br, ia_t dst_ia, uint16_t local_if, std::vector<std::vector<const PathSegment *>> all_paths,
+  BackgroundTrafficApp (BorderRouter *br, ia_t dst_ia, std::vector<std::vector<const PathSegment *>> all_paths,
                         int32_t path_id, uint16_t inf, uint16_t hopf)
   : GeneralTrafficApp (NULL, 0, 0, dst_ia, 0, all_paths),
   br (br),
@@ -104,6 +105,7 @@ public:
   }
 
   void StartAppTraffic () override;
+  std::string GetIfInfoAsString ();
 
   // storing the background infos
   static std::map<std::pair<BorderRouter *, uint16_t>, BackgroundTrafficApp *> backgroundTrafficApps;

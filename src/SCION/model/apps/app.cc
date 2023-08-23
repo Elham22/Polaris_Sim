@@ -71,6 +71,12 @@ App::StartAppTraffic ()
     }
 }
 
+void
+App::StopAppTraffic ()
+{
+  stopped = true;
+}
+
 void 
 App::GenerateAppTraffic ()
 {
@@ -153,7 +159,7 @@ App::ReceiveProbeResponse (ProbeResp probe_resp)
       if (probe_resp.src_ia == dst_ia && probe_resp.src_host_addr == dst_host_addr)
         {
           // wait a bit for other probes before computing the score
-          Simulator::Schedule(Seconds(1), &App::ComputeAllScores, this);
+          Simulator::Schedule(Seconds(1), &App::ComputeAllScores, this, true);
           first_probe_returned = true;
         }
     }
@@ -176,27 +182,34 @@ App::isActivePath (int32_t path_id)
 }
 
 void
-App::ComputeAllScores ()
+App::ComputeAllScores (bool triggered_by_probes)
 {
-  std::cout << "app " << app_id << " computing all scores" << std::endl;
+  std::cout << "app " << app_id << " computing all scores at " << Simulator::Now ().ToInteger (Time::Unit::MS)
+            << "(" << Simulator::Now ().ToDouble (Time::Unit::MIN) << " min)" << std::endl;
   double max_score = - INFINITY;
-  uint32_t max_id = 0;
-  for (uint32_t i = 0; i < path_infos->size (); i++)
+  int32_t max_id = 0;
+  auto path_info_container = path_infos;
+  if (probes_pending && !triggered_by_probes)
+    {
+      path_info_container = path_infos_old; // probing is currently ongoing, current path_infos might be incomplete so use old path_infos.
+    }
+
+  for (uint32_t i = 0; i < path_info_container->size (); i++)
   {
-    auto path_info = path_infos->at (i);
+    auto path_info = path_info_container->at (i);
     std::cout << "path_id " << i;
     if (isActivePath (i))
       {
         path_info.latency = Time::FromDouble(active_latency, Time::Unit::US);
-        path_info.score = ComputeScore (active_latency / 1000., active_loss, 700, i); // 700 bonus for being the active path
+        path_info.score = ComputeScore (active_latency / 1000., active_loss, 0, i);
       }
     else
       {
-        double additional_score = 0.;
+        double additional_score = -500; // punishment for choosing a different path
         double loss = path_info.GetLoss (&additional_score);
         path_info.score = ComputeScore (path_info.latency.ToDouble (Time::Unit::MS), loss, additional_score, i);
       }
-    std::cout << ", score: " << path_info.score;
+    std::cout << "score: " << path_info.score;
 
     if (path_info.score > max_score)
       {
@@ -206,12 +219,20 @@ App::ComputeAllScores ()
       }
     std::cout << std::endl;
   }
-  best_path_id = max_id;
-  if (probes_pending)
+
+  if (best_path_id != max_id)
+  {
+    best_path_id = max_id;
+    active_loss = 0.;
+    active_latency = 0.;
+  }
+
+  if (probes_pending && triggered_by_probes)
     {
       probes_pending = false;
       Simulator::Schedule (Seconds(30), &App::SendProbes, this);
     }
+  last_scoring = Simulator::Now ();
 }
 
 /**
@@ -244,6 +265,14 @@ App::ReceiveAppResponse (AppResp app_resp)
   active_latency = app_resp.avg_latency;
   active_loss = app_resp.loss;
   app_responses.push_back (std::make_pair (Simulator::Now (), app_resp));
+
+  if (active_loss >  acceptable_loss // loss too high, recompute scores.
+      && Simulator::Now () > last_scoring + Seconds (5) /* Backoff to avoid too frequent score computation. When path is
+                                                          switched, packets over old path might still arrive for a short time. */
+      )
+  {
+    ComputeAllScores (false);
+  }
 }
 
 void
@@ -255,6 +284,18 @@ App::PrintResults ()
     std::cout << entry.first.ToInteger (Time::Unit::MS) << ", " << entry.second.avg_latency / 1000. << ", "
               << entry.second.loss << ", " << entry.second.bytes_received << std::endl;
   }
+}
+
+void
+App::PrintPathInfo ()
+{
+  std::cout << host->GetAddressAsString () << " " << app_id << std::endl;
+  for (uint64_t i = 0; i < all_paths.size (); ++i)
+    {
+      std::cout << "path_id " << i << ", ";
+      host->PrintPath (all_paths.at (i));
+    }
+  std::cout << "End of app path info" << std::endl;
 }
 
 } // namespace ns3

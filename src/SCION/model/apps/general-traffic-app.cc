@@ -23,6 +23,23 @@
 
 namespace ns3 {
 
+void
+GeneralTrafficApp::SetBwdFactor (double factor, double avail_bwd_Mbit)
+{
+  if (factor <= 0.) 
+  {
+    SetDataRate (0.);
+    return;
+  }
+  double oldBitrate = static_cast<double>(m_cbrRate.GetBitRate());
+  SetDataRate (avail_bwd_Mbit * factor / 200.);
+
+  if (oldBitrate <= 0. && factor > 0.)
+  {
+    PPBP ();
+  }
+}
+
 void 
 GeneralTrafficApp::SetBurstArrivals (double val)
 {
@@ -38,12 +55,7 @@ GeneralTrafficApp::SetBurstLength (double val)
 void 
 GeneralTrafficApp::SetDataRate (double val_Mbit)
 {
-  double old_bitrate = static_cast<double>(m_cbrRate.GetBitRate());
   m_cbrRate = DataRate (std::to_string (val_Mbit) + "Mb/s");
-  if (old_bitrate <= 0 && val_Mbit > 0)
-  {
-    PPBP ();
-  }
 }
 
 void
@@ -70,7 +82,7 @@ void
 GeneralTrafficApp::PPBP() // Poisson Pareto Burst 
 {  
   double bitrate = static_cast<double>(m_cbrRate.GetBitRate());
-  if (bitrate <= 0)
+  if (bitrate <= 0 || stopped)
     {
       // stop sending packets and no longer schedule anything.
       m_activebursts = 1;
@@ -80,9 +92,10 @@ GeneralTrafficApp::PPBP() // Poisson Pareto Burst
   double inter_burst_intervals;
   inter_burst_intervals = 1/m_burstArrivals->GetValue();
 
+  //std::cout << "inter_burst " << inter_burst_intervals << std::endl;
   Ptr<ExponentialRandomVariable> exp = CreateObjectWithAttributes<ExponentialRandomVariable> ("Mean", DoubleValue (inter_burst_intervals));
   Time t_poisson_arrival = Seconds (exp->GetValue());
-  Simulator::Schedule(t_poisson_arrival,&GeneralTrafficApp::PoissonArrival, this);
+  Simulator::Schedule(t_poisson_arrival, &GeneralTrafficApp::PoissonArrival, this);
   
   // Pareto
   m_shape = 3 - 2 * m_h;
@@ -91,9 +104,9 @@ GeneralTrafficApp::PPBP() // Poisson Pareto Burst
   
   Ptr<ParetoRandomVariable> pareto = CreateObjectWithAttributes<ParetoRandomVariable> ("Scale", DoubleValue (scale), "Shape", DoubleValue (m_shape));
   
-  Simulator::Schedule(t_poisson_arrival + Seconds (pareto->GetValue()),&GeneralTrafficApp::ParetoDeparture, this);
+  Simulator::Schedule(t_poisson_arrival + Seconds (pareto->GetValue()), &GeneralTrafficApp::ParetoDeparture, this);
   
-  Simulator::Schedule(t_poisson_arrival,&GeneralTrafficApp::PPBP, this);
+  Simulator::Schedule(t_poisson_arrival, &GeneralTrafficApp::PPBP, this);
 }
 
 void
@@ -162,6 +175,14 @@ BackgroundTrafficApp::SendData (uint32_t size, std::vector<const ns3::PathSegmen
   br->SendBackgroundPacket (size * scale, dst_ia, path, inf, hopf);
 }
 
+std::string
+BackgroundTrafficApp::GetIfInfoAsString ()
+{
+  auto seg = all_paths.at (best_path_id).at (inf);
+  auto hop = seg->hops.at (hopf);
+  return "ing " + std::to_string (GET_HOP_ING_IF (hop)) + " eg " + std::to_string (GET_HOP_EG_IF (hop));
+}
+
 std::map<std::pair<BorderRouter *, uint16_t>, BackgroundTrafficApp *>
 BackgroundTrafficApp::backgroundTrafficApps = {};
 
@@ -188,17 +209,21 @@ BackgroundTrafficApp::AddBackgroundTraffic (std::vector<std::vector<const PathSe
               //std::cout << as_node->isd_number << ":" << as_node->as_number << std::endl;
               auto ing = GET_HOP_ING_IF (hop_from);
               BorderRouter *br = as_node->GetBr (ing);
+              //uint16_t local_if = br->GetLocalIfFromASIf (ing);
               uint16_t local_if = br->GetLocalIfFromASIf (GET_HOP_EG_IF (hop_from));
               double avail_bwd_Mbit = br->GetBwdGbit (local_if) * 1000.;
-              double background_bwd = avail_bwd_Mbit * bwdFactor / 10.; // divide by ten to not have to enter too small values in configs
+              // double background_bwd = avail_bwd_Mbit * bwdFactor / 10.; // divide by ten to not have to enter too small values in configs
               auto key = std::make_pair (br, local_if);
               if (backgroundTrafficApps.find (key) == backgroundTrafficApps.end ())
                 {
-                  BackgroundTrafficApp *app = new BackgroundTrafficApp (br, GET_HOP_IA (hop_to), local_if, all_paths, i, inf, hopf);
-                  app->SetDataRate (background_bwd);
+                  BackgroundTrafficApp *app = new BackgroundTrafficApp (br, GET_HOP_IA (hop_to), all_paths, i, inf, hopf);
+                  app->SetBwdFactor (bwdFactor, avail_bwd_Mbit);
                   backgroundTrafficApps[key] = app;
                   app->StartAppTraffic ();
                 }
+              else {
+                backgroundTrafficApps.at (key)->SetBwdFactor (bwdFactor, avail_bwd_Mbit);
+              }
               
               //std::cout << "BR " << br->GetLogitude () << ", " << br->GetLatitude () << ", if " << local_if << std::endl;
             }

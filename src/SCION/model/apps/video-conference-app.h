@@ -57,6 +57,7 @@ public:
       : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths),
       num_paths (all_paths.size ())
   {
+    acceptable_loss = 0.05;
     // triples the path vector so we get one path entry per path/quality pair.
     std::vector<std::vector<const PathSegment *>> copies;
     copies.resize (3 * num_paths);
@@ -66,11 +67,11 @@ public:
       }
     
     App::all_paths = copies;
-    for (uint32_t i = 0; i < copies.size (); ++i)
+    /*for (uint32_t i = 0; i < copies.size (); ++i)
       {
         std::cout << "Path_id " << i << ", ";
         ScionHost::PrintPath (copies.at (i));
-      }
+      }*/
   }
   void PrintResults () override;
 
@@ -88,7 +89,59 @@ protected:
   void GenerateAppTraffic () override;
   uint32_t ComputeExpectedBandwidth (uint32_t path_id) override;
   double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
-  void ComputeAllScores () override;
+  void ComputeAllScores (bool triggered_by_probes) override;
+  virtual std::string InfoString ();
+};
+
+class VCAPassive : public VideoConferenceApp
+{
+public:
+  VCAPassive (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia, host_addr_t app_dst_host_addr,
+              std::vector<std::vector<const PathSegment *>> all_paths)
+      : VideoConferenceApp (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths)
+  {
+
+  }
+
+protected:
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
+  std::string InfoString () override;
+};
+
+class VCANaive : public VideoConferenceApp
+{
+public:
+  VCANaive (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia, host_addr_t app_dst_host_addr,
+              std::vector<std::vector<const PathSegment *>> all_paths)
+      : VideoConferenceApp (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths)
+  {
+    auto var = CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0), "Max", DoubleValue (num_paths-1));
+    chosen_path = var->GetInteger ();
+  }
+
+protected:
+  uint32_t chosen_path;
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
+  std::string InfoString () override;
+
+};
+
+class VCAGiven : public VideoConferenceApp
+{
+public:
+  VCAGiven (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia, host_addr_t app_dst_host_addr,
+              std::vector<std::vector<const PathSegment *>> all_paths, std::string given_path)
+      : VideoConferenceApp (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths)
+  {
+    ParseGivenPath (given_path);
+  }
+
+protected:
+  uint32_t chosen_path = -1;
+  void ParseGivenPath (std::string given_path);
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
+  std::string InfoString () override;
+
 };
 
 } // namespace ns3

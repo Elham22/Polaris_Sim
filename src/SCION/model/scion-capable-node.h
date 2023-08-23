@@ -66,6 +66,9 @@ public:
   uint32_t GetNDevices (void) const;
   Time GetLocalTime (void) const;
 
+  std::string GetAddressAsString ();
+  void PrintLinkInfo (uint16_t local_if);
+
   virtual void AdvanceLocalTime ();
 
 protected:
@@ -95,12 +98,16 @@ protected:
    * For each time unit, the number of bytes is collected in current and after
    * the period expired it is written to the estimation.
   */
-  Time collection_period = MilliSeconds (500);
+  Time collection_period = MilliSeconds (1000);
   std::vector<uint64_t> current_throughput_bytes; // throughput of arriving bytes
   std::vector<uint64_t> current_loss_bytes;
+  std::vector<uint64_t> arrived_packets;
+  std::vector<uint64_t> lost_packets;
   std::vector<Time> last_update;
-  std::vector<uint64_t> estimated_throughput; // throughput of arriving bytes
-  std::vector<double> estimated_loss;
+  std::vector<std::vector<uint64_t>> estimated_throughput; // throughput of arriving bytes
+  std::vector<std::vector<double>> estimated_loss;
+  std::vector<std::vector<double>> estimated_packetloss;
+  std::vector<std::vector<Time>> estimation_times;
 
   packet_id_t next_packet_id;
 

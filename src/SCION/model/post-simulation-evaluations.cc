@@ -30,6 +30,7 @@
 #include "ns3/point-to-point-helper.h"
 #include "ns3/ptr.h"
 
+#include "src/SCION/model/apps/general-traffic-app.h"
 #include "src/SCION/model/beaconing/baseline.h"
 #include "src/SCION/model/beaconing/beacon-server.h"
 #include "src/SCION/model/beaconing/diversity-age-based.h"
@@ -1368,6 +1369,51 @@ PostSimulationEvaluations::PrintHostApps ()
             }
         }
     }
+  std::cout << "End Apps evaluation" << std::endl;
+}
+
+void
+PostSimulationEvaluations::PrintLinkStatistics ()
+{
+  std::cout << "########################### Link Statistics"
+               "#####################################"
+            << std::endl;
+
+  for (auto it = BackgroundTrafficApp::backgroundTrafficApps.begin ();
+            it != BackgroundTrafficApp::backgroundTrafficApps.end (); ++it)
+    {
+      auto br = it->first.first;
+      auto app = it->second;
+      std::cout << "BR " << br->GetAddressAsString () << " " << app->GetIfInfoAsString () << " --------------" << std::endl;
+      std::cout << "Time, Throughput, Loss" << std::endl;
+      br->PrintLinkInfo (it->first.second);
+      std::cout << "End results of Link." << std::endl;
+    }
+  std::cout << "End link statistics" << std::endl;
+}
+
+void
+PostSimulationEvaluations::PrintAppPathInfo ()
+{
+  std::cout << "########################### Path info per app"
+               "#####################################"
+            << std::endl;
+  for (uint32_t i = 0; i < as_nodes.GetN (); ++i)
+    {
+      ScionAs *node = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (i)));
+      for (uint32_t j = 0; j < node->GetNHosts (); ++j)
+        {
+          ScionHost *host = dynamic_cast<ScionHost *> (node->GetHost (j+2));
+          if (host != NULL)
+            {
+              for (uint32_t k = 0; k < host->apps.size (); ++k)
+                {
+                  host->apps.at (k)->PrintPathInfo ();
+                }
+            }
+        }
+    }
+  std::cout << "End path info" << std::endl;
 }
 
 void

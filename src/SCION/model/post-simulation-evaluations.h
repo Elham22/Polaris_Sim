@@ -73,6 +73,8 @@ public:
     REGISTER_FUN (PrintNumberOfValidBeaconEntriesInBeaconStore)
 
     REGISTER_FUN (PrintHostApps)
+    REGISTER_FUN (PrintLinkStatistics)
+    REGISTER_FUN (PrintAppPathInfo)
   }
 
   void DoFinalEvaluations ();
@@ -118,6 +120,10 @@ public:
   void PrintNumberOfValidBeaconEntriesInBeaconStore ();
 
   void PrintHostApps ();
+
+  void PrintLinkStatistics ();
+
+  void PrintAppPathInfo ();
 
   friend void
   SortBeaconsByPollutionByLatency (NodeContainer &as_nodes, ScionAs *as1, ScionAs *as2,

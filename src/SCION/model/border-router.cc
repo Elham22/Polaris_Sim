@@ -182,10 +182,25 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
   int64_t avail_bwd_bytes = GetBwdGbit (local_if) * 0.125e9;
   payload.probe_resp.raw_bwd = avail_bwd_bytes;
   //std::cout << "Raw bwd " << payload.probe_resp.raw_bwd  << " Gbps" << std::endl;
-  int64_t new_bwd = estimated_throughput.at (local_if) + request.expected_bandwidth;
-  double new_loss = new_bwd < avail_bwd_bytes ? 0 : ((double) new_bwd - avail_bwd_bytes) / new_bwd;
-  std::cout << "Loss estimation, id " << request.app_id << "|" << request.probe_id << ", raw_bwd " << avail_bwd_bytes << ", est " << estimated_throughput.at (local_if) << ", req "
-            << request.expected_bandwidth << ", new " << new_bwd << ", loss " << new_loss << std::endl;
+  double new_loss = 0.;
+  if (estimated_throughput.at (local_if).size () > 0 || estimated_packetloss.at (local_if).size () > 0)
+    {
+      int64_t new_bwd = estimated_throughput.at (local_if).at (estimated_throughput.at (local_if).size () - 1) + request.expected_bandwidth;
+      new_loss = new_bwd < avail_bwd_bytes && estimated_packetloss.at (local_if).at (estimated_packetloss.at (local_if).size () - 1) == 0 ? 0 :
+                        estimated_packetloss.at (local_if).at (estimated_packetloss.at (local_if).size () - 1) + ((double) request.expected_bandwidth) / avail_bwd_bytes;
+      
+
+      auto hop = packet->path.at (old_inf)->hops.at (old_hopf);
+
+      std::cout << "Loss estimation, id " << request.app_id << "|" << request.probe_id
+                << " (" << GetAddressAsString () << ", " << GET_HOP_ING_IF (hop) << ", " << GET_HOP_EG_IF (hop) << ")" << ", time "
+                << estimation_times.at (local_if).at (estimation_times.at (local_if).size () - 1).ToInteger(Time::Unit::MS)
+                << ", raw_bwd " << avail_bwd_bytes << ", est "
+                << estimated_throughput.at (local_if).at (estimated_throughput.at (local_if).size () - 1) << ", req "
+                << request.expected_bandwidth << ", new " << new_bwd << ", loss " << new_loss << ", measured_loss "
+                << estimated_loss.at (local_if).at (estimated_loss.at (local_if).size () - 1) << " | "
+                << estimated_packetloss.at (local_if).at (estimated_packetloss.at (local_if).size () - 1) << std::endl;
+    }
   payload.probe_resp.expected_loss = new_loss;
   
   // TODO additional score is currently not implemented

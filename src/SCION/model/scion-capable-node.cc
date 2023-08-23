@@ -62,16 +62,26 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
   NS_LOG_FUNCTION (packet);
   UpdateInterfaceEstimation (local_if);
   current_throughput_bytes.at (local_if) += packet->size;
+  arrived_packets.at (local_if) += 1;
+  /*if (as_number == 0 && local_address == 0)
+    {
+      std::cout << "Schedule packet type " << packet->payload_type << " size " << packet->size << std::endl;
+    }*/
   auto new_size = transmission_queues_lengths.at (local_if) + packet->size;
   if (new_size > max_transmission_queues_lengths.at (local_if)
       && packet->payload_type != PayloadType::QOS_PROBE_REQ && packet->payload_type != PayloadType::QOS_PROBE_RESP
       && packet->payload_type != PayloadType::APPLICATION_RESP)
     {
-      /*std::cout << local_time.ToDouble (Time::Unit::MS) << ": Node " << isd_number << ":" << as_number << ":" << local_address << ", dropping packet "
-                << packet->id << ", type " << packet->payload_type << ", if " << local_if << ", queue length: " 
+      /*std::cout << local_time.ToDouble (Time::Unit::S) << ": Node " << isd_number << ":" << as_number << ":" << local_address << ", dropping packet "
+                << packet->id << ", type " << packet->payload_type << " size " << packet->size << ", if " << local_if << ", queue length: " 
                 << new_size << "/" << max_transmission_queues_lengths.at (local_if) << std::endl;*/
       // TODO some packets are never dropped to make their transmission reliable. Handling loss of these packets should be implemented later.
+      /*if (as_number == 0 && local_address == 0)
+        {
+          std::cout << "Drop packet type " << packet->payload_type << " size " << packet->size << std::endl;
+        }*/
       current_loss_bytes.at (local_if) += packet->size;
+      lost_packets.at (local_if) += 1;
       Drop (packet);
       return;
     }
@@ -172,6 +182,10 @@ ScionCapableNode::InitializeTransmissionQueues ()
   last_update.resize (n_devices);
   estimated_throughput.resize (n_devices);
   estimated_loss.resize (n_devices);
+  arrived_packets.resize (n_devices);
+  lost_packets.resize (n_devices);
+  estimated_packetloss.resize (n_devices);
+  estimation_times.resize (n_devices);
 
   // set the max_queue sizes to the bwd-delay product
   for (uint32_t i = 0; i < n_devices; ++i)
@@ -324,14 +338,48 @@ ScionCapableNode::GetLocalTime (void) const
 void
 ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
 {
+  AdvanceLocalTime ();
   auto time_passed = local_time - last_update.at (local_if);
   if (time_passed > collection_period)
     {
-      estimated_loss.at (local_if) = ((double) current_loss_bytes.at (local_if)) / current_throughput_bytes.at (local_if);
-      estimated_throughput.at (local_if) = current_throughput_bytes.at (local_if) * 1000 / time_passed.ToInteger (Time::Unit::MS);
+      estimated_loss.at (local_if).push_back (current_throughput_bytes.at (local_if) > 0 ? ((double) current_loss_bytes.at (local_if)) / current_throughput_bytes.at (local_if) : 0);
+      estimated_throughput.at (local_if).push_back (current_throughput_bytes.at (local_if) * 1000 / time_passed.ToInteger (Time::Unit::MS));
+      estimated_packetloss.at (local_if).push_back (arrived_packets.at (local_if) > 0 ? ((double) lost_packets.at (local_if)) / arrived_packets.at (local_if) : 0);
+      estimation_times.at (local_if).push_back (local_time);
+      if (current_throughput_bytes.at (local_if) > 0)
+        {
+          Simulator::Schedule (collection_period + TimeStep (1), &ScionCapableNode::UpdateInterfaceEstimation, this, local_if);
+        }
+      //std::cout << "Lost / arrived " << lost_packets.at (local_if) << "/" << arrived_packets.at (local_if) << std::endl;
       current_loss_bytes.at (local_if) = 0;
       current_throughput_bytes.at (local_if) = 0;
+      lost_packets.at (local_if) = 0;
+      arrived_packets.at (local_if) = 0;
       last_update.at (local_if) = local_time;
+
+      std::cout << local_time.ToInteger (Time::Unit::S) << ": Node " << isd_number << ":" << as_number << ":" << local_address
+                << "(" << local_if << "):" << estimated_throughput.at (local_if). at(estimated_throughput.at (local_if).size () - 1)
+                << std::endl;
     }
+}
+
+void
+ScionCapableNode::PrintLinkInfo (uint16_t local_if)
+{
+  local_if = 0;
+  auto times = estimation_times.at (local_if);
+  auto throughput = estimated_throughput.at (local_if);
+  auto loss = estimated_packetloss.at (local_if);
+
+  for (uint64_t i = 0; i < times.size () && i < throughput.size () && i < loss.size (); ++i)
+    {
+      std::cout << times.at (i).ToInteger (Time::Unit::MS) << ", " << throughput.at (i) << ", " << loss.at (i) << std::endl; 
+    }
+}
+
+std::string
+ScionCapableNode::GetAddressAsString ()
+{
+  return std::to_string(isd_number) + ":" + std::to_string(as_number)  + ":" + std::to_string(local_address);
 }
 } // namespace ns3
