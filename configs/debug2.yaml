@@ -1,7 +1,7 @@
 time_resolution: PS
-topology: /cluster/home/passuter/scion-simulator/topology/host_qos/debug.xml
-events_file: /cluster/home/passuter/scion-simulator/user_defined_events/debug.json
-output: /cluster/scratch/passuter/debug.txt
+topology: /cluster/home/passuter/scion-simulator/topology/host_qos/debug2.xml
+events_file: /cluster/home/passuter/scion-simulator/user_defined_events/debug2.json
+output: /cluster/scratch/passuter/debug2.txt
 simulation_duration: 105min
 NUM_CORE: 128
 beacon_service:

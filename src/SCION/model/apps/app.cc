@@ -28,17 +28,19 @@ namespace ns3 {
 double
 PathInfo::GetLoss (double *additional_scoring)
 {
-  double max_loss = 0.;
+  if (activeLossMeasured)
+    {
+      return activeLoss;
+    }
+
+  double noloss = 1.;
   for (auto probe : probe_responses)
     {
-      if (probe.expected_loss > max_loss)
-        {
-          max_loss = probe.expected_loss;
-        }
+      noloss = noloss * (1. - probe.expected_loss);
     }
   uint32_t missing_probes = num_expected_responses - probe_responses.size ();
   *additional_scoring -= missing_probes * 1000; // punish missing probes
-  return max_loss;
+  return 1. - noloss;
 }
 
 void
@@ -147,7 +149,7 @@ App::ReceiveProbeResponse (ProbeResp probe_resp)
 {
   if (probe_resp.src_ia == dst_ia && probe_resp.src_host_addr == dst_host_addr)
     {
-      path_infos->at(probe_resp.probe_id).latency = Time::FromInteger(probe_resp.time_recv, Time::Unit::MS) - path_infos->at(probe_resp.probe_id).probe_sent_time;
+      path_infos->at(probe_resp.probe_id).latency = probe_resp.time_recv - path_infos->at(probe_resp.probe_id).probe_sent_time.ToInteger (Time::Unit::MS);
     }
   else
     {
@@ -200,14 +202,13 @@ App::ComputeAllScores (bool triggered_by_probes)
     std::cout << "path_id " << i;
     if (isActivePath (i))
       {
-        path_info.latency = Time::FromDouble(active_latency, Time::Unit::US);
-        path_info.score = ComputeScore (active_latency / 1000., active_loss, 0, i);
+        path_info.score = ComputeScore (path_info.latency, path_info.activeLoss, 0, i, true);
       }
     else
       {
         double additional_score = -500; // punishment for choosing a different path
         double loss = path_info.GetLoss (&additional_score);
-        path_info.score = ComputeScore (path_info.latency.ToDouble (Time::Unit::MS), loss, additional_score, i);
+        path_info.score = ComputeScore (path_info.latency, loss, additional_score, i, path_info.activeLossMeasured);
       }
     std::cout << "score: " << path_info.score;
 
@@ -243,7 +244,7 @@ App::ComputeAllScores (bool triggered_by_probes)
  * Subclasses should implement score functions that work best for their applications.
 */
 double
-App::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id)
+App::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool wasActive)
 {
   std::cout << "(" << latency << ", " << loss << ", " << additional_scoring << ")";
   return additional_scoring - latency;
@@ -264,6 +265,11 @@ App::ReceiveAppResponse (AppResp app_resp)
 {
   active_latency = app_resp.avg_latency;
   active_loss = app_resp.loss;
+  auto path_info = path_infos->at (best_path_id);
+  path_info.activeLoss = app_resp.loss;
+  path_info.activeLossMeasured = true;
+  path_info.latency = app_resp.avg_latency / 1000;
+  path_infos->at (best_path_id) = path_info;
   app_responses.push_back (std::make_pair (Simulator::Now (), app_resp));
 
   if (active_loss >  acceptable_loss // loss too high, recompute scores.

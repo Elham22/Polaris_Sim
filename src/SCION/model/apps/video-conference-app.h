@@ -88,9 +88,11 @@ protected:
   
   void GenerateAppTraffic () override;
   uint32_t ComputeExpectedBandwidth (uint32_t path_id) override;
-  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active) override;
   void ComputeAllScores (bool triggered_by_probes) override;
   virtual std::string InfoString ();
+
+  void ScheduleSendData (uint32_t size, std::vector<const ns3::PathSegment *> path);
 };
 
 class VCAPassive : public VideoConferenceApp
@@ -104,7 +106,7 @@ public:
   }
 
 protected:
-  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active) override;
   std::string InfoString () override;
 };
 
@@ -121,7 +123,7 @@ public:
 
 protected:
   uint32_t chosen_path;
-  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active) override;
   std::string InfoString () override;
 
 };
@@ -139,7 +141,7 @@ public:
 protected:
   uint32_t chosen_path = -1;
   void ParseGivenPath (std::string given_path);
-  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active) override;
   std::string InfoString () override;
 
 };

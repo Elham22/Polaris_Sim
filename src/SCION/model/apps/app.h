@@ -45,8 +45,10 @@ public:
   u_int32_t num_expected_responses;
   std::vector<ProbeResp> probe_responses;
   Time probe_sent_time;
-  Time latency;
+  double latency;
   double score = -INFINITY;
+  bool activeLossMeasured = false;
+  double activeLoss = 0.0;
 
   double GetLoss (double *additional_score);
 
@@ -78,6 +80,7 @@ public:
   virtual void PrintPathInfo ();
 
 protected:
+  uint32_t m_pktSize = 1470 * 15;       // Size of packets
   ScionHost *host;
   uint32_t app_id;
   app_packet_id_t packet_id = 0;
@@ -106,7 +109,7 @@ protected:
   void CheckResendProbes ();
   virtual void ComputeAllScores (bool triggered_by_probes);
   virtual bool isActivePath (int32_t path_id);
-  virtual double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id);
+  virtual double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active);
   std::vector<const ns3::PathSegment *> GetPath ();
   virtual void SendData (uint32_t size, std::vector<const ns3::PathSegment *> path);
 };

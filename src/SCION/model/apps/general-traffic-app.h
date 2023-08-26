@@ -58,10 +58,9 @@ protected:
   void SetBurstLength (double val);
   void SetDataRate (double val_mbit);
   void GenerateAppTraffic () override;
-  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id) override;
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active) override;
 
   // PPBP
-  uint32_t		    m_pktSize = 1470 * 15;       // Size of packets, rescaled to be similar to VCA packet size
   Ptr<RandomVariableStream> m_burstArrivals = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (240)); // Mean rate of burst arrivals
 	Ptr<RandomVariableStream> m_burstLength = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (0.2)); // Mean burst time length
 	DataRate m_cbrRate = DataRate ("10Mb/s");// Burst intensity (constant bit-rate)

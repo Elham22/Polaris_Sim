@@ -65,7 +65,9 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
   arrived_packets.at (local_if) += 1;
   /*if (as_number == 0 && local_address == 0)
     {
-      std::cout << "Schedule packet type " << packet->payload_type << " size " << packet->size << std::endl;
+      std::cout << local_time.ToDouble (Time::Unit::S) << ": Schedule packet type " << packet->payload_type << " size " << packet->size
+                << " Q before " << transmission_queues_lengths.at (local_if) << "/" << max_transmission_queues_lengths.at (local_if)
+                << std::endl;
     }*/
   auto new_size = transmission_queues_lengths.at (local_if) + packet->size;
   if (new_size > max_transmission_queues_lengths.at (local_if)
@@ -357,9 +359,9 @@ ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
       arrived_packets.at (local_if) = 0;
       last_update.at (local_if) = local_time;
 
-      std::cout << local_time.ToInteger (Time::Unit::S) << ": Node " << isd_number << ":" << as_number << ":" << local_address
+      /*std::cout << local_time.ToInteger (Time::Unit::S) << ": Node " << isd_number << ":" << as_number << ":" << local_address
                 << "(" << local_if << "):" << estimated_throughput.at (local_if). at(estimated_throughput.at (local_if).size () - 1)
-                << std::endl;
+                << std::endl;*/
     }
 }
 

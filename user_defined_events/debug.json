@@ -4,6 +4,11 @@
     "time": "103min",
     "type": "start_application",
     "args": ["0", "1356", "2", "0", "2914", "3", "video conference naive", "5"]
+  },
+  {
+    "time": "104.75min",
+    "type": "stop_app_traffic",
+    "args": ["0", "1356", "2", "0"]
   }
 ]
 }

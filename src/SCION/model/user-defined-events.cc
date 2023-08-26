@@ -79,6 +79,8 @@ UserDefinedEvents::ConstructFuncMap ()
       FunctionFactory (&UserDefinedEvents::SendPacketBatch, this);
   function_name_to_function["start_application"] =
       FunctionFactory (&UserDefinedEvents::StartApp, this);
+  function_name_to_function["stop_app_traffic"] =
+      FunctionFactory (&UserDefinedEvents::StopAppTraffic, this);
   function_name_to_function["set_link_rate"] =
       FunctionFactory (&UserDefinedEvents::SetLinkTraffic, this);
   function_name_to_function["time_references_down"] =

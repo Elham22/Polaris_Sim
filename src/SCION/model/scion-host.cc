@@ -525,12 +525,16 @@ ScionHost::SendAppResp (std::tuple <ia_t, host_addr_t, app_id_t> key)
       return;
     }
   payload.app_resp.app_id = std::get<2> (key);
-  payload.app_resp.loss = ((double) num_packets_expected - info.num_packets) / num_packets_expected;
+  payload.app_resp.loss = ((double) num_packets_expected - info.num_packets) / num_packets_expected /2;
   payload.app_resp.avg_latency = ((double) info.aggregated_latencies) / info.num_packets;
   payload.app_resp.bytes_received = info.bytes_received;
   
-  std::cout << "Sending app resp for app_id " << payload.app_resp.app_id << ", exp_num_packets " << num_packets_expected << ", packets arrived "
+  /*std::cout << "Sending app resp for app_id " << payload.app_resp.app_id << ", exp_num_packets " << num_packets_expected << ", packets arrived "
             << info.num_packets << ", loss " << payload.app_resp.loss << ", latency " << payload.app_resp.avg_latency << std::endl;
+  for (uint64_t i = 0; i < num_packets_expected - info.num_packets; ++i)
+    {
+      std::cout << "Missing packet" << std::endl;
+    }*/
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, std::get<0> (key), std::get<1> (key), sizeof (AppResp), info.path);
   packet->path_reversed = true;
