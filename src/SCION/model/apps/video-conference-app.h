@@ -80,7 +80,7 @@ protected:
   std::vector<std::tuple<int64_t, uint32_t, int32_t>> selected_qualities;
 
   // parameters
-  std::vector<double> bitrates {0.7e6, 1.5e6, 5e6};
+  std::vector<double> bitrates {10*0.7e6, 10*1.5e6, 10*5e6};
   const uint16_t fps = 30;
   double selected_bitrate = bitrates.at (1);
   LaplaceRV frame_size_noise = LaplaceRV (0.15); // noise of the packet sizes, modeled after rfc8593
@@ -89,8 +89,12 @@ protected:
   void GenerateAppTraffic () override;
   uint32_t ComputeExpectedBandwidth (uint32_t path_id) override;
   double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active) override;
+  double MetricScore (double latency, double loss, uint32_t quality);
   void ComputeAllScores (bool triggered_by_probes) override;
   virtual std::string InfoString ();
+
+  bool rescore (double active_loss) override;
+  bool isActivePath (int32_t path_id) override;
 
   void ScheduleSendData (uint32_t size, std::vector<const ns3::PathSegment *> path);
 };

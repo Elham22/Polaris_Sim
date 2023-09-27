@@ -105,7 +105,7 @@ protected:
   std::vector<uint64_t> lost_packets;
   std::vector<Time> last_update;
   std::vector<std::vector<uint64_t>> estimated_throughput; // throughput of arriving bytes
-  std::vector<std::vector<double>> estimated_loss;
+  std::vector<std::vector<uint64_t>> predicted_new_throughput;
   std::vector<std::vector<double>> estimated_packetloss;
   std::vector<std::vector<Time>> estimation_times;
 

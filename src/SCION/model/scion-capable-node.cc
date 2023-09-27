@@ -183,7 +183,7 @@ ScionCapableNode::InitializeTransmissionQueues ()
   current_loss_bytes.resize (n_devices);
   last_update.resize (n_devices);
   estimated_throughput.resize (n_devices);
-  estimated_loss.resize (n_devices);
+  predicted_new_throughput.resize (n_devices);
   arrived_packets.resize (n_devices);
   lost_packets.resize (n_devices);
   estimated_packetloss.resize (n_devices);
@@ -203,7 +203,10 @@ ScionCapableNode::InitializeTransmissionQueues ()
         {
           propagation_delay = 100000; // 0.1ms delay minimum
         }
-      max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay; // units cancel out, 1Gbit = 10^9bit, 1NS = 10^(-9)s
+      // units cancel out, 1Gbit = 10^9bit, 1NS = 10^(-9)s
+      //max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay;
+      // factor of 20 for testing
+      max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay * 20;
     }
 }
 
@@ -344,8 +347,17 @@ ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
   auto time_passed = local_time - last_update.at (local_if);
   if (time_passed > collection_period)
     {
-      estimated_loss.at (local_if).push_back (current_throughput_bytes.at (local_if) > 0 ? ((double) current_loss_bytes.at (local_if)) / current_throughput_bytes.at (local_if) : 0);
-      estimated_throughput.at (local_if).push_back (current_throughput_bytes.at (local_if) * 1000 / time_passed.ToInteger (Time::Unit::MS));
+      //estimated_loss.at (local_if).push_back (current_throughput_bytes.at (local_if) > 0 ? ((double) current_loss_bytes.at (local_if)) / current_throughput_bytes.at (local_if) : 0);
+      uint64_t throughput = current_throughput_bytes.at (local_if) * 1000 / time_passed.ToInteger (Time::Unit::MS);
+      estimated_throughput.at (local_if).push_back (throughput);
+      auto predicted_new_throughput_local = predicted_new_throughput.at (local_if);
+      uint64_t previous_new_througput = throughput;
+      if (predicted_new_throughput_local.size () > 0)
+        {
+          // also consider some previous requests as they might have happened just before the update
+          previous_new_througput += predicted_new_throughput_local.at (predicted_new_throughput_local.size () - 1) / 10;
+        }
+      predicted_new_throughput_local.push_back (previous_new_througput);
       estimated_packetloss.at (local_if).push_back (arrived_packets.at (local_if) > 0 ? ((double) lost_packets.at (local_if)) / arrived_packets.at (local_if) : 0);
       estimation_times.at (local_if).push_back (local_time);
       if (current_throughput_bytes.at (local_if) > 0)

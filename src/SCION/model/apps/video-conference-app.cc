@@ -68,15 +68,38 @@ VideoConferenceApp::ComputeExpectedBandwidth (uint32_t path_id)
   return bitrates.at (quality) / 8;
 }
 
+bool
+VideoConferenceApp::rescore (double active_loss)
+{
+  return active_loss > acceptable_loss || 
+    (active_loss == 0 && best_path_id / num_paths < 2); // also rescore when loss is zero and not highest quality to select an increased quality.
+}
+
+bool
+VideoConferenceApp::isActivePath (int32_t path_id)
+{
+  return path_id % num_paths == best_path_id % num_paths && best_path_id >= 0;
+}
+
 double
 VideoConferenceApp::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active)
 {
-  std::cout << " VCA::ComputeScore (" << latency << ", " << loss << ", " << additional_scoring << "), ";
+  //std::cout << " VCA::ComputeScore (" << latency << ", " << loss << ", " << additional_scoring << "), ";
   //if (path_id == 51) return 10000; // force a specific path for debugging purposes
   uint32_t quality = path_id / num_paths;
-  double penalty_latency = latency < 50 ? 0 : latency * 2 - 100;
-  double penalty_loss = loss < acceptable_loss ?  loss * 2e3 : loss * 1e4;
-  return quality * 1000 + additional_scoring - penalty_latency - penalty_loss;
+  double penalty_latency = latency < 50 ? 0 : latency * 4 - 200;
+  double penalty_loss = loss < acceptable_loss ?  loss * 5e3 : loss * 1e4;
+  if ((loss > acceptable_loss && quality > 0) ||
+      (best_path_id != -1 &&
+        ((quality > 1 + best_path_id / num_paths) ||
+        (quality == 1 + best_path_id / num_paths && path_infos->at(best_path_id).activeLoss > 0) ||
+        (quality > 0 && quality >= best_path_id / num_paths && path_infos->at(best_path_id).activeLoss > acceptable_loss)
+        )
+      ))
+    {
+      penalty_loss += 10000; // backoff if congestion detected and high sending rate
+    }
+  return quality * 300 + additional_scoring - penalty_latency - penalty_loss;
 }
 
 void
@@ -86,6 +109,14 @@ VideoConferenceApp::ComputeAllScores (bool triggered_by_probes)
   uint32_t quality = best_path_id / num_paths;
   selected_bitrate = bitrates.at (quality);
   selected_qualities.push_back (std::make_tuple (host->GetLocalTime ().ToInteger (Time::Unit::MS), quality, best_path_id));
+}
+
+double
+VideoConferenceApp::MetricScore (double latency, double loss, uint32_t quality)
+{
+  double penalty_latency = latency < 50 ? 0 : latency * 4 - 200;
+  double penalty_loss = loss < acceptable_loss ?  loss * 5e3 : loss * 1e4;
+  return quality * 300 - penalty_latency - penalty_loss;
 }
 
 void
@@ -103,7 +134,7 @@ VideoConferenceApp::PrintResults ()
       }
     uint32_t quality = std::get<1> (selected_qualities.at (i));
     int32_t selected_path = std::get<2> (selected_qualities.at (i));
-    double score = VideoConferenceApp::ComputeScore (entry.second.avg_latency / 1000., entry.second.loss, 0, quality * num_paths, true);
+    double score = VideoConferenceApp::MetricScore (entry.second.avg_latency / 1000., entry.second.loss, quality);
     std::cout << timestamp << "(" << entry.first.ToDouble (Time::Unit::MIN) << " min), " << entry.second.avg_latency / 1000. << ", "
               << entry.second.loss << ", " << entry.second.bytes_received << ", " 
               << selected_path << ", " << quality << ", " 
@@ -116,7 +147,7 @@ void
 VideoConferenceApp::ScheduleSendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
 {
   Time delay = TimeStep (1);
-  Time increment = MilliSeconds (3);
+  Time increment = MilliSeconds (1);
   // split up into multiple packets if larger than pktSize
   while (size > m_pktSize)
     {
@@ -139,17 +170,25 @@ VideoConferenceApp::InfoString ()
 double
 VCAPassive::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active)
 {
-  std::cout << " VCAPassive::ComputeScore (" << latency << ", " << loss << ", " << additional_scoring << ", " << was_active << "), ";
+  //std::cout << " VCAPassive::ComputeScore (" << latency << ", " << loss << ", " << additional_scoring << ", " << was_active << "), ";
   double penalty_loss = 0.;
   // only do loss sensitive computation based on active loss but not on probing
   if (was_active)
     {
-      penalty_loss = loss < acceptable_loss ?  loss * 2e3 : loss * 1e4;
+      penalty_loss = loss < acceptable_loss ?  loss * 5e3 : loss * 1e4;
     }
   uint32_t quality = path_id / num_paths;
-  double penalty_latency = latency < 50 ? 0 : latency * 2 - 100;
-  //additional scoring (same path and incomplete probing) is taken into account but has lesser impact
-  return quality * 1000 - penalty_loss - penalty_latency + additional_scoring;
+
+  // start new paths at low quality only
+  if ((quality > 0 && !isActivePath(path_id)) || 
+      (quality > 1 + best_path_id / num_paths) ||
+      (quality == 1 + best_path_id / num_paths && path_infos->at(best_path_id).activeLoss > 0))
+    {
+      additional_scoring -= 10000;
+      //std::cout << "Path quality disqualified, "; 
+    }
+  double penalty_latency = latency < 50 ? 0 : latency * 4 - 200;
+  return quality * 300 - penalty_loss - penalty_latency + additional_scoring;
 }
 
 std::string
@@ -161,10 +200,19 @@ VCAPassive::InfoString ()
 double
 VCANaive::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active)
 {
-  std::cout << " VCANaive::ComputeScore (" << latency << ", " << loss << ", " << additional_scoring << "), ";
+  //std::cout << " VCANaive::ComputeScore (" << latency << ", " << loss << ", " << additional_scoring << "), ";
   uint32_t quality = path_id / num_paths;
-  uint32_t path_bonus = path_id % num_paths == chosen_path ? 500 : 0;
-  return quality * 1000 + path_bonus;
+  uint32_t path_bonus = path_id % num_paths == chosen_path ? 5000 : 0;
+  // start new paths at low quality only
+  bool current_path = best_path_id >= 0 && path_id % num_paths == best_path_id % num_paths;
+  if ((quality > 0 && !current_path) ||
+      (quality > 1 + best_path_id / num_paths) ||
+      (quality == 1 + best_path_id / num_paths && path_infos->at(best_path_id).activeLoss > 0) ||
+      (quality > 0 && was_active && loss > acceptable_loss))
+    {
+      path_bonus = 0;
+    }
+  return quality * 300 + path_bonus;
 }
 
 std::string
@@ -176,10 +224,19 @@ VCANaive::InfoString ()
 double
 VCAGiven::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active)
 {
-  std::cout << " VCAGiven::ComputeScore (" << latency << ", " << loss << ", " << additional_scoring << "), ";
+  //std::cout << " VCAGiven::ComputeScore (" << latency << ", " << loss << ", " << additional_scoring << "), ";
   uint32_t quality = path_id / num_paths;
-  uint32_t path_bonus = path_id % num_paths == chosen_path ? 500 : 0;
-  return quality * 1000 + path_bonus;
+  uint32_t path_bonus = path_id % num_paths == chosen_path ? 5000 : 0;
+  // start new paths at low quality only
+  bool current_path = best_path_id >= 0 && path_id % num_paths == best_path_id % num_paths;
+  if ((quality > 0 && !current_path) || 
+      (quality > 1 + best_path_id / num_paths) ||
+      (quality == 1 + best_path_id / num_paths && path_infos->at(best_path_id).activeLoss > 0) ||
+      (quality > 0 && was_active && loss > acceptable_loss))
+    {
+      path_bonus = 0;
+    }
+  return quality * 300 + path_bonus;
 }
 
 std::string

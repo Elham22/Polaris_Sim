@@ -183,14 +183,18 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
   payload.probe_resp.raw_bwd = avail_bwd_bytes;
   //std::cout << "Raw bwd " << payload.probe_resp.raw_bwd  << " Gbps" << std::endl;
   double new_loss = 0.;
-  if (estimated_throughput.at (local_if).size () > 0 || estimated_packetloss.at (local_if).size () > 0)
+  if (predicted_new_throughput.at (local_if).size () > 0 && estimated_packetloss.at (local_if).size () > 0)
     {
-      int64_t new_bwd = estimated_throughput.at (local_if).at (estimated_throughput.at (local_if).size () - 1) + request.expected_bandwidth;
+      double estimated_loss = estimated_packetloss.at (local_if).at (estimated_packetloss.at (local_if).size () - 1);
+      uint64_t predicted_new_throughput_val = predicted_new_throughput.at (local_if).at (predicted_new_throughput.at (local_if).size () - 1);
+      int64_t new_bwd = predicted_new_throughput_val + request.expected_bandwidth;
       new_loss = new_bwd < avail_bwd_bytes && estimated_packetloss.at (local_if).at (estimated_packetloss.at (local_if).size () - 1) == 0 ? 0 :
-                        estimated_packetloss.at (local_if).at (estimated_packetloss.at (local_if).size () - 1) + ((double) request.expected_bandwidth) / avail_bwd_bytes;
+                        estimated_loss + ((double) request.expected_bandwidth) / avail_bwd_bytes;
       
+      predicted_new_throughput_val += request.expected_bandwidth / 5; // assume conservatively that 20% will send traffic through here
+      predicted_new_throughput.at (local_if).at (predicted_new_throughput.at (local_if).size () - 1) = predicted_new_throughput_val;
 
-      auto hop = packet->path.at (old_inf)->hops.at (old_hopf);
+      /*auto hop = packet->path.at (old_inf)->hops.at (old_hopf);
 
       std::cout << "Loss estimation, id " << request.app_id << "|" << request.probe_id
                 << " (" << GetAddressAsString () << ", " << GET_HOP_ING_IF (hop) << ", " << GET_HOP_EG_IF (hop) << ")" << ", time "
@@ -199,7 +203,7 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
                 << estimated_throughput.at (local_if).at (estimated_throughput.at (local_if).size () - 1) << ", req "
                 << request.expected_bandwidth << ", new " << new_bwd << ", loss " << new_loss << ", measured_loss "
                 << estimated_loss.at (local_if).at (estimated_loss.at (local_if).size () - 1) << " | "
-                << estimated_packetloss.at (local_if).at (estimated_packetloss.at (local_if).size () - 1) << std::endl;
+                << estimated_packetloss.at (local_if).at (estimated_packetloss.at (local_if).size () - 1) << std::endl;*/
     }
   payload.probe_resp.expected_loss = new_loss;
   

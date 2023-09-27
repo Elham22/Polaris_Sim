@@ -192,8 +192,17 @@ UserDefinedEvents::SetLinkTraffic (std::string src_isd_number, std::string src_a
   uint16_t local_if = br->GetLocalIfFromASIf (std::stoi (eg_if));
   double avail_bwd_Mbit = br->GetBwdGbit (local_if) * 1000.;
   //double new_bitrate_mbit = avail_bwd_Mbit * std::stod (bwdFactor) / 10.;
-  BackgroundTrafficApp::backgroundTrafficApps.at (std::make_pair (br, local_if))
-            ->SetBwdFactor (std::stod (bwdFactor), avail_bwd_Mbit);
+  try
+    {
+      BackgroundTrafficApp::backgroundTrafficApps.at (std::make_pair (br, local_if))
+                ->SetBwdFactor (std::stod (bwdFactor), avail_bwd_Mbit);
+    }
+  catch(const std::exception& e)
+    {
+      std::cerr << e.what() << '\n';
+      std::cout << "Could not set link traffic for as " << src_as_no << ", ing " << ing_if << ", eg " << eg_if << std::endl;
+    }
+  
 
 }
 

@@ -39,7 +39,7 @@ PathInfo::GetLoss (double *additional_scoring)
       noloss = noloss * (1. - probe.expected_loss);
     }
   uint32_t missing_probes = num_expected_responses - probe_responses.size ();
-  *additional_scoring -= missing_probes * 1000; // punish missing probes
+  *additional_scoring -= missing_probes * 50; // punish missing probes
   return 1. - noloss;
 }
 
@@ -186,8 +186,12 @@ App::isActivePath (int32_t path_id)
 void
 App::ComputeAllScores (bool triggered_by_probes)
 {
-  std::cout << "app " << app_id << " computing all scores at " << Simulator::Now ().ToInteger (Time::Unit::MS)
-            << "(" << Simulator::Now ().ToDouble (Time::Unit::MIN) << " min)" << std::endl;
+  /*bool printScore = host->GetLocalAddress() == 2 && app_id <= 2;
+  if (printScore)
+    {
+      std::cout << "app " << app_id << " computing all scores at " << Simulator::Now ().ToInteger (Time::Unit::MS)
+                << "(" << Simulator::Now ().ToDouble (Time::Unit::MIN) << " min), previous best path " << best_path_id << std::endl;
+    }*/
   double max_score = - INFINITY;
   int32_t max_id = 0;
   auto path_info_container = path_infos;
@@ -199,26 +203,38 @@ App::ComputeAllScores (bool triggered_by_probes)
   for (uint32_t i = 0; i < path_info_container->size (); i++)
   {
     auto path_info = path_info_container->at (i);
-    std::cout << "path_id " << i;
+    /*if (printScore)
+      {
+        std::cout << "path_id " << i;
+      }*/
     if (isActivePath (i))
       {
         path_info.score = ComputeScore (path_info.latency, path_info.activeLoss, 0, i, true);
       }
     else
       {
-        double additional_score = -500; // punishment for choosing a different path
+        double additional_score = -300; // punishment for choosing a different path
         double loss = path_info.GetLoss (&additional_score);
         path_info.score = ComputeScore (path_info.latency, loss, additional_score, i, path_info.activeLossMeasured);
       }
-    std::cout << "score: " << path_info.score;
+    /*if (printScore)
+      {
+        std::cout << "score: " << path_info.score;
+      }*/
 
     if (path_info.score > max_score)
       {
-        std::cout << " new max";
+        /*if (printScore)
+          {
+            std::cout << " new max";
+          }*/
         max_score = path_info.score;
         max_id = i;
       }
-    std::cout << std::endl;
+    /*if (printScore)
+      {
+        std::cout << std::endl;
+      }*/
   }
 
   if (best_path_id != max_id)
@@ -231,9 +247,15 @@ App::ComputeAllScores (bool triggered_by_probes)
   if (probes_pending && triggered_by_probes)
     {
       probes_pending = false;
-      Simulator::Schedule (Seconds(30), &App::SendProbes, this);
+      Simulator::Schedule (Seconds(180), &App::SendProbes, this);
     }
-  last_scoring = Simulator::Now ();
+  // Backoff to avoid too frequent score computation. When path is switched, packets over old path might still arrive for a short time.
+  //next_scoring = Simulator::Now () + Seconds (3);
+
+  // randomize delay time to introduce non-determinism. Breaks cycles where apps jump to same paths every time
+  auto var = CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0), "Max", DoubleValue (6));
+  auto randDelay = Seconds(var->GetValue(0.0, 6.0));
+  next_scoring = Simulator::Now () + Seconds (3) + randDelay;
 }
 
 /**
@@ -260,6 +282,12 @@ App::GetPath ()
   return all_paths.at (best_path_id);
 }
 
+bool
+App::rescore (double active_loss)
+{
+  return active_loss >  acceptable_loss; // loss too high, recompute scores.
+}
+
 void
 App::ReceiveAppResponse (AppResp app_resp)
 {
@@ -272,10 +300,7 @@ App::ReceiveAppResponse (AppResp app_resp)
   path_infos->at (best_path_id) = path_info;
   app_responses.push_back (std::make_pair (Simulator::Now (), app_resp));
 
-  if (active_loss >  acceptable_loss // loss too high, recompute scores.
-      && Simulator::Now () > last_scoring + Seconds (5) /* Backoff to avoid too frequent score computation. When path is
-                                                          switched, packets over old path might still arrive for a short time. */
-      )
+  if (rescore(active_loss) && Simulator::Now () > next_scoring)
   {
     ComputeAllScores (false);
   }

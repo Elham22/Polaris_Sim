@@ -100,8 +100,10 @@ protected:
   double active_latency = INFINITY;
   double active_loss = 1.0;
   double acceptable_loss = 1.0;
-  Time last_scoring = Time (0);
+  Time next_scoring = Time (0);
   bool stopped = false;
+
+  virtual bool rescore (double active_loss);
 
   virtual void GenerateAppTraffic ();
   virtual uint32_t ComputeExpectedBandwidth (uint32_t path_id); // bytes per second

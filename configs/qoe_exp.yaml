@@ -1,0 +1,26 @@
+time_resolution: PS
+topology: /cluster/home/passuter/scion-simulator/topology/host_qos/5_geo_rel_10cap.xml
+events_file: /cluster/scratch/passuter/qoe_exp.json
+output: /cluster/scratch/passuter/qoe_exp_results.txt
+simulation_duration: 105min
+NUM_CORE: 4
+beacon_service:
+  policy: baseline
+  #br_br_energy_file: /cluster/scratch/tabaeias/br_br_energy.txt
+  write_beacons_directory: /cluster/scratch/passuter/
+  period: 10min
+  expiration_period: 6h
+  first_beaconing: 0min
+  last_beaconing: 100min
+path_service: True
+only_propagation_delay: 0
+border_router:
+        truly_random_malicious: 0
+        percent_of_ASes_with_malicious_br: 0
+end_user:
+  number_per_as: 1
+post_eval:
+  - func: PrintAllDiscoveredPaths
+  - func: PrintHostApps
+  - func: PrintLinkStatistics
+  - func: PrintAppPathInfo
