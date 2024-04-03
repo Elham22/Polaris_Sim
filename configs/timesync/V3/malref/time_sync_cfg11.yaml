@@ -1,6 +1,6 @@
 time_resolution: PS
-topology: /cluster/home/tabaeias/scion-simulator/topology/2000_geo_rel.xml
-output: /cluster/scratch/tabaeias/time_sync_cfg11_results.txt
+topology: topology/2000_geo_rel.xml
+output: out/time_sync_cfg11_results.txt
 simulation_duration: 45d
 NUM_CORE: 128
 beacon_service:
@@ -31,7 +31,7 @@ time_service:
         G: 24
         number_of_paths_to_use_for_global_sync: 5
         path_selection: disjoint
-        time_service_output_path: /cluster/scratch/tabaeias/
+        time_service_output_path: out/
         read_disjoint_paths: NO_R_NO_W
         reference_clk: ON
         percent_of_malicious_time_references: 20

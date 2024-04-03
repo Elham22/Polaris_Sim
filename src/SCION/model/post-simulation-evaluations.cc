@@ -104,7 +104,7 @@ PostSimulationEvaluations::PrintTrafficSentFromCollectorsPerDstPerPeriod ()
 void
 PostSimulationEvaluations::FindMinLatencyToDnsRootServers ()
 {
-  std::string probes_file = "/cluster/scratch/tabaeias/atlas_probes.xml";
+  std::string probes_file = "inputs/atlas_probes.xml";
   std::ifstream fin_probes (probes_file.c_str ());
   std::ostringstream probes_sstr;
   probes_sstr << fin_probes.rdbuf ();
@@ -126,7 +126,7 @@ PostSimulationEvaluations::FindMinLatencyToDnsRootServers ()
       std::cout << "################################################## " << root_server_name
                 << " #########################################################" << std::endl;
 
-      std::string dns_root_file = "/cluster/scratch/tabaeias/" + root_server_name + ".xml";
+      std::string dns_root_file = "inputs/" + root_server_name + ".xml";
       std::ifstream fin_dns_root (dns_root_file.c_str ());
       std::ostringstream dns_root_sstr;
       dns_root_sstr << fin_dns_root.rdbuf ();
@@ -1048,7 +1048,7 @@ PostSimulationEvaluations::PrintPathPollutionIndex ()
 void
 PostSimulationEvaluations::PrintLeastPollutingPaths ()
 {
-  std::ifstream bgp_paths_file ("/cluster/scratch/tabaeias/BGP_path_and_pollution.txt");
+  std::ifstream bgp_paths_file ("inputs/BGP_path_and_pollution.txt");
   std::string line;
 
   std::map<std::tuple<int, int>, int> bgp_path_no = std::map<std::tuple<int, int>, int> ();

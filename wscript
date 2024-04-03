@@ -378,8 +378,6 @@ def configure(conf):
     env = conf.env
     conf.env['lgomp'] = conf.check(mandatory=True, lib='gomp', uselib_store='GOMP')
 
-    conf.env.append_value('INCLUDES', ['/cluster/home/tabaeias/yaml-cpp/lib/include'])
-    conf.env.append_value('LIBPATH', ['/cluster/home/tabaeias/yaml-cpp/lib/lib64'])
     conf.env['lyaml-cpp'] = conf.check(mandatory=True, lib='yaml-cpp', uselib_store='YAML-CPP')
 
     if Options.options.enable_gcov:
