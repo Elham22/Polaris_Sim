@@ -24,6 +24,8 @@
 #include <map>
 #include <unordered_map>
 #include <vector>
+#include <cstdint>
+#include <string>
 
 namespace ns3 {
 typedef uint32_t ia_t;
