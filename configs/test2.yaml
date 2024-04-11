@@ -1,13 +1,13 @@
 time_resolution: NS
-topology: /cluster/home/passuter/scion-simulator/topology/host_qos/test.xml
-events_file: /cluster/home/passuter/scion-simulator/user_defined_events/host_test2.json
-output: /cluster/scratch/passuter/test_results.txt
+topology: topology/host_qos/test.xml
+events_file: user_defined_events/host_test2.json
+output: out/test_results.txt
 simulation_duration: 105min
 NUM_CORE: 128
 beacon_service:
   policy: baseline
   #br_br_energy_file: /cluster/scratch/tabaeias/br_br_energy.txt
-  write_beacons_directory: /cluster/scratch/passuter/
+  write_beacons_directory: out/
   period: 10min
   expiration_period: 6h
   first_beaconing: 0min
