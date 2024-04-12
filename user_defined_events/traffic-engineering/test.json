@@ -1,0 +1,39 @@
+{"events":
+[
+  {
+    "time": "102.9min",
+    "type": "send_packet",
+    "args": ["0", "1356", "2", "0", "2914", "3", "1024"]
+  },
+  {
+    "time": "103min",
+    "type": "start_application",
+    "args": ["0", "1356", "2", "0", "2914", "3", "video conference passive", "0.0"]
+  },
+  {
+    "time": "103min",
+    "type": "start_application",
+    "args": ["0", "1356", "2", "0", "2914", "3", "video conference active", "0.0"]
+  },
+  {
+    "time": "103.01min",
+    "type": "set_link_rate",
+    "args": ["0", "0", "2", "0", "0.01"]
+  },
+  {
+    "time": "103.01min",
+    "type": "set_link_rate",
+    "args": ["0", "0", "1", "0", "0.01"]
+  },
+  {
+    "time": "103.01min",
+    "type": "set_link_rate",
+    "args": ["0", "0", "3", "0", "0.01"]
+  },
+  {
+    "time": "104.75min",
+    "type": "stop_app_traffic",
+    "args": ["0", "1356", "2", "0"]
+  }
+]
+}
