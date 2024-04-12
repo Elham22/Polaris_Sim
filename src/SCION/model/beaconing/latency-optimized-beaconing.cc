@@ -47,17 +47,17 @@ LatencyOptimized::DoInitializations (uint32_t num_ases, rapidxml::xml_node<> *xm
 }
 
 void
-LatencyOptimized::CreateInitialStaticInfoExtension (
-    static_info_extension_t &static_info_extension, uint16_t self_egress_if_no,
-    const OptimizationTarget *optimization_target)
+LatencyOptimized::CreateInitialStaticInfoExtension (static_info_extension_t &static_info_extension,
+                                                    uint16_t self_egress_if_no,
+                                                    const OptimizationTarget *optimization_target)
 {
   static_info_extension.insert (std::make_pair (StaticInfoType::LATENCY, 0));
 }
 
 std::tuple<bool, bool, bool, Beacon *, ld>
 LatencyOptimized::AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as,
-                                              uint16_t remote_egress_if_no,
-                                              uint16_t self_ingress_if_no, uint16_t now)
+                                           uint16_t remote_egress_if_no,
+                                           uint16_t self_ingress_if_no, uint16_t now)
 {
   uint16_t dst_as = UPPER_16_BITS (the_beacon.the_path.at (0));
 
@@ -101,8 +101,8 @@ LatencyOptimized::DeleteFromAlgorithmDataStructures (Beacon *the_beacon, ld repl
 
 void
 LatencyOptimized::InsertToAlgorithmDataStructures (Beacon *the_beacon, uint16_t sender_as,
-                                                       uint16_t remote_egress_if_no,
-                                                       uint16_t self_ingress_if_no)
+                                                   uint16_t remote_egress_if_no,
+                                                   uint16_t self_ingress_if_no)
 {
   uint16_t dst_as = UPPER_16_BITS (the_beacon->the_path.at (0));
   uint16_t self_ingress_if = LOWER_16_BITS (the_beacon->the_path.back ());

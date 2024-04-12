@@ -33,7 +33,7 @@ typedef uint64_t src_dst_ia_t;
 
 #define MAKE_IA(isd, as) ((((uint32_t) isd) << 16) | ((uint32_t) as))
 #define GET_ISDN(input) ((uint16_t) ((input) >> 16))
-#define GET_ASN(input) ((uint16_t) ((input) &0x0000ffff))
+#define GET_ASN(input) ((uint16_t) ((input) & 0x0000ffff))
 
 #define MAKE_IA_PAIR(src_ia, dst_ia) ((((uint64_t) src_ia) << 32) | ((uint64_t) dst_ia))
 #define MAKE_SRC_DST_PAIR(src_isd, src_as, dst_isd, dst_as)                                    \
@@ -41,16 +41,16 @@ typedef uint64_t src_dst_ia_t;
    ((uint64_t) dst_as))
 
 #define GET_SRC_ISD(input) ((uint16_t) ((input) >> 48))
-#define GET_SRC_AS(input) ((uint16_t) (((input) &0x0000ffff00000000) >> 32))
-#define GET_DST_ISD(input) ((uint16_t) (((input) &0x00000000ffff0000) >> 16))
-#define GET_DST_AS(input) ((uint16_t) ((input) &0x000000000000ffff))
+#define GET_SRC_AS(input) ((uint16_t) (((input) & 0x0000ffff00000000) >> 32))
+#define GET_DST_ISD(input) ((uint16_t) (((input) & 0x00000000ffff0000) >> 16))
+#define GET_DST_AS(input) ((uint16_t) ((input) & 0x000000000000ffff))
 
 #define GET_HOP_ISD(input) ((uint16_t) ((input) >> 48))
-#define GET_HOP_AS(input) ((uint16_t) (((input) &0x0000ffff00000000) >> 32))
-#define GET_HOP_IA(input) ((ia_t) (((input) &0xffffffff00000000) >> 32))
-#define GET_HOP_ING_IF(input) ((uint16_t) (((input) &0x00000000ffff0000) >> 16))
-#define GET_HOP_EG_IF(input) ((uint16_t) ((input) &0x000000000000ffff))
-#define GET_HOP_AS_ING(input) ((uint32_t) (((input) &0x0000ffffffff0000) >> 16))
+#define GET_HOP_AS(input) ((uint16_t) (((input) & 0x0000ffff00000000) >> 32))
+#define GET_HOP_IA(input) ((ia_t) (((input) & 0xffffffff00000000) >> 32))
+#define GET_HOP_ING_IF(input) ((uint16_t) (((input) & 0x00000000ffff0000) >> 16))
+#define GET_HOP_EG_IF(input) ((uint16_t) ((input) & 0x000000000000ffff))
+#define GET_HOP_AS_ING(input) ((uint32_t) (((input) & 0x0000ffffffff0000) >> 16))
 
 enum PathSegmentType { CORE_SEG = 0, UP_SEG = 1, DOWN_SEG = 2 };
 

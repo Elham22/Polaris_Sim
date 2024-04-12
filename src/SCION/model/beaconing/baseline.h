@@ -43,17 +43,17 @@ private:
 
   std::tuple<bool, bool, bool, Beacon *, ld>
   AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as, uint16_t remote_egress_if_no,
-                              uint16_t self_ingress_if_no, uint16_t now) override;
+                           uint16_t self_ingress_if_no, uint16_t now) override;
 
   void InsertToAlgorithmDataStructures (Beacon *the_beacon, uint16_t sender_as,
-                                            uint16_t remote_egress_if_no,
-                                            uint16_t self_ingress_if_no) override;
+                                        uint16_t remote_egress_if_no,
+                                        uint16_t self_ingress_if_no) override;
 
   void DeleteFromAlgorithmDataStructures (Beacon *the_beacon, ld replacement_key) override;
 
   void CreateInitialStaticInfoExtension (static_info_extension_t &static_info_extension,
-                                        uint16_t self_egress_if_no,
-                                        const OptimizationTarget *optimization_target) override;
+                                         uint16_t self_egress_if_no,
+                                         const OptimizationTarget *optimization_target) override;
 
   void UpdateAlgorithmDataStructuresPeriodic (Beacon *the_beacon, bool invalidated) override;
 };

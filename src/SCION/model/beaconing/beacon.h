@@ -36,14 +36,14 @@ namespace ns3 {
 #define BEACON_HOP_SIZE 132
 #define ORIGINATOR(beacon) (UPPER_16_BITS (beacon.the_path.front ()))
 #define ORIGINATOR_PTR(beacon) (UPPER_16_BITS (beacon->the_path.front ()))
-#define DST_AS(beacon)                                       \
+#define DST_AS(beacon)                                     \
   (beacon.beacon_direction == BeaconDirectionT::PULL_BASED \
-       ? beacon.optimization_target->target_as               \
+       ? beacon.optimization_target->target_as             \
        : UPPER_16_BITS (beacon.the_path.front ()))
 
-#define DST_AS_PTR(beacon)                                    \
+#define DST_AS_PTR(beacon)                                  \
   (beacon->beacon_direction == BeaconDirectionT::PULL_BASED \
-       ? beacon->optimization_target->target_as               \
+       ? beacon->optimization_target->target_as             \
        : UPPER_16_BITS (beacon->the_path.front ()))
 
 typedef long double ld;

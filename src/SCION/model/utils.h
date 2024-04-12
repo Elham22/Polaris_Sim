@@ -33,15 +33,15 @@ namespace ns3 {
 
 #define UPPER_16_BITS(input) ((uint16_t) ((input) >> 48))
 
-#define LOWER_16_BITS(input) ((uint16_t) ((input) &0x000000000000ffff))
+#define LOWER_16_BITS(input) ((uint16_t) ((input) & 0x000000000000ffff))
 
-#define SECOND_UPPER_16_BITS(input) ((uint16_t) (((input) &0x0000ffff00000000) >> 32))
+#define SECOND_UPPER_16_BITS(input) ((uint16_t) (((input) & 0x0000ffff00000000) >> 32))
 
-#define SECOND_LOWER_16_BITS(input) ((uint16_t) (((input) &0x00000000ffff0000) >> 16))
+#define SECOND_LOWER_16_BITS(input) ((uint16_t) (((input) & 0x00000000ffff0000) >> 16))
 
 #define UPPER_32_BITS(input) ((uint32_t) ((input) >> 32))
 
-#define LOWER_32_BITS(input) ((uint32_t) ((input) &0x00000000ffffffff))
+#define LOWER_32_BITS(input) ((uint32_t) ((input) & 0x00000000ffffffff))
 
 double GetMedian (std::multiset<int64_t> &data);
 

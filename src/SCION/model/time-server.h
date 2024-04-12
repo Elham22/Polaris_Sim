@@ -149,10 +149,10 @@ private:
       {"OFF", SnapshotType::SNAPSHOT_OFF}};
 
   std::map<std::string, AlgV> alg_v_map = {{"V1", AlgV::V1},
-                                            {"V2", AlgV::V2},
-                                            {"V3", AlgV::V3},
-                                            {"V4", AlgV::V4},
-                                            {"LOCAL_SYNC", AlgV::LOCAL_SYNC}};
+                                           {"V2", AlgV::V2},
+                                           {"V3", AlgV::V3},
+                                           {"V4", AlgV::V4},
+                                           {"LOCAL_SYNC", AlgV::LOCAL_SYNC}};
 
   bool parallel_scheduler;
   Time max_initial_drift;

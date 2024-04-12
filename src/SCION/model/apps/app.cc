@@ -18,7 +18,6 @@
  * Author: Pascal Suter passuter@student.ethz.ch
  */
 
-
 #include "src/SCION/model/scion-core-as.h"
 #include "src/SCION/model/scion-host.h"
 #include "app.h"
@@ -54,20 +53,20 @@ App::StartAppTraffic ()
 {
   if (dst_ia == ia_addr)
     {
-      GenerateAppTraffic();
+      GenerateAppTraffic ();
       return;
     }
 
   if (best_path_id != -1)
     {
       // path selection ran once, can start to generate traffic.
-      GenerateAppTraffic();
+      GenerateAppTraffic ();
     }
   else
     {
       if (!probes_pending)
         {
-          SendProbes();
+          SendProbes ();
         }
       Simulator::Schedule (Seconds (1), &App::StartAppTraffic, this);
     }
@@ -79,13 +78,13 @@ App::StopAppTraffic ()
   stopped = true;
 }
 
-void 
+void
 App::GenerateAppTraffic ()
 {
   // std::cout << "GenerateAppTraffic called" << std::endl;
   for (uint i = 0; i < 10; i++)
     {
-      Simulator::Schedule(MilliSeconds(i), &App::SendData, this, 1024, GetPath ());
+      Simulator::Schedule (MilliSeconds (i), &App::SendData, this, 1024, GetPath ());
     }
 }
 
@@ -97,7 +96,7 @@ App::SendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
   payload.app_data.app_packet_id = packet_id++;
   payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
   PayloadType payload_type = PayloadType::APPLICATION_DATA;
-  host->SendAppPacket(this, payload, payload_type, size * scale, path);
+  host->SendAppPacket (this, payload, payload_type, size * scale, path);
 }
 
 /**
@@ -107,7 +106,7 @@ App::SendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
 uint32_t
 App::ComputeExpectedBandwidth (uint32_t path_id)
 {
-  return 10*1024;
+  return 10 * 1024;
 }
 
 void
@@ -125,35 +124,37 @@ App::SendProbes ()
   path_infos_old = path_infos;
   probes_pending = true;
   first_probe_returned = false;
-  path_infos = new std::vector<PathInfo>();
-  
+  path_infos = new std::vector<PathInfo> ();
+
   std::vector<uint8_t> shortcuts;
 
-  for (uint i = 0; i < all_paths.size(); i++)
+  for (uint i = 0; i < all_paths.size (); i++)
     {
       PayloadType payload_type = PayloadType::QOS_PROBE_REQ;
       Payload payload;
       payload.probe_req.app_id = app_id;
       payload.probe_req.probe_id = i; // TODO use unique probe_ids and map them to the paths
       payload.probe_req.expected_bandwidth = ComputeExpectedBandwidth (i);
-      
-      path_infos->push_back(PathInfo(all_paths.at (i)));
-      host->SendAppPacket(this, payload, payload_type, sizeof (ProbeReq), all_paths.at (i));
+
+      path_infos->push_back (PathInfo (all_paths.at (i)));
+      host->SendAppPacket (this, payload, payload_type, sizeof (ProbeReq), all_paths.at (i));
     }
-  
-  Simulator::Schedule (Seconds(3), &App::CheckResendProbes, this);
+
+  Simulator::Schedule (Seconds (3), &App::CheckResendProbes, this);
 }
 
 void
-App::ReceiveProbeResponse (ProbeResp probe_resp) 
+App::ReceiveProbeResponse (ProbeResp probe_resp)
 {
   if (probe_resp.src_ia == dst_ia && probe_resp.src_host_addr == dst_host_addr)
     {
-      path_infos->at(probe_resp.probe_id).latency = probe_resp.time_recv - path_infos->at(probe_resp.probe_id).probe_sent_time.ToInteger (Time::Unit::MS);
+      path_infos->at (probe_resp.probe_id).latency =
+          probe_resp.time_recv -
+          path_infos->at (probe_resp.probe_id).probe_sent_time.ToInteger (Time::Unit::MS);
     }
   else
     {
-      path_infos->at(probe_resp.probe_id).probe_responses.push_back(probe_resp);
+      path_infos->at (probe_resp.probe_id).probe_responses.push_back (probe_resp);
     }
 
   if (!App::first_probe_returned)
@@ -161,7 +162,7 @@ App::ReceiveProbeResponse (ProbeResp probe_resp)
       if (probe_resp.src_ia == dst_ia && probe_resp.src_host_addr == dst_host_addr)
         {
           // wait a bit for other probes before computing the score
-          Simulator::Schedule(Seconds(1), &App::ComputeAllScores, this, true);
+          Simulator::Schedule (Seconds (1), &App::ComputeAllScores, this, true);
           first_probe_returned = true;
         }
     }
@@ -173,7 +174,7 @@ App::CheckResendProbes ()
   // resend probes if none returned
   if (App::probes_pending && !App::first_probe_returned)
     {
-      SendProbes();
+      SendProbes ();
     }
 }
 
@@ -192,69 +193,72 @@ App::ComputeAllScores (bool triggered_by_probes)
       std::cout << "app " << app_id << " computing all scores at " << Simulator::Now ().ToInteger (Time::Unit::MS)
                 << "(" << Simulator::Now ().ToDouble (Time::Unit::MIN) << " min), previous best path " << best_path_id << std::endl;
     }*/
-  double max_score = - INFINITY;
+  double max_score = -INFINITY;
   int32_t max_id = 0;
   auto path_info_container = path_infos;
   if (probes_pending && !triggered_by_probes)
     {
-      path_info_container = path_infos_old; // probing is currently ongoing, current path_infos might be incomplete so use old path_infos.
+      path_info_container =
+          path_infos_old; // probing is currently ongoing, current path_infos might be incomplete so use old path_infos.
     }
 
   for (uint32_t i = 0; i < path_info_container->size (); i++)
-  {
-    auto path_info = path_info_container->at (i);
-    /*if (printScore)
+    {
+      auto path_info = path_info_container->at (i);
+      /*if (printScore)
       {
         std::cout << "path_id " << i;
       }*/
-    if (isActivePath (i))
-      {
-        path_info.score = ComputeScore (path_info.latency, path_info.activeLoss, 0, i, true);
-      }
-    else
-      {
-        double additional_score = -300; // punishment for choosing a different path
-        double loss = path_info.GetLoss (&additional_score);
-        path_info.score = ComputeScore (path_info.latency, loss, additional_score, i, path_info.activeLossMeasured);
-      }
-    /*if (printScore)
+      if (isActivePath (i))
+        {
+          path_info.score = ComputeScore (path_info.latency, path_info.activeLoss, 0, i, true);
+        }
+      else
+        {
+          double additional_score = -300; // punishment for choosing a different path
+          double loss = path_info.GetLoss (&additional_score);
+          path_info.score = ComputeScore (path_info.latency, loss, additional_score, i,
+                                          path_info.activeLossMeasured);
+        }
+      /*if (printScore)
       {
         std::cout << "score: " << path_info.score;
       }*/
 
-    if (path_info.score > max_score)
-      {
-        /*if (printScore)
+      if (path_info.score > max_score)
+        {
+          /*if (printScore)
           {
             std::cout << " new max";
           }*/
-        max_score = path_info.score;
-        max_id = i;
-      }
-    /*if (printScore)
+          max_score = path_info.score;
+          max_id = i;
+        }
+      /*if (printScore)
       {
         std::cout << std::endl;
       }*/
-  }
+    }
 
   if (best_path_id != max_id)
-  {
-    best_path_id = max_id;
-    active_loss = 0.;
-    active_latency = 0.;
-  }
+    {
+      best_path_id = max_id;
+      active_loss = 0.;
+      active_latency = 0.;
+    }
 
   if (probes_pending && triggered_by_probes)
     {
       probes_pending = false;
-      Simulator::Schedule (Seconds(180), &App::SendProbes, this);
+      Simulator::Schedule (Seconds (180), &App::SendProbes, this);
     }
   // Backoff to avoid too frequent score computation. When path is switched, packets over old path might still arrive for a short time.
   //next_scoring = Simulator::Now () + Seconds (3);
 
   // randomize delay time to introduce non-determinism. Breaks cycles where apps jump to same paths every time
-  auto var = CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0), "Max", DoubleValue (6));
-  auto randDelay = Seconds(var->GetValue(0.0, 6.0));
+  auto var = CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0), "Max",
+                                                                DoubleValue (6));
+  auto randDelay = Seconds (var->GetValue (0.0, 6.0));
   next_scoring = Simulator::Now () + Seconds (3) + randDelay;
 }
 
@@ -266,7 +270,8 @@ App::ComputeAllScores (bool triggered_by_probes)
  * Subclasses should implement score functions that work best for their applications.
 */
 double
-App::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool wasActive)
+App::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id,
+                   bool wasActive)
 {
   std::cout << "(" << latency << ", " << loss << ", " << additional_scoring << ")";
   return additional_scoring - latency;
@@ -285,7 +290,7 @@ App::GetPath ()
 bool
 App::rescore (double active_loss)
 {
-  return active_loss >  acceptable_loss; // loss too high, recompute scores.
+  return active_loss > acceptable_loss; // loss too high, recompute scores.
 }
 
 void
@@ -300,21 +305,23 @@ App::ReceiveAppResponse (AppResp app_resp)
   path_infos->at (best_path_id) = path_info;
   app_responses.push_back (std::make_pair (Simulator::Now (), app_resp));
 
-  if (rescore(active_loss) && Simulator::Now () > next_scoring)
-  {
-    ComputeAllScores (false);
-  }
+  if (rescore (active_loss) && Simulator::Now () > next_scoring)
+    {
+      ComputeAllScores (false);
+    }
 }
 
 void
 App::PrintResults ()
 {
-  std::cout << "----- App id " << app_id << ": Timestamp, latency, loss, bytes ------- " << std::endl;
+  std::cout << "----- App id " << app_id << ": Timestamp, latency, loss, bytes ------- "
+            << std::endl;
   for (auto entry : app_responses)
-  {
-    std::cout << entry.first.ToInteger (Time::Unit::MS) << ", " << entry.second.avg_latency / 1000. << ", "
-              << entry.second.loss << ", " << entry.second.bytes_received << std::endl;
-  }
+    {
+      std::cout << entry.first.ToInteger (Time::Unit::MS) << ", "
+                << entry.second.avg_latency / 1000. << ", " << entry.second.loss << ", "
+                << entry.second.bytes_received << std::endl;
+    }
 }
 
 void

@@ -38,7 +38,7 @@ namespace ns3 {
 
 void
 ScionAs::DoInitializations (uint32_t num_ases, rapidxml::xml_node<> *xml_node,
-                             const YAML::Node &config)
+                            const YAML::Node &config)
 {
   InitializeLatencies (true);
 
@@ -56,7 +56,7 @@ ScionAs::DoInitializations (uint32_t num_ases, rapidxml::xml_node<> *xml_node,
 
 void
 ScionAs::DoInitializations (uint32_t num_ases, rapidxml::xml_node<> *xml_node,
-                             const YAML::Node &config, bool only_propagation_delay)
+                            const YAML::Node &config, bool only_propagation_delay)
 {
   ConnectInternalNodes (only_propagation_delay);
   InitializeLatencies (only_propagation_delay);
@@ -93,7 +93,7 @@ ScionAs::GetRemoteAsInfo (uint16_t egress_interface_no)
 
 void
 ScionAs::ReceiveBeacon (Beacon &received_beacon, uint16_t sender_as, uint16_t remote_if,
-                         uint16_t local_if)
+                        uint16_t local_if)
 {
   beacon_server->ReceiveBeacon (received_beacon, sender_as, remote_if, local_if);
 }
@@ -153,7 +153,7 @@ ScionAs::AddHost (ScionHost *host)
 
 BorderRouter *
 ScionAs::AddBr (double latitude, double longitude, Time processing_delay,
-                 Time processing_throughput_delay)
+                Time processing_throughput_delay)
 {
   BorderRouter *the_br = new BorderRouter (0, isd_number, as_number, 0, latitude, longitude, this);
 
@@ -265,8 +265,8 @@ ScionAs::ConnectInternalNodes (bool only_propagation_delay)
         {
           ScionHost *host = hosts.at (j);
 
-          Time propagation_delay = NanoSeconds (
-              (int64_t) floor (1e6 * CalculateGreatCircleLatency ((ld) br->GetLatitude (), (ld) br->GetLogitude (),
+          Time propagation_delay = NanoSeconds ((int64_t) floor (
+              1e6 * CalculateGreatCircleLatency ((ld) br->GetLatitude (), (ld) br->GetLogitude (),
                                                  (ld) host->GetLatitude (),
                                                  (ld) host->GetLogitude ())));
 
@@ -449,7 +449,7 @@ ScionAs::AddToRemoteAsInfo (uint16_t remote_if, ScionAs *remote_as)
 
 void
 ScionAs::InstantiateBeaconServer (bool parallel_scheduler, rapidxml::xml_node<> *xml_node,
-                                     const YAML::Node &config)
+                                  const YAML::Node &config)
 {
   std::string beaconing_policy_str = config["beacon_service"]["policy"].as<std::string> ();
 

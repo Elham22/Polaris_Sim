@@ -110,8 +110,8 @@ PathServer::RegisterDownPathSegment (PathSegment &path_segment, std::string key)
 }
 
 void
-PathServer::ProcessLocalHostRequestForPath (PathSegmentType path_type, ia_t src_ia,
-                                                 ia_t dst_ia, host_addr_t host_addr)
+PathServer::ProcessLocalHostRequestForPath (PathSegmentType path_type, ia_t src_ia, ia_t dst_ia,
+                                            host_addr_t host_addr)
 {
   if (path_type == PathSegmentType::UP_SEG)
     {
@@ -186,8 +186,8 @@ PathServer::ProcessLocalHostRequestForPath (PathSegmentType path_type, ia_t src_
 
 void
 PathServer::SendRegisteredPathToLocalHost (host_addr_t host_addr, PathSegmentType path_type,
-                                                ia_t src_ia, ia_t dst_ia,
-                                                const reg_path_segs_to_one_as_t *paths_to_dst_ia)
+                                           ia_t src_ia, ia_t dst_ia,
+                                           const reg_path_segs_to_one_as_t *paths_to_dst_ia)
 {
   PayloadType payload_type = PayloadType::REG_PATHS_FROM_LOCAL_PS;
   Payload payload;

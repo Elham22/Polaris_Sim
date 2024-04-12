@@ -54,13 +54,16 @@ public:
 
   static void PrintPath (std::vector<const PathSegment *> the_path);
   void SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host);
-  void StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host, double backgroundBwdFactor);
+  void StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host,
+                         double backgroundBwdFactor);
   void SendProbes (uint32_t expected_bandwidth);
-  void SendAppPacket (App *app, Payload payload, PayloadType payload_type, uint32_t size, std::vector<const ns3::PathSegment *> path);
+  void SendAppPacket (App *app, Payload payload, PayloadType payload_type, uint32_t size,
+                      std::vector<const ns3::PathSegment *> path);
   void PrintAppsEval ();
   void PrintAddress ();
 
   std::vector<App *> apps;
+
 protected:
   cached_path_segs_dataset_t cached_up_path_segments;
   cached_path_segs_dataset_t cached_core_path_segments;
@@ -70,28 +73,31 @@ protected:
   std::map<std::tuple<ia_t, host_addr_t, app_id_t>, AppInfo> app_infos;
 
   virtual void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet,
-                                        Time receive_time) override;
+                                      Time receive_time) override;
   virtual void ModifyPktUponSend (ScionPacket *packet) override;
   void RemoveExpiredSegments ();
-  void SearchAllInCachedSegments(ia_t dst_ia, std::vector<std::vector <const PathSegment *>> &paths);
+  void SearchAllInCachedSegments (ia_t dst_ia,
+                                  std::vector<std::vector<const PathSegment *>> &paths);
   void SearchInCachedSegments (ia_t dst_ia, std::vector<const PathSegment *> &path,
-                                  std::vector<uint8_t> &shortcuts);
+                               std::vector<uint8_t> &shortcuts);
   void RequestForPathSegments (ia_t dst_ia);
   void SendRequestForPathSegments (PathSegmentType seg_type, ia_t src_ia, ia_t dst_ia);
 
   void ReceiveRegisteredPathSegments (PathSegmentType seg_type, ia_t src_ia, ia_t dst_ia,
-                                         const reg_path_segs_to_one_as_t *path_segments);
+                                      const reg_path_segs_to_one_as_t *path_segments);
   void ReceiveCachedPathSegments (PathSegmentType seg_type, ia_t src_ia, ia_t dst_ia,
-                                     cached_path_segs_per_dst_t *path_seg);
+                                  cached_path_segs_per_dst_t *path_seg);
 
-  void CachePathSegment (PathSegmentType seg_type, ia_t src_ia, ia_t dst_ia,
-                           PathSegment *path_seg);
+  void CachePathSegment (PathSegmentType seg_type, ia_t src_ia, ia_t dst_ia, PathSegment *path_seg);
 
-  void ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr, std::vector<const ns3::PathSegment *> path, ProbeReq probe_req, Time receive_time);
-  void ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr, ProbeResp probe_resp); // TODO score is just a placeholder
+  void ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr,
+                            std::vector<const ns3::PathSegment *> path, ProbeReq probe_req,
+                            Time receive_time);
+  void ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr,
+                             ProbeResp probe_resp); // TODO score is just a placeholder
   void ReceiveAppData (ScionPacket *packet);
   void ReceiveAppResp (AppResp app_resp);
-  void SendAppResp (std::tuple <ia_t, host_addr_t, app_id_t> key);
+  void SendAppResp (std::tuple<ia_t, host_addr_t, app_id_t> key);
 };
 } // namespace ns3
 

@@ -48,23 +48,22 @@ private:
 
   std::tuple<bool, bool, bool, Beacon *, ld>
   AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as, uint16_t remote_egress_if_no,
-                              uint16_t self_ingress_if_no, uint16_t now) override;
+                           uint16_t self_ingress_if_no, uint16_t now) override;
   void InsertToAlgorithmDataStructures (Beacon *the_beacon, uint16_t sender_as,
-                                            uint16_t remote_egress_if_no,
-                                            uint16_t self_ingress_if_no) override;
+                                        uint16_t remote_egress_if_no,
+                                        uint16_t self_ingress_if_no) override;
 
   void DeleteFromAlgorithmDataStructures (Beacon *the_beacon, ld replacement_key) override;
 
   void CreateInitialStaticInfoExtension (static_info_extension_t &static_info_extension,
-                                        uint16_t self_egress_if_no,
-                                        const OptimizationTarget *optimization_target) override;
+                                         uint16_t self_egress_if_no,
+                                         const OptimizationTarget *optimization_target) override;
 
   void UpdateAlgorithmDataStructuresPeriodic (Beacon *the_beacon, bool invalidated) override;
 
   std::multimap<ld, std::tuple<Beacon *, uint16_t, uint16_t, ScionAs *, static_info_extension_t>>
-  SelectBeaconsToDisseminatePerDstPerNbr (
-      uint16_t remote_as_no, uint16_t dst_as_no,
-      const beacons_with_same_dst_as &beacons_to_the_dst_as);
+  SelectBeaconsToDisseminatePerDstPerNbr (uint16_t remote_as_no, uint16_t dst_as_no,
+                                          const beacons_with_same_dst_as &beacons_to_the_dst_as);
 };
 } // namespace ns3
 #endif //SCION_SIMULATOR_LATENCY_OPTIMIZED_BEACONING_H

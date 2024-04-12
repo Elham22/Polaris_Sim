@@ -60,11 +60,10 @@ private:
   void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time receive_time) override;
 
   void ProcessLocalHostRequestForPath (PathSegmentType path_type, ia_t src_ia, ia_t dst_ia,
-                                            host_addr_t host_addr);
+                                       host_addr_t host_addr);
 
-  void SendRegisteredPathToLocalHost (host_addr_t host_addr, PathSegmentType path_type,
-                                           ia_t src_ia, ia_t dst_ia,
-                                           const reg_path_segs_to_one_as_t *);
+  void SendRegisteredPathToLocalHost (host_addr_t host_addr, PathSegmentType path_type, ia_t src_ia,
+                                      ia_t dst_ia, const reg_path_segs_to_one_as_t *);
 
   void ReturnListOfAllCoreAses (host_addr_t host_addr);
 };

@@ -43,12 +43,12 @@ public:
   uint16_t GetLocalIfFromASIf (uint16_t as_if);
   int64_t GetBwdGbit (uint16_t local_if);
   void SendBackgroundPacket (uint32_t size, ia_t dst_ia, std::vector<const ns3::PathSegment *> path,
-                            uint16_t inf, uint16_t hopf);
+                             uint16_t inf, uint16_t hopf);
 
 private:
   void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time receive_time) override;
-  void ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool isDestinationAS, uint16_t as_if_to_send,
-                            uint16_t old_hopf, uint16_t old_inf);
+  void ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool isDestinationAS,
+                           uint16_t as_if_to_send, uint16_t old_hopf, uint16_t old_inf);
 };
 } // namespace ns3
 #endif //SCION_SIMULATOR_BORDER_ROUTER_H

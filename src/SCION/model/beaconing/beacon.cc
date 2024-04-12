@@ -78,7 +78,7 @@ Beacon::ExtractPathSegmentFromPullBasedBeacon (PathSegment &path_segment) const
   path_segment.expiration_time = next_expiration_time;
 
   path_segment.originator = (((uint32_t) the_isd_path.back ()) << 16) |
-                           (((uint32_t) SECOND_LOWER_16_BITS (the_path.back ())));
+                            (((uint32_t) SECOND_LOWER_16_BITS (the_path.back ())));
 
   uint64_t previous_hop = 0;
   bool last_hop = true;

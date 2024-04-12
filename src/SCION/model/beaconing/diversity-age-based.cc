@@ -71,9 +71,9 @@ DiversityAgeBased::DoInitializations (uint32_t num_ases, rapidxml::xml_node<> *x
 }
 
 void
-DiversityAgeBased::CreateInitialStaticInfoExtension (
-    static_info_extension_t &static_info_extension, uint16_t self_egress_if_no,
-    const OptimizationTarget *optimization_target)
+DiversityAgeBased::CreateInitialStaticInfoExtension (static_info_extension_t &static_info_extension,
+                                                     uint16_t self_egress_if_no,
+                                                     const OptimizationTarget *optimization_target)
 {
   static_info_extension.insert (std::make_pair (StaticInfoType::LATENCY, 0));
 }
@@ -128,8 +128,8 @@ DiversityAgeBased::DisseminateBeacons (NeighbourRelation relation)
 
 std::tuple<bool, bool, bool, Beacon *, ld>
 DiversityAgeBased::AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as,
-                                               uint16_t remote_egress_if_no,
-                                               uint16_t self_ingress_if_no, uint16_t now)
+                                            uint16_t remote_egress_if_no,
+                                            uint16_t self_ingress_if_no, uint16_t now)
 {
   uint16_t dst_as = UPPER_16_BITS (the_beacon.the_path.at (0));
 
@@ -165,8 +165,8 @@ DiversityAgeBased::DeleteFromAlgorithmDataStructures (Beacon *the_beacon, ld rep
 
 void
 DiversityAgeBased::InsertToAlgorithmDataStructures (Beacon *the_beacon, uint16_t sender_as,
-                                                        uint16_t remote_egress_if_no,
-                                                        uint16_t self_ingress_if_no)
+                                                    uint16_t remote_egress_if_no,
+                                                    uint16_t self_ingress_if_no)
 {
   IncLinksJointnessOnReceivedPaths (UPPER_16_BITS (the_beacon->the_path.at (0)), the_beacon);
 }
@@ -340,8 +340,7 @@ DiversityAgeBased::SelectBeaconsToDisseminatePerDstPerNbr (
               PathNotSentBefore (remote_as_no, self_egress_if_no, the_beacon) &&
               sent_beacons_cnt.at (dst_as_no)->at (remote_as_no) < min_no_paths_to_send;
 
-          if (!counters_changed ||
-              !PathNotSentBefore (remote_as_no, self_egress_if_no, the_beacon))
+          if (!counters_changed || !PathNotSentBefore (remote_as_no, self_egress_if_no, the_beacon))
             {
               raw_score = candidate.second.first;
               score = candidate.second.second;
@@ -376,7 +375,7 @@ DiversityAgeBased::SelectBeaconsToDisseminatePerDstPerNbr (
 
 inline ld
 DiversityAgeBased::CalculateRawScore (Beacon *the_beacon, uint16_t dst_as_no,
-                                        uint16_t self_egress_if_no, ScionAs *remote_as)
+                                      uint16_t self_egress_if_no, ScionAs *remote_as)
 {
   ld link_diversity_score = CalculateLinkDiversityScoreForDissemination (
       remote_as->as_number, dst_as_no, self_egress_if_no, the_beacon);
@@ -395,7 +394,7 @@ DiversityAgeBased::CalculateImportRawScore (Beacon &the_beacon)
 
 void
 DiversityAgeBased::UpdateSentBeaconTimer (uint16_t remote_as, uint16_t self_egress_if_no,
-                                             Beacon *the_beacon)
+                                          Beacon *the_beacon)
 {
   uint16_t new_exp_time = the_beacon->expiration_time;
   float raw_score = sent_beacons.at (self_egress_if_no)->at (the_beacon).first;
@@ -404,8 +403,7 @@ DiversityAgeBased::UpdateSentBeaconTimer (uint16_t remote_as, uint16_t self_egre
 
 void
 DiversityAgeBased::IncLinksJointnessOnSentPaths (uint16_t dst_as_no, uint16_t remote_as_no,
-                                                      uint16_t self_egress_if_no,
-                                                      Beacon *the_beacon)
+                                                 uint16_t self_egress_if_no, Beacon *the_beacon)
 {
   if (the_beacon != NULL)
     {
@@ -456,8 +454,8 @@ DiversityAgeBased::IncLinksJointnessOnReceivedPaths (uint16_t dst_as_no, Beacon 
 
 void
 DiversityAgeBased::AddToSentBeacons (uint16_t dst_as_no, uint16_t remote_as,
-                                        uint16_t self_egress_if_no, Beacon *the_beacon,
-                                        float raw_score)
+                                     uint16_t self_egress_if_no, Beacon *the_beacon,
+                                     float raw_score)
 {
   sent_beacons.at (self_egress_if_no)
       ->insert (
@@ -466,10 +464,9 @@ DiversityAgeBased::AddToSentBeacons (uint16_t dst_as_no, uint16_t remote_as,
 }
 
 ld
-DiversityAgeBased::CalculateLinkDiversityScoreForDissemination (uint16_t remote_as,
-                                                                     uint16_t dst_as,
-                                                                     uint16_t egress_if_no,
-                                                                     Beacon *the_beacon)
+DiversityAgeBased::CalculateLinkDiversityScoreForDissemination (uint16_t remote_as, uint16_t dst_as,
+                                                                uint16_t egress_if_no,
+                                                                Beacon *the_beacon)
 {
   if (links_jointnesses_on_sent_paths.at (remote_as).at (dst_as)->empty ())
     {
@@ -540,7 +537,7 @@ DiversityAgeBased::CalculateLinkDiversityScoreForImport (uint16_t dst_as, Beacon
 
 bool
 DiversityAgeBased::PathNotSentBefore (uint16_t remote_as, uint16_t self_egress_if_no,
-                                         Beacon *the_beacon)
+                                      Beacon *the_beacon)
 {
   if (sent_beacons.at (self_egress_if_no)->find (the_beacon) ==
       sent_beacons.at (self_egress_if_no)->end ())
@@ -572,8 +569,7 @@ DiversityAgeBased::RemoveInvalidSentBeacons (Beacon *the_beacon, uint16_t dst_as
 
 void
 DiversityAgeBased::DecLinksJointnessesOnSentPaths (Beacon *the_beacon, uint16_t dst_as,
-                                                        uint16_t remote_as_no,
-                                                        uint16_t self_egress_if)
+                                                   uint16_t remote_as_no, uint16_t self_egress_if)
 {
   auto const &the_path = the_beacon->the_path;
   for (auto const &seg : the_path)

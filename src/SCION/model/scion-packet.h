@@ -35,7 +35,6 @@ typedef uint32_t packet_id_t;
 typedef uint32_t app_packet_id_t;
 typedef uint32_t app_id_t;
 
-
 class ScionCapableNode;
 
 enum PayloadType {
@@ -81,7 +80,7 @@ struct NtpReqOrResp
 struct ProbeReq
 {
   app_id_t app_id;
-  uint32_t probe_id; 
+  uint32_t probe_id;
   uint64_t expected_bandwidth;
 };
 
@@ -94,7 +93,7 @@ struct ProbeResp
   int32_t raw_bwd; // total bandwidth available in Gbps
   double expected_loss; // expected loss rate if this path is chosen
   int64_t time_recv;
-  
+
   /*  machines may give the proposed path a score based on their own view on the
       current network state. Allows for the ASes to run more sophisticated methods and
       send it back to the host.

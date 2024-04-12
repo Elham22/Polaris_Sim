@@ -222,7 +222,8 @@ PostSimulationEvaluations::FindMinLatencyToDnsRootServers ()
               double instance_long = std::stod (curr_site->first_node ("Longitude")->value ());
               std::pair<double, double> last_br_coordinates =
                   dst_as->interfaces_coordinates.at (last_br);
-              double overall_latency = min_latency_to_dst_as + CalculateGreatCircleLatency (instance_lat, instance_long,
+              double overall_latency =
+                  min_latency_to_dst_as + CalculateGreatCircleLatency (instance_lat, instance_long,
                                                                        last_br_coordinates.first,
                                                                        last_br_coordinates.second);
               if (overall_latency < min_overall_latency)
@@ -833,11 +834,9 @@ PostSimulationEvaluations::PrintMinimumLatencyDist ()
                   assert (the_beacon->the_path.size () != 1 ||
                           the_beacon->static_info_extension.at (StaticInfoType::LATENCY) ==
                               (float) 0);
-                  if (the_beacon->static_info_extension.at (StaticInfoType::LATENCY) <
-                      min_latency)
+                  if (the_beacon->static_info_extension.at (StaticInfoType::LATENCY) < min_latency)
                     {
-                      min_latency =
-                          the_beacon->static_info_extension.at (StaticInfoType::LATENCY);
+                      min_latency = the_beacon->static_info_extension.at (StaticInfoType::LATENCY);
                     }
                 }
             }
@@ -1362,7 +1361,7 @@ PostSimulationEvaluations::PrintHostApps ()
       ScionAs *node = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (i)));
       for (uint32_t j = 0; j < node->GetNHosts (); ++j)
         {
-          ScionHost *host = dynamic_cast<ScionHost *> (node->GetHost (j+2));
+          ScionHost *host = dynamic_cast<ScionHost *> (node->GetHost (j + 2));
           if (host != NULL)
             {
               host->PrintAppsEval ();
@@ -1380,11 +1379,12 @@ PostSimulationEvaluations::PrintLinkStatistics ()
             << std::endl;
 
   for (auto it = BackgroundTrafficApp::backgroundTrafficApps.begin ();
-            it != BackgroundTrafficApp::backgroundTrafficApps.end (); ++it)
+       it != BackgroundTrafficApp::backgroundTrafficApps.end (); ++it)
     {
       auto br = it->first.first;
       auto app = it->second;
-      std::cout << "BR " << br->GetAddressAsString () << " " << app->GetIfInfoAsString () << " --------------" << std::endl;
+      std::cout << "BR " << br->GetAddressAsString () << " " << app->GetIfInfoAsString ()
+                << " --------------" << std::endl;
       std::cout << "Time, Throughput, Loss" << std::endl;
       br->PrintLinkInfo (it->first.second);
       std::cout << "End results of Link." << std::endl;
@@ -1403,7 +1403,7 @@ PostSimulationEvaluations::PrintAppPathInfo ()
       ScionAs *node = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (i)));
       for (uint32_t j = 0; j < node->GetNHosts (); ++j)
         {
-          ScionHost *host = dynamic_cast<ScionHost *> (node->GetHost (j+2));
+          ScionHost *host = dynamic_cast<ScionHost *> (node->GetHost (j + 2));
           if (host != NULL)
             {
               for (uint32_t k = 0; k < host->apps.size (); ++k)
@@ -1505,8 +1505,7 @@ PostSimulationEvaluations::InvestigateAffectedTimeServers ()
 #pragma omp parallel for
                   for (uint32_t i = 0; i < num_all_ases; ++i)
                     {
-                      ScionAs *scion_as =
-                          dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (i)));
+                      ScionAs *scion_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (i)));
 
                       if (inherently_and_transitive_malicious.find (scion_as->ia_addr) !=
                           inherently_and_transitive_malicious.end ())
@@ -1572,8 +1571,7 @@ PostSimulationEvaluations::InvestigateAffectedTimeServers ()
 
                   for (uint32_t i = 0; i < num_all_ases; ++i)
                     {
-                      ScionAs *scion_as =
-                          dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (i)));
+                      ScionAs *scion_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (i)));
 
                       if (inherently_and_transitive_malicious.find (scion_as->ia_addr) !=
                           inherently_and_transitive_malicious.end ())

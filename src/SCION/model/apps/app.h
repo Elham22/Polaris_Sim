@@ -33,11 +33,13 @@ public:
   {
     uint32_t n_hops = 0;
     for (auto seg : path)
-    {
-      n_hops += seg->hops.size ();
-    }
+      {
+        n_hops += seg->hops.size ();
+      }
     num_hops = n_hops;
-    num_expected_responses = n_hops * 2 - 2; // probe passes through 2 border router per hop, except for src & target AS, there only 1
+    num_expected_responses =
+        n_hops * 2 -
+        2; // probe passes through 2 border router per hop, except for src & target AS, there only 1
     probe_sent_time = Simulator::Now ();
   }
 
@@ -51,26 +53,25 @@ public:
   double activeLoss = 0.0;
 
   double GetLoss (double *additional_score);
-
 };
 class App
 {
 public:
-  App (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia, host_addr_t app_dst_host_addr,
-      std::vector<std::vector<const PathSegment *>> all_paths)
-  : dst_ia (app_dst_ia),
-    dst_host_addr (app_dst_host_addr),
-    host (host),
-    app_id (app_id),
-    ia_addr (ia_addr),
-    all_paths (all_paths)
+  App (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
+       host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths)
+      : dst_ia (app_dst_ia),
+        dst_host_addr (app_dst_host_addr),
+        host (host),
+        app_id (app_id),
+        ia_addr (ia_addr),
+        all_paths (all_paths)
   {
   }
 
   ia_t dst_ia;
   host_addr_t dst_host_addr;
   static const uint16_t scale = 1; // scaling factor for app data packets
-  
+
   virtual void StartAppTraffic ();
   void StopAppTraffic ();
   void StartAppTrafficDelayed (Time delay);
@@ -80,13 +81,13 @@ public:
   virtual void PrintPathInfo ();
 
 protected:
-  uint32_t m_pktSize = 1470 * 15;       // Size of packets
+  uint32_t m_pktSize = 1470 * 15; // Size of packets
   ScionHost *host;
   uint32_t app_id;
   app_packet_id_t packet_id = 0;
   ia_t ia_addr;
   //std::vector<const PathSegment *> active_path;
-  std::vector<std::vector <const PathSegment *>> all_paths;
+  std::vector<std::vector<const PathSegment *>> all_paths;
   //std::vector<std::vector<ProbeResp *>> probe_responses;
   bool probes_pending = false;
   bool first_probe_returned = false;
@@ -111,7 +112,8 @@ protected:
   void CheckResendProbes ();
   virtual void ComputeAllScores (bool triggered_by_probes);
   virtual bool isActivePath (int32_t path_id);
-  virtual double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active);
+  virtual double ComputeScore (double latency, double loss, double additional_scoring,
+                               uint32_t path_id, bool was_active);
   std::vector<const ns3::PathSegment *> GetPath ();
   virtual void SendData (uint32_t size, std::vector<const ns3::PathSegment *> path);
 };

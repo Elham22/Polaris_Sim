@@ -25,7 +25,7 @@
 namespace ns3 {
 void
 UserDefinedEvents::RunUserSpecifiedEvent (const std::string &func_name,
-                                             std::vector<std::string> vec)
+                                          std::vector<std::string> vec)
 {
   switch (vec.size ())
     {
@@ -115,7 +115,7 @@ UserDefinedEvents::ReadAndScheduleUserDefinedEvents (const std::string &events_f
 
 void
 UserDefinedEvents::AddAHost (std::string isd_number, std::string real_as_no,
-                               std::string local_address)
+                             std::string local_address)
 {
 }
 
@@ -130,40 +130,42 @@ UserDefinedEvents::LinkUp (std::string isd_number, std::string real_as_no, std::
 
 void
 UserDefinedEvents::SendAPacket (std::string src_isd_number, std::string real_src_as_no,
-                                  std::string src_local_address, std::string dst_isd_number,
-                                  std::string real_dst_as_no, std::string dst_local_address,
-                                  std::string payload_size)
+                                std::string src_local_address, std::string dst_isd_number,
+                                std::string real_dst_as_no, std::string dst_local_address,
+                                std::string payload_size)
 {
-  SendPacketBatch(src_isd_number, real_src_as_no, src_local_address, dst_isd_number, real_dst_as_no,
-                  dst_local_address, payload_size, "1");
+  SendPacketBatch (src_isd_number, real_src_as_no, src_local_address, dst_isd_number,
+                   real_dst_as_no, dst_local_address, payload_size, "1");
 }
 
 void
 UserDefinedEvents::SendPacketBatch (std::string src_isd_number, std::string real_src_as_no,
-                                      std::string src_local_address, std::string dst_isd_number,
-                                      std::string real_dst_as_no, std::string dst_local_address,
-                                      std::string payload_size, std::string no_pkts)
+                                    std::string src_local_address, std::string dst_isd_number,
+                                    std::string real_dst_as_no, std::string dst_local_address,
+                                    std::string payload_size, std::string no_pkts)
 {
   uint16_t alias_as_no = real_to_alias_as_no.at (std::stoi (real_src_as_no));
   ScionAs *src_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_as_no)));
   ScionHost *src_host = dynamic_cast<ScionHost *> (src_as->GetHost (std::stoi (src_local_address)));
-  ia_t dst_ia = MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
+  ia_t dst_ia =
+      MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
 
   for (int i = 0; i < std::stoi (no_pkts); ++i)
     {
-      src_host->SendArbitraryPacket(dst_ia, std::stoi(dst_local_address));
+      src_host->SendArbitraryPacket (dst_ia, std::stoi (dst_local_address));
     }
 
-  std::cout << no_pkts << " packets to send from " << real_src_as_no << "(" << alias_as_no << "):"
-            << src_local_address << " to " << real_dst_as_no << "(" << real_to_alias_as_no.at (std::stoi (real_dst_as_no))
-            << "):" << dst_local_address << std::endl;
+  std::cout << no_pkts << " packets to send from " << real_src_as_no << "(" << alias_as_no
+            << "):" << src_local_address << " to " << real_dst_as_no << "("
+            << real_to_alias_as_no.at (std::stoi (real_dst_as_no)) << "):" << dst_local_address
+            << std::endl;
 }
 
 void
 UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as_no,
-                              std::string src_local_address,std::string dst_isd_number,
-                              std::string real_dst_as_no, std::string dst_local_address,
-                              std::string app_type, std::string backgroundBwdFactor)
+                             std::string src_local_address, std::string dst_isd_number,
+                             std::string real_dst_as_no, std::string dst_local_address,
+                             std::string app_type, std::string backgroundBwdFactor)
 {
   if (std::stoi (src_isd_number) != 0)
     {
@@ -173,13 +175,15 @@ UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as
   uint16_t alias_as_no = real_to_alias_as_no.at (std::stoi (real_src_as_no));
   ScionAs *src_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_as_no)));
   ScionHost *src_host = dynamic_cast<ScionHost *> (src_as->GetHost (std::stoi (src_local_address)));
-  ia_t dst_ia = MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
-  src_host->StartApplication(app_type, dst_ia, std::stoi(dst_local_address), std::stod (backgroundBwdFactor));
+  ia_t dst_ia =
+      MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
+  src_host->StartApplication (app_type, dst_ia, std::stoi (dst_local_address),
+                              std::stod (backgroundBwdFactor));
 }
 
 void
-UserDefinedEvents::SetLinkTraffic (std::string src_isd_number, std::string src_as_no, std::string ing_if,
-                                    std::string eg_if, std::string bwdFactor)
+UserDefinedEvents::SetLinkTraffic (std::string src_isd_number, std::string src_as_no,
+                                   std::string ing_if, std::string eg_if, std::string bwdFactor)
 {
   if (std::stoi (src_isd_number) != 0)
     {
@@ -195,20 +199,19 @@ UserDefinedEvents::SetLinkTraffic (std::string src_isd_number, std::string src_a
   try
     {
       BackgroundTrafficApp::backgroundTrafficApps.at (std::make_pair (br, local_if))
-                ->SetBwdFactor (std::stod (bwdFactor), avail_bwd_Mbit);
+          ->SetBwdFactor (std::stod (bwdFactor), avail_bwd_Mbit);
     }
-  catch(const std::exception& e)
+  catch (const std::exception &e)
     {
-      std::cerr << e.what() << '\n';
-      std::cout << "Could not set link traffic for as " << src_as_no << ", ing " << ing_if << ", eg " << eg_if << std::endl;
+      std::cerr << e.what () << '\n';
+      std::cout << "Could not set link traffic for as " << src_as_no << ", ing " << ing_if
+                << ", eg " << eg_if << std::endl;
     }
-  
-
 }
 
 void
 UserDefinedEvents::StopAppTraffic (std::string src_isd_number, std::string real_src_as_no,
-                std::string src_local_address, std::string app_id)
+                                   std::string src_local_address, std::string app_id)
 {
   if (std::stoi (src_isd_number) != 0)
     {

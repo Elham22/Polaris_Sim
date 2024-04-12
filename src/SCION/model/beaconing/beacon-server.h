@@ -184,28 +184,28 @@ protected:
   void InitiateBeacons (NeighbourRelation relation);
 
   virtual void InitiateBeaconsPerInterface (uint16_t self_egress_if_no, ScionAs *remote_as,
-                                               uint16_t remote_ingress_if_no);
+                                            uint16_t remote_ingress_if_no);
 
   virtual void CreateInitialStaticInfoExtension (static_info_extension_t &static_info_extension,
-                                        uint16_t self_egress_if_no,
-                                        const OptimizationTarget *optimization_target);
+                                                 uint16_t self_egress_if_no,
+                                                 const OptimizationTarget *optimization_target);
 
   virtual void DisseminateBeacons (NeighbourRelation relation) = 0;
 
   void GenerateBeaconAndSend (Beacon *selected_beacon, uint16_t self_egress_if_no,
-                            uint16_t remote_ingress_if_no, ScionAs *remote_as,
-                            static_info_extension_t &static_info_extension,
-                            const OptimizationTarget *optimization_target = NULL,
+                              uint16_t remote_ingress_if_no, ScionAs *remote_as,
+                              static_info_extension_t &static_info_extension,
+                              const OptimizationTarget *optimization_target = NULL,
                               BeaconDirectionT beacon_direction = BeaconDirectionT::PUSH_BASED);
 
   std::tuple<bool, bool, bool, Beacon *, ld> ImportPolicy (Beacon &the_beacon, uint16_t sender_as,
-                                                            uint16_t remote_egress_if_no,
-                                                            uint16_t self_ingress_if_no,
-                                                            uint16_t now);
+                                                           uint16_t remote_egress_if_no,
+                                                           uint16_t self_ingress_if_no,
+                                                           uint16_t now);
 
   void InsertBeacon (Beacon &the_beacon, uint16_t dst_as, uint16_t sender_as,
-                      uint16_t remote_egress_if, uint16_t local_ingress_if, bool path_exists,
-                      bool existing_path_valid, Beacon *beacon_to_replace);
+                     uint16_t remote_egress_if, uint16_t local_ingress_if, bool path_exists,
+                     bool existing_path_valid, Beacon *beacon_to_replace);
 
   void IncrementValidBeaconsCount (uint16_t dst_as);
 
@@ -219,11 +219,11 @@ protected:
 
   virtual std::tuple<bool, bool, bool, Beacon *, ld>
   AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as, uint16_t remote_egress_if_no,
-                              uint16_t self_ingress_if_no, uint16_t now) = 0;
+                           uint16_t self_ingress_if_no, uint16_t now) = 0;
 
   virtual void InsertToAlgorithmDataStructures (Beacon *the_beacon, uint16_t sender_as,
-                                                    uint16_t remote_egress_if_no,
-                                                    uint16_t self_ingress_if_no) = 0;
+                                                uint16_t remote_egress_if_no,
+                                                uint16_t self_ingress_if_no) = 0;
 
   virtual void DeleteFromAlgorithmDataStructures (Beacon *the_beacon, ld replacement_key) = 0;
 

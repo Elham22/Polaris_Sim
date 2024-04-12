@@ -601,8 +601,7 @@ TimeServer::ContinueGlobalTimeSync ()
   int32_t f = std::floor ((n - 1) / 3);
 
   int64_t loff;
-  loff =
-      (alg_v == AlgV::V4) ? 0 : (GetReferenceTime ().GetTimeStep () - local_time.GetTimeStep ());
+  loff = (alg_v == AlgV::V4) ? 0 : (GetReferenceTime ().GetTimeStep () - local_time.GetTimeStep ());
   int64_t corr = loff;
 
   std::multiset<int64_t> off;
@@ -950,13 +949,11 @@ TimeServer::ScheduleListOfAllASesRequest ()
           if (diff_with_first_event.GetTimeStep () % time_sync_period.GetTimeStep () == 0)
             {
               Simulator::Schedule (t - Time (PATH_RQ_TIME_SYNC_DIFF),
-                                   &TimeServer::RequestSetOfAllCoreAsesFromPathServer,
-                                   this);
+                                   &TimeServer::RequestSetOfAllCoreAsesFromPathServer, this);
             }
           else
             {
-              Simulator::Schedule (t, &TimeServer::RequestSetOfAllCoreAsesFromPathServer,
-                                   this);
+              Simulator::Schedule (t, &TimeServer::RequestSetOfAllCoreAsesFromPathServer, this);
             }
         }
     }

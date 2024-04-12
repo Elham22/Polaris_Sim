@@ -116,7 +116,7 @@ OnDemandOptimization::PerLinkInitializations (rapidxml::xml_node<> *cur_xml_link
 
 void
 OnDemandOptimization::InitiateBeaconsPerInterface (uint16_t self_egress_if_no, ScionAs *remote_as,
-                                                      uint16_t remote_ingress_if_no)
+                                                   uint16_t remote_ingress_if_no)
 {
   // push_based
   if (now < first_pull_based_interval)
@@ -179,9 +179,10 @@ OnDemandOptimization::CreateInitialStaticInfoExtension (
 }
 
 void
-OnDemandOptimization::ExtendStaticInfoExtension (
-    const Beacon *the_beacon, uint16_t beacon_ingress_if_no, uint16_t candidate_egress_if_no,
-    static_info_extension_t &propagation_static_info)
+OnDemandOptimization::ExtendStaticInfoExtension (const Beacon *the_beacon,
+                                                 uint16_t beacon_ingress_if_no,
+                                                 uint16_t candidate_egress_if_no,
+                                                 static_info_extension_t &propagation_static_info)
 {
   for (auto const &criteria : the_beacon->optimization_target->criteria)
     {
@@ -241,12 +242,10 @@ OnDemandOptimization::DisseminateBeacons (NeighbourRelation relation)
               continue;
             }
 
-          std::unordered_map<
-              uint16_t,
-              std::multimap<
-                  ld, std::tuple<Beacon *, uint16_t, uint16_t,
+          std::unordered_map<uint16_t, std::multimap<ld,
+                                                     std::tuple<Beacon *, uint16_t, uint16_t,
                                                                 ScionAs *, static_info_extension_t>,
-                  std::greater<ld>>>
+                                                     std::greater<ld>>>
               selected_beacons;
 
           SelectBeaconsToDisseminatePerTargetPerNbr (remote_as_no, beacons_with_the_same_opt_target,
@@ -424,8 +423,8 @@ OnDemandOptimization::SendSelectedBeaconsPerTargetPerNbr (
 
 std::tuple<bool, bool, bool, Beacon *, ld>
 OnDemandOptimization::AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as,
-                                                  uint16_t remote_egress_if_no,
-                                                  uint16_t self_ingress_if_no, uint16_t now)
+                                               uint16_t remote_egress_if_no,
+                                               uint16_t self_ingress_if_no, uint16_t now)
 {
   if (the_beacon.beacon_direction == BeaconDirectionT::PULL_BASED)
     {
@@ -497,8 +496,8 @@ OnDemandOptimization::AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t send
 
 void
 OnDemandOptimization::InsertToAlgorithmDataStructures (Beacon *the_beacon, uint16_t sender_as,
-                                                           uint16_t remote_egress_if_no,
-                                                           uint16_t self_ingress_if_no)
+                                                       uint16_t remote_egress_if_no,
+                                                       uint16_t self_ingress_if_no)
 {
   if (the_beacon->beacon_direction == BeaconDirectionT::PULL_BASED)
     {
@@ -591,7 +590,7 @@ OnDemandOptimization::DeleteFromAlgorithmDataStructures (Beacon *the_beacon, ld 
 
 ld
 OnDemandOptimization::CalculateScore (const OptimizationTarget *optimization_target,
-                                       const static_info_extension_t &static_info_extension)
+                                      const static_info_extension_t &static_info_extension)
 {
   ld score = 0;
   ld weights_sum = 0;
@@ -600,8 +599,8 @@ OnDemandOptimization::CalculateScore (const OptimizationTarget *optimization_tar
       weights_sum += criteria.second;
       if (criteria.first == StaticInfoType::LATENCY)
         { // in ms, assuming max latency is 1000 ms
-          score += (1 - static_info_extension.at (StaticInfoType::LATENCY) / 1000.0) *
-                   criteria.second;
+          score +=
+              (1 - static_info_extension.at (StaticInfoType::LATENCY) / 1000.0) * criteria.second;
         }
       else if (criteria.first == StaticInfoType::BW)
         { // in Gbps, assuming max BW is 400 Gbps
@@ -609,8 +608,7 @@ OnDemandOptimization::CalculateScore (const OptimizationTarget *optimization_tar
         }
       else if (criteria.first == StaticInfoType::CO2)
         { // in g/Gbps, assuming max is 10 g/Gbps
-          score +=
-              (1 - static_info_extension.at (StaticInfoType::CO2) / 10.0) * criteria.second;
+          score += (1 - static_info_extension.at (StaticInfoType::CO2) / 10.0) * criteria.second;
         }
       else if (criteria.first == StaticInfoType::FORBIDDEN_EDGES)
         {
@@ -626,8 +624,7 @@ OnDemandOptimization::CalculateScore (const OptimizationTarget *optimization_tar
 }
 
 void
-OnDemandOptimization::UpdateAlgorithmDataStructuresPeriodic (Beacon *the_beacon,
-                                                                 bool invalidated)
+OnDemandOptimization::UpdateAlgorithmDataStructuresPeriodic (Beacon *the_beacon, bool invalidated)
 {
   if (invalidated)
     {
@@ -928,8 +925,8 @@ OnDemandOptimization::CreateOptimizationTargetsForForbiddenEdges (uint16_t dst_a
 {
   OptimizationTarget *optimization_target =
       new OptimizationTarget (0xFFFF - as->as_number, {{StaticInfoType::FORBIDDEN_EDGES, 1}},
-                               OptimizationDirection::SYMMETRIC, dst_as, 0xFFFF, 1,
-                                 set_of_forbidden_edges_per_destination_as.at (dst_as));
+                              OptimizationDirection::SYMMETRIC, dst_as, 0xFFFF, 1,
+                              set_of_forbidden_edges_per_destination_as.at (dst_as));
 
   for (uint16_t iface = 0; iface < as->GetNDevices (); ++iface)
     {

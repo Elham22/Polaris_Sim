@@ -91,12 +91,12 @@ InstantiateASesFromTopo (rapidxml::xml_node<> *xml_root,
       if (type == "core")
         {
           as_node = CreateObject<ScionCoreAs> (0, (alias_as_no == 0), alias_as_no, cur_xml_node,
-                                                 config, malicious_border_routers, Time (0));
+                                               config, malicious_border_routers, Time (0));
         }
       else if (type == "non-core")
         {
-          as_node = CreateObject<ScionAs> (0, (alias_as_no == 0), alias_as_no, cur_xml_node,
-                                            config, malicious_border_routers, Time (0));
+          as_node = CreateObject<ScionAs> (0, (alias_as_no == 0), alias_as_no, cur_xml_node, config,
+                                           malicious_border_routers, Time (0));
         }
       else
         {
@@ -347,8 +347,8 @@ InstantiateEndUsers (const YAML::Node &config, const NodeContainer &as_nodes)
 
       for (uint16_t j = 0; j < amount_per_as; ++j)
         {
-          ScionHost *host = new ScionHost(0, isd_number, alias_as_no, j + 2, 0.0, 0.0, as_node);
-          as_node->AddHost(host);
+          ScionHost *host = new ScionHost (0, isd_number, alias_as_no, j + 2, 0.0, 0.0, as_node);
+          as_node->AddHost (host);
         }
     }
 }

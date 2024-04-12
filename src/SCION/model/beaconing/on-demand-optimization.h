@@ -62,8 +62,8 @@ public:
 
         if (p.HasProperty ("latency") && std::stof (p.GetProperty ("latency")) > 0.001)
           {
-            optimization_criteria.insert (std::make_pair (StaticInfoType::LATENCY,
-                                                          std::stof (p.GetProperty ("latency"))));
+            optimization_criteria.insert (
+                std::make_pair (StaticInfoType::LATENCY, std::stof (p.GetProperty ("latency"))));
           }
 
         std::string direction = cur_target->first_node ("direction")->value ();
@@ -80,11 +80,9 @@ public:
         uint16_t group_id = std::stoi (cur_target->first_node ("group_id")->value ());
         uint16_t no_beacons = std::stoi (cur_target->first_node ("no_beacons")->value ());
 
-        set_of_optimization_targets_originated_from_this_as.insert (
-            std::make_pair (target_id, OptimizationTarget (target_id, optimization_criteria,
-                                                              optimization_direction,
-                                           as->as_number,
-                                                              group_id, no_beacons, NULL)));
+        set_of_optimization_targets_originated_from_this_as.insert (std::make_pair (
+            target_id, OptimizationTarget (target_id, optimization_criteria, optimization_direction,
+                                           as->as_number, group_id, no_beacons, NULL)));
         cur_target = cur_target->next_sibling ("target");
       }
   }
@@ -124,33 +122,34 @@ private:
   std::unordered_set<Beacon *> new_requested_pull_based_beacons;
 
   void InitiateBeaconsPerInterface (uint16_t self_egress_if_no, ScionAs *remote_as,
-                                       uint16_t remote_ingress_if_no) override;
+                                    uint16_t remote_ingress_if_no) override;
 
   void CreateInitialStaticInfoExtension (static_info_extension_t &static_info_extension,
-                                        uint16_t self_egress_if_no,
-                                        const OptimizationTarget *optimization_target) override;
+                                         uint16_t self_egress_if_no,
+                                         const OptimizationTarget *optimization_target) override;
 
   void DisseminateBeacons (NeighbourRelation relation) override;
 
   std::tuple<bool, bool, bool, Beacon *, ld>
   AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as, uint16_t remote_egress_if_no,
-                              uint16_t self_ingress_if_no, uint16_t now) override;
+                           uint16_t self_ingress_if_no, uint16_t now) override;
 
   void InsertToAlgorithmDataStructures (Beacon *the_beacon, uint16_t sender_as,
-                                            uint16_t remote_egress_if_no,
-                                            uint16_t self_ingress_if_no) override;
+                                        uint16_t remote_egress_if_no,
+                                        uint16_t self_ingress_if_no) override;
 
   void DeleteFromAlgorithmDataStructures (Beacon *the_beacon, ld replacement_key) override;
 
   static ld CalculateScore (const OptimizationTarget *optimization_target,
-                             const static_info_extension_t &static_info_extension);
+                            const static_info_extension_t &static_info_extension);
 
   void SelectBeaconsToDisseminatePerTargetPerNbr (
       uint16_t remote_as_no,
       const beacons_with_the_same_opt_target_t &beacons_with_the_same_opt_target,
       const OptimizationTarget *optimization_target,
       std::unordered_map<uint16_t, std::multimap<ld,
-                                                 std::tuple<Beacon *, uint16_t, uint16_t, ScionAs *, static_info_extension_t>,
+                                                 std::tuple<Beacon *, uint16_t, uint16_t, ScionAs *,
+                                                            static_info_extension_t>,
                                                  std::greater<ld>>> &selected_beacons);
 
   void SendSelectedBeaconsPerTargetPerNbr (
@@ -161,8 +160,8 @@ private:
               std::greater<ld>>> &selected_beacons);
 
   void ExtendStaticInfoExtension (const Beacon *the_beacon, uint16_t beacon_ingress_if_no,
-                                     uint16_t candidate_egress_if_no,
-                                     static_info_extension_t &propagation_static_info);
+                                  uint16_t candidate_egress_if_no,
+                                  static_info_extension_t &propagation_static_info);
 
   void UpdateStateBeforeBeaconing () override;
 

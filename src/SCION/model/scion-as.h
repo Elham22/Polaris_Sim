@@ -49,8 +49,8 @@ class ScionAs : public Node
 {
 public:
   ScionAs (uint32_t system_id, bool parallel_scheduler, uint16_t as_number,
-            rapidxml::xml_node<> *xml_node, const YAML::Node &config, bool malicious_border_routers,
-            Time local_time)
+           rapidxml::xml_node<> *xml_node, const YAML::Node &config, bool malicious_border_routers,
+           Time local_time)
       : Node (system_id)
   {
     PropertyContainer p = ParseProperties (xml_node);
@@ -158,7 +158,7 @@ protected:
   void InitializeLatencies (bool only_propagation_delay);
 
   void InstantiateBeaconServer (bool parallel_scheduler, rapidxml::xml_node<> *xml_node,
-                                  const YAML::Node &config);
+                                const YAML::Node &config);
 };
 } // namespace ns3
 #endif //SCION_SIMULATOR_SCION_AS_H

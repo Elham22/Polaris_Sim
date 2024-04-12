@@ -48,8 +48,7 @@ ScionCapableNode::Receive (uint16_t local_if, ScionPacket *packet)
 }
 
 void
-ScionCapableNode::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet,
-                                           Time receive_time)
+ScionCapableNode::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time receive_time)
 {
   AdvanceLocalTime ();
   processing_queue_length--;
@@ -70,9 +69,10 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
                 << std::endl;
     }*/
   auto new_size = transmission_queues_lengths.at (local_if) + packet->size;
-  if (new_size > max_transmission_queues_lengths.at (local_if)
-      && packet->payload_type != PayloadType::QOS_PROBE_REQ && packet->payload_type != PayloadType::QOS_PROBE_RESP
-      && packet->payload_type != PayloadType::APPLICATION_RESP)
+  if (new_size > max_transmission_queues_lengths.at (local_if) &&
+      packet->payload_type != PayloadType::QOS_PROBE_REQ &&
+      packet->payload_type != PayloadType::QOS_PROBE_RESP &&
+      packet->payload_type != PayloadType::APPLICATION_RESP)
     {
       /*std::cout << local_time.ToDouble (Time::Unit::S) << ": Node " << isd_number << ":" << as_number << ":" << local_address << ", dropping packet "
                 << packet->id << ", type " << packet->payload_type << " size " << packet->size << ", if " << local_if << ", queue length: " 
@@ -195,9 +195,9 @@ ScionCapableNode::InitializeTransmissionQueues ()
       uint64_t bwd_Gbit = 400; // default 400 Gbps
       auto transmission_delay = transmission_delays.at (i);
       if (transmission_delay != 0)
-      {
-        bwd_Gbit = 8000 / transmission_delay.ToInteger (Time::Unit::PS);
-      }
+        {
+          bwd_Gbit = 8000 / transmission_delay.ToInteger (Time::Unit::PS);
+        }
       auto propagation_delay = propagation_delays.at (i).ToInteger (Time::Unit::NS);
       if (propagation_delay < 100000)
         {
@@ -264,10 +264,10 @@ ScionCapableNode::SendScionPacket (ScionPacket *packet)
 }
 
 ScionPacket *
-ScionCapableNode::CreateScionPacket (const Payload &payload, PayloadType payload_type,
-                                       ia_t dst_ia, host_addr_t dst_host, int32_t payload_size,
-                                       const std::vector<const PathSegment *> &the_path,
-                                       const std::vector<uint8_t> &shortcut_hopfs)
+ScionCapableNode::CreateScionPacket (const Payload &payload, PayloadType payload_type, ia_t dst_ia,
+                                     host_addr_t dst_host, int32_t payload_size,
+                                     const std::vector<const PathSegment *> &the_path,
+                                     const std::vector<uint8_t> &shortcut_hopfs)
 {
   on_the_flight_packets.insert (
       std::make_pair (next_packet_id, ScionPacket (this, next_packet_id)));
@@ -348,21 +348,27 @@ ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
   if (time_passed > collection_period)
     {
       //estimated_loss.at (local_if).push_back (current_throughput_bytes.at (local_if) > 0 ? ((double) current_loss_bytes.at (local_if)) / current_throughput_bytes.at (local_if) : 0);
-      uint64_t throughput = current_throughput_bytes.at (local_if) * 1000 / time_passed.ToInteger (Time::Unit::MS);
+      uint64_t throughput =
+          current_throughput_bytes.at (local_if) * 1000 / time_passed.ToInteger (Time::Unit::MS);
       estimated_throughput.at (local_if).push_back (throughput);
       auto predicted_new_throughput_local = predicted_new_throughput.at (local_if);
       uint64_t previous_new_througput = throughput;
       if (predicted_new_throughput_local.size () > 0)
         {
           // also consider some previous requests as they might have happened just before the update
-          previous_new_througput += predicted_new_throughput_local.at (predicted_new_throughput_local.size () - 1) / 10;
+          previous_new_througput +=
+              predicted_new_throughput_local.at (predicted_new_throughput_local.size () - 1) / 10;
         }
       predicted_new_throughput_local.push_back (previous_new_througput);
-      estimated_packetloss.at (local_if).push_back (arrived_packets.at (local_if) > 0 ? ((double) lost_packets.at (local_if)) / arrived_packets.at (local_if) : 0);
+      estimated_packetloss.at (local_if).push_back (arrived_packets.at (local_if) > 0
+                                                        ? ((double) lost_packets.at (local_if)) /
+                                                              arrived_packets.at (local_if)
+                                                        : 0);
       estimation_times.at (local_if).push_back (local_time);
       if (current_throughput_bytes.at (local_if) > 0)
         {
-          Simulator::Schedule (collection_period + TimeStep (1), &ScionCapableNode::UpdateInterfaceEstimation, this, local_if);
+          Simulator::Schedule (collection_period + TimeStep (1),
+                               &ScionCapableNode::UpdateInterfaceEstimation, this, local_if);
         }
       //std::cout << "Lost / arrived " << lost_packets.at (local_if) << "/" << arrived_packets.at (local_if) << std::endl;
       current_loss_bytes.at (local_if) = 0;
@@ -387,13 +393,15 @@ ScionCapableNode::PrintLinkInfo (uint16_t local_if)
 
   for (uint64_t i = 0; i < times.size () && i < throughput.size () && i < loss.size (); ++i)
     {
-      std::cout << times.at (i).ToInteger (Time::Unit::MS) << ", " << throughput.at (i) << ", " << loss.at (i) << std::endl; 
+      std::cout << times.at (i).ToInteger (Time::Unit::MS) << ", " << throughput.at (i) << ", "
+                << loss.at (i) << std::endl;
     }
 }
 
 std::string
 ScionCapableNode::GetAddressAsString ()
 {
-  return std::to_string(isd_number) + ":" + std::to_string(as_number)  + ":" + std::to_string(local_address);
+  return std::to_string (isd_number) + ":" + std::to_string (as_number) + ":" +
+         std::to_string (local_address);
 }
 } // namespace ns3

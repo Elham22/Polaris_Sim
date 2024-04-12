@@ -34,8 +34,8 @@ Scionlab::DoInitializations (uint32_t num_ases, rapidxml::xml_node<> *xml_node,
 
 void
 Scionlab::CreateInitialStaticInfoExtension (static_info_extension_t &static_info_extension,
-                                                uint16_t self_egress_if_no,
-                                                const OptimizationTarget *optimization_target)
+                                            uint16_t self_egress_if_no,
+                                            const OptimizationTarget *optimization_target)
 {
   static_info_extension.insert (std::make_pair (StaticInfoType::LATENCY, 0));
   static_info_extension.insert (
@@ -200,8 +200,8 @@ Scionlab::DisseminateBeacons (NeighbourRelation relation)
 
 std::tuple<bool, bool, bool, Beacon *, ld>
 Scionlab::AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as,
-                                      uint16_t remote_egress_if_no, uint16_t self_ingress_if_no,
-                                      uint16_t now)
+                                   uint16_t remote_egress_if_no, uint16_t self_ingress_if_no,
+                                   uint16_t now)
 {
   uint16_t dst_as = UPPER_16_BITS (the_beacon.the_path.at (0));
 
@@ -221,8 +221,8 @@ Scionlab::AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as,
 
 void
 Scionlab::InsertToAlgorithmDataStructures (Beacon *the_beacon, uint16_t sender_as,
-                                               uint16_t remote_egress_if_no,
-                                               uint16_t self_ingress_if_no)
+                                           uint16_t remote_egress_if_no,
+                                           uint16_t self_ingress_if_no)
 {
 }
 

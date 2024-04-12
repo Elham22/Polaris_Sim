@@ -44,47 +44,53 @@ namespace ns3 {
 class GeneralTrafficApp : public App
 {
 public:
-  GeneralTrafficApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia, host_addr_t app_dst_host_addr,
-      std::vector<std::vector<const PathSegment *>> all_paths)
+  GeneralTrafficApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
+                     host_addr_t app_dst_host_addr,
+                     std::vector<std::vector<const PathSegment *>> all_paths)
       : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths)
   {
   }
   void PrintResults () override;
 
-void SetBwdFactor (double factor, double avail_bwd_mbit);
+  void SetBwdFactor (double factor, double avail_bwd_mbit);
 
 protected:
   void SetBurstArrivals (double val);
   void SetBurstLength (double val);
   void SetDataRate (double val_mbit);
   void GenerateAppTraffic () override;
-  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active) override;
+  double ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id,
+                       bool was_active) override;
 
   // PPBP
-  Ptr<RandomVariableStream> m_burstArrivals = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (240)); // Mean rate of burst arrivals
-	Ptr<RandomVariableStream> m_burstLength = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (0.2)); // Mean burst time length
-	DataRate m_cbrRate = DataRate ("10Mb/s");// Burst intensity (constant bit-rate)
+  Ptr<RandomVariableStream> m_burstArrivals = CreateObjectWithAttributes<ConstantRandomVariable> (
+      "Constant", DoubleValue (240)); // Mean rate of burst arrivals
+  Ptr<RandomVariableStream> m_burstLength = CreateObjectWithAttributes<ConstantRandomVariable> (
+      "Constant", DoubleValue (0.2)); // Mean burst time length
+  DataRate m_cbrRate = DataRate ("10Mb/s"); // Burst intensity (constant bit-rate)
 
-	double			    m_h = 0.7;							// Hurst parameter	(Pareto distribution)
-	double			    m_shape;						    // Shape			(Pareto distribution)
-	Time			      m_timeSlot;						  // The time slot
-	int				      m_activebursts = 1;			// Number of active bursts at time t. Initialized to 1 to speed up reaching steady state
-	bool			      m_offPeriod = true;;
-  
-	/**
+  double m_h = 0.7; // Hurst parameter	(Pareto distribution)
+  double m_shape; // Shape			(Pareto distribution)
+  Time m_timeSlot; // The time slot
+  int m_activebursts =
+      1; // Number of active bursts at time t. Initialized to 1 to speed up reaching steady state
+  bool m_offPeriod = true;
+  ;
+
+  /**
    * \ Functions that allows to keep track of the current number of active bursts at time t, nt,
 	 * taking into account that their arrival process follows a Poisson process and that their
 	 * length is determined by a Pareto distribution.
 	 */
-	void PPBP();
-	void PoissonArrival();
-	void ParetoDeparture();
-	
-	/**
+  void PPBP ();
+  void PoissonArrival ();
+  void ParetoDeparture ();
+
+  /**
 	 * \ Function thet generates the packets departure at a constant bit-rate nt x r.
 	 */
-	void ScheduleNextTx();
-	void SendPacket();
+  void ScheduleNextTx ();
+  void SendPacket ();
 };
 
 /**
@@ -93,12 +99,10 @@ protected:
 class BackgroundTrafficApp : public GeneralTrafficApp
 {
 public:
-  BackgroundTrafficApp (BorderRouter *br, ia_t dst_ia, std::vector<std::vector<const PathSegment *>> all_paths,
-                        int32_t path_id, uint16_t inf, uint16_t hopf)
-  : GeneralTrafficApp (NULL, 0, 0, dst_ia, 0, all_paths),
-  br (br),
-  inf (inf),
-  hopf (hopf)
+  BackgroundTrafficApp (BorderRouter *br, ia_t dst_ia,
+                        std::vector<std::vector<const PathSegment *>> all_paths, int32_t path_id,
+                        uint16_t inf, uint16_t hopf)
+      : GeneralTrafficApp (NULL, 0, 0, dst_ia, 0, all_paths), br (br), inf (inf), hopf (hopf)
   {
     best_path_id = path_id;
   }
@@ -107,8 +111,10 @@ public:
   std::string GetIfInfoAsString ();
 
   // storing the background infos
-  static std::map<std::pair<BorderRouter *, uint16_t>, BackgroundTrafficApp *> backgroundTrafficApps;
-  static void AddBackgroundTraffic (std::vector<std::vector<const PathSegment *>> all_paths, double bwdFactor);
+  static std::map<std::pair<BorderRouter *, uint16_t>, BackgroundTrafficApp *>
+      backgroundTrafficApps;
+  static void AddBackgroundTraffic (std::vector<std::vector<const PathSegment *>> all_paths,
+                                    double bwdFactor);
 
 protected:
   BorderRouter *br;

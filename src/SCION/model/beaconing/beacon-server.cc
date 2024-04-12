@@ -67,7 +67,8 @@ BeaconServer::ScheduleBeaconing (Time last_beaconing_event_time)
           Time updateStatePeriodicDelay = TimeStep (1);
           if (as->GetPathServer () != NULL)
             {
-              updateStatePeriodicDelay = updateStatePeriodicDelay + as->latency_between_path_server_and_beacon_server;
+              updateStatePeriodicDelay =
+                  updateStatePeriodicDelay + as->latency_between_path_server_and_beacon_server;
               Simulator::Schedule (t + as->latency_between_path_server_and_beacon_server,
                                    &RunParallelEvents<void (BeaconServer::*) ()>,
                                    &BeaconServer::RegisterToLocalPathServer);
@@ -75,7 +76,8 @@ BeaconServer::ScheduleBeaconing (Time last_beaconing_event_time)
           Simulator::Schedule (t, &RunParallelEvents<void (BeaconServer::*) ()>,
                                &BeaconServer::UpdateStateBeforeBeaconing);
 
-          Simulator::Schedule (t + updateStatePeriodicDelay, &RunParallelEvents<void (BeaconServer::*) ()>,
+          Simulator::Schedule (t + updateStatePeriodicDelay,
+                               &RunParallelEvents<void (BeaconServer::*) ()>,
                                &BeaconServer::UpdateStatePeriodic);
         }
 
@@ -165,9 +167,9 @@ BeaconServer::UpdateBeaconState (Beacon *the_beacon)
 }
 
 void
-BeaconServer::CreateInitialStaticInfoExtension (
-    static_info_extension_t &static_info_extension, uint16_t self_egress_if_no,
-    const OptimizationTarget *optimization_target)
+BeaconServer::CreateInitialStaticInfoExtension (static_info_extension_t &static_info_extension,
+                                                uint16_t self_egress_if_no,
+                                                const OptimizationTarget *optimization_target)
 {
 }
 
@@ -203,7 +205,7 @@ BeaconServer::InitiateBeacons (NeighbourRelation relation)
 
 void
 BeaconServer::InitiateBeaconsPerInterface (uint16_t self_egress_if_no, ScionAs *remote_as,
-                                              uint16_t remote_ingress_if_no)
+                                           uint16_t remote_ingress_if_no)
 {
   static_info_extension_t static_info_extension;
   CreateInitialStaticInfoExtension (static_info_extension, self_egress_if_no, NULL);
@@ -214,9 +216,9 @@ BeaconServer::InitiateBeaconsPerInterface (uint16_t self_egress_if_no, ScionAs *
 
 void
 BeaconServer::GenerateBeaconAndSend (Beacon *selected_beacon, uint16_t self_egress_if_no,
-                                        uint16_t remote_ingress_if_no, ScionAs *remote_as,
-                                        static_info_extension_t &static_info_extension,
-                                        const OptimizationTarget *optimization_target,
+                                     uint16_t remote_ingress_if_no, ScionAs *remote_as,
+                                     static_info_extension_t &static_info_extension,
+                                     const OptimizationTarget *optimization_target,
                                      BeaconDirectionT beacon_direction)
 {
   std::string key;
@@ -303,8 +305,8 @@ BeaconServer::UpdateStatePeriodic ()
 
 void
 BeaconServer::InsertBeacon (Beacon &the_beacon, uint16_t dst_as, uint16_t sender_as,
-                             uint16_t remote_egress_if, uint16_t local_ingress_if, bool path_exists,
-                             bool existing_path_valid, Beacon *beacon_to_replace)
+                            uint16_t remote_egress_if, uint16_t local_ingress_if, bool path_exists,
+                            bool existing_path_valid, Beacon *beacon_to_replace)
 {
   if (the_beacon.beacon_direction == BeaconDirectionT::PULL_BASED)
     {
@@ -550,7 +552,7 @@ BeaconServer::ReceiveBeacon (Beacon &received_beacon, uint16_t sender_as, uint16
 
 std::tuple<bool, bool, bool, Beacon *, ld>
 BeaconServer::ImportPolicy (Beacon &the_beacon, uint16_t sender_as, uint16_t remote_egress_if_no,
-                             uint16_t self_ingress_if_no, uint16_t now)
+                            uint16_t self_ingress_if_no, uint16_t now)
 {
   if (the_beacon.beacon_direction == BeaconDirectionT::PUSH_BASED)
     {

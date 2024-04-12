@@ -37,8 +37,8 @@ Baseline::DoInitializations (uint32_t num_ases, rapidxml::xml_node<> *xml_node,
 
 void
 Baseline::CreateInitialStaticInfoExtension (static_info_extension_t &static_info_extension,
-                                                uint16_t self_egress_if_no,
-                                                const OptimizationTarget *optimization_target)
+                                            uint16_t self_egress_if_no,
+                                            const OptimizationTarget *optimization_target)
 {
   static_info_extension.insert (std::make_pair (StaticInfoType::LATENCY, 0));
   static_info_extension.insert (
@@ -120,11 +120,10 @@ Baseline::DisseminateBeacons (NeighbourRelation relation)
                       uint16_t remote_ingress_if_no = remote_as_if_pair.first;
                       ScionAs *remote_as = remote_as_if_pair.second;
 
-                      ld latency =
-                          the_beacon->static_info_extension.at (StaticInfoType::LATENCY) +
+                      ld latency = the_beacon->static_info_extension.at (StaticInfoType::LATENCY) +
                                    as->latencies_between_interfaces
-                              .at (LOWER_16_BITS (the_beacon->the_path.back ()))
-                              .at (egress_interface_no);
+                                       .at (LOWER_16_BITS (the_beacon->the_path.back ()))
+                                       .at (egress_interface_no);
                       ld bwd = the_beacon->static_info_extension.at (StaticInfoType::BW) >
                                        (ld) as->inter_as_bwds.at (egress_interface_no)
                                    ? (ld) as->inter_as_bwds.at (egress_interface_no)
@@ -146,8 +145,8 @@ Baseline::DisseminateBeacons (NeighbourRelation relation)
 
 std::tuple<bool, bool, bool, Beacon *, ld>
 Baseline::AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as,
-                                      uint16_t remote_egress_if_no, uint16_t self_ingress_if_no,
-                                      uint16_t now)
+                                   uint16_t remote_egress_if_no, uint16_t self_ingress_if_no,
+                                   uint16_t now)
 {
   uint16_t dst_as = UPPER_16_BITS (the_beacon.the_path.at (0));
 
@@ -167,8 +166,8 @@ Baseline::AlgSpecificImportPolicy (Beacon &the_beacon, uint16_t sender_as,
 
 void
 Baseline::InsertToAlgorithmDataStructures (Beacon *the_beacon, uint16_t sender_as,
-                                               uint16_t remote_egress_if_no,
-                                               uint16_t self_ingress_if_no)
+                                           uint16_t remote_egress_if_no,
+                                           uint16_t self_ingress_if_no)
 {
 }
 

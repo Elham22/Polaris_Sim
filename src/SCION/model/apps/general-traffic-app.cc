@@ -26,33 +26,35 @@ namespace ns3 {
 void
 GeneralTrafficApp::SetBwdFactor (double factor, double avail_bwd_Mbit)
 {
-  if (factor <= 0.) 
-  {
-    SetDataRate (0.);
-    return;
-  }
-  double oldBitrate = static_cast<double>(m_cbrRate.GetBitRate());
+  if (factor <= 0.)
+    {
+      SetDataRate (0.);
+      return;
+    }
+  double oldBitrate = static_cast<double> (m_cbrRate.GetBitRate ());
   SetDataRate (avail_bwd_Mbit * factor / 200.);
 
   if (oldBitrate <= 0. && factor > 0.)
-  {
-    PPBP ();
-  }
+    {
+      PPBP ();
+    }
 }
 
-void 
+void
 GeneralTrafficApp::SetBurstArrivals (double val)
 {
-  m_burstArrivals = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (val));
+  m_burstArrivals =
+      CreateObjectWithAttributes<ConstantRandomVariable> ("Constant", DoubleValue (val));
 }
 
-void 
+void
 GeneralTrafficApp::SetBurstLength (double val)
 {
-  m_burstLength = CreateObjectWithAttributes <ConstantRandomVariable> ("Constant", DoubleValue (val));
+  m_burstLength =
+      CreateObjectWithAttributes<ConstantRandomVariable> ("Constant", DoubleValue (val));
 }
 
-void 
+void
 GeneralTrafficApp::SetDataRate (double val_Mbit)
 {
   m_cbrRate = DataRate (std::to_string (val_Mbit) + "Mb/s");
@@ -65,7 +67,8 @@ GeneralTrafficApp::GenerateAppTraffic ()
 }
 
 double
-GeneralTrafficApp::ComputeScore (double latency, double loss, double additional_scoring, uint32_t path_id, bool was_active)
+GeneralTrafficApp::ComputeScore (double latency, double loss, double additional_scoring,
+                                 uint32_t path_id, bool was_active)
 {
   // TODO
   return App::ComputeScore (latency, loss, additional_scoring, path_id, was_active);
@@ -79,53 +82,57 @@ GeneralTrafficApp::PrintResults ()
 }
 
 void
-GeneralTrafficApp::PPBP() // Poisson Pareto Burst 
-{  
-  double bitrate = static_cast<double>(m_cbrRate.GetBitRate());
+GeneralTrafficApp::PPBP () // Poisson Pareto Burst
+{
+  double bitrate = static_cast<double> (m_cbrRate.GetBitRate ());
   if (bitrate <= 0 || stopped)
     {
       // stop sending packets and no longer schedule anything.
       m_activebursts = 1;
       return;
-    }	
+    }
 
   double inter_burst_intervals;
-  inter_burst_intervals = 1/m_burstArrivals->GetValue();
+  inter_burst_intervals = 1 / m_burstArrivals->GetValue ();
 
   //std::cout << "inter_burst " << inter_burst_intervals << std::endl;
-  Ptr<ExponentialRandomVariable> exp = CreateObjectWithAttributes<ExponentialRandomVariable> ("Mean", DoubleValue (inter_burst_intervals));
-  Time t_poisson_arrival = Seconds (exp->GetValue());
-  Simulator::Schedule(t_poisson_arrival, &GeneralTrafficApp::PoissonArrival, this);
-  
+  Ptr<ExponentialRandomVariable> exp = CreateObjectWithAttributes<ExponentialRandomVariable> (
+      "Mean", DoubleValue (inter_burst_intervals));
+  Time t_poisson_arrival = Seconds (exp->GetValue ());
+  Simulator::Schedule (t_poisson_arrival, &GeneralTrafficApp::PoissonArrival, this);
+
   // Pareto
   m_shape = 3 - 2 * m_h;
-  double scale = m_burstLength->GetValue() * (m_shape - 1.0) / m_shape;
-  m_timeSlot = Seconds(scale);
-  
-  Ptr<ParetoRandomVariable> pareto = CreateObjectWithAttributes<ParetoRandomVariable> ("Scale", DoubleValue (scale), "Shape", DoubleValue (m_shape));
-  
-  Simulator::Schedule(t_poisson_arrival + Seconds (pareto->GetValue()), &GeneralTrafficApp::ParetoDeparture, this);
-  
-  Simulator::Schedule(t_poisson_arrival, &GeneralTrafficApp::PPBP, this);
+  double scale = m_burstLength->GetValue () * (m_shape - 1.0) / m_shape;
+  m_timeSlot = Seconds (scale);
+
+  Ptr<ParetoRandomVariable> pareto = CreateObjectWithAttributes<ParetoRandomVariable> (
+      "Scale", DoubleValue (scale), "Shape", DoubleValue (m_shape));
+
+  Simulator::Schedule (t_poisson_arrival + Seconds (pareto->GetValue ()),
+                       &GeneralTrafficApp::ParetoDeparture, this);
+
+  Simulator::Schedule (t_poisson_arrival, &GeneralTrafficApp::PPBP, this);
 }
 
 void
-GeneralTrafficApp::PoissonArrival()
+GeneralTrafficApp::PoissonArrival ()
 {
   ++m_activebursts;
-  if (m_offPeriod) ScheduleNextTx();
+  if (m_offPeriod)
+    ScheduleNextTx ();
 }
 
 void
-GeneralTrafficApp::ParetoDeparture()
+GeneralTrafficApp::ParetoDeparture ()
 {
   --m_activebursts;
 }
-	
+
 void
-GeneralTrafficApp::ScheduleNextTx()
+GeneralTrafficApp::ScheduleNextTx ()
 {
-  double bitrate = static_cast<double>(m_cbrRate.GetBitRate());
+  double bitrate = static_cast<double> (m_cbrRate.GetBitRate ());
   if (bitrate <= 0)
     {
       // stop sending packets and no longer schedule anything.
@@ -134,27 +141,26 @@ GeneralTrafficApp::ScheduleNextTx()
     }
 
   uint32_t bits = (m_pktSize + 30) * 8 * scale;
-  Time nextTime(Seconds (bits / bitrate));
-  
-  if (m_activebursts != 0)
-  {
-    m_offPeriod = false;
-    double data_rate = (double) nextTime.GetSeconds() / m_activebursts;
-    Simulator::Schedule(Seconds(data_rate),&GeneralTrafficApp::SendPacket, this);
-  }
-  else
-  {
-    m_offPeriod = true;
-  }
+  Time nextTime (Seconds (bits / bitrate));
 
-}	
+  if (m_activebursts != 0)
+    {
+      m_offPeriod = false;
+      double data_rate = (double) nextTime.GetSeconds () / m_activebursts;
+      Simulator::Schedule (Seconds (data_rate), &GeneralTrafficApp::SendPacket, this);
+    }
+  else
+    {
+      m_offPeriod = true;
+    }
+}
 
 void
-GeneralTrafficApp::SendPacket()
+GeneralTrafficApp::SendPacket ()
 {
   // note, pktSize doesn't have to be scaled here because scaling is made in SendData
   SendData (m_pktSize, GetPath ());
-  ScheduleNextTx();
+  ScheduleNextTx ();
 }
 
 void
@@ -162,7 +168,7 @@ BackgroundTrafficApp::StartAppTraffic ()
 {
   // as link is fixed, directly start sending.
   // 7 seconds delay to allow user defined events to overwrite bitrate
-  double bitrate = static_cast<double>(m_cbrRate.GetBitRate());
+  double bitrate = static_cast<double> (m_cbrRate.GetBitRate ());
   if (bitrate > 0)
     {
       Simulator::Schedule (Seconds (7), &BackgroundTrafficApp::GenerateAppTraffic, this);
@@ -180,14 +186,16 @@ BackgroundTrafficApp::GetIfInfoAsString ()
 {
   auto seg = all_paths.at (best_path_id).at (inf);
   auto hop = seg->hops.at (hopf);
-  return "ing " + std::to_string (GET_HOP_ING_IF (hop)) + " eg " + std::to_string (GET_HOP_EG_IF (hop));
+  return "ing " + std::to_string (GET_HOP_ING_IF (hop)) + " eg " +
+         std::to_string (GET_HOP_EG_IF (hop));
 }
 
 std::map<std::pair<BorderRouter *, uint16_t>, BackgroundTrafficApp *>
-BackgroundTrafficApp::backgroundTrafficApps = {};
+    BackgroundTrafficApp::backgroundTrafficApps = {};
 
 void
-BackgroundTrafficApp::AddBackgroundTraffic (std::vector<std::vector<const PathSegment *>> all_paths, double bwdFactor)
+BackgroundTrafficApp::AddBackgroundTraffic (std::vector<std::vector<const PathSegment *>> all_paths,
+                                            double bwdFactor)
 {
   //std::cout << "Adding background traffic" << std::endl;
 
@@ -202,10 +210,11 @@ BackgroundTrafficApp::AddBackgroundTraffic (std::vector<std::vector<const PathSe
             {
               //std::cout << "Path " << i << ", hop " << hopf << std::endl;
               auto hop_from = seg->hops.at (hopf);
-              auto hop_to = seg->hops.at (hopf+1);
+              auto hop_to = seg->hops.at (hopf + 1);
               // auto isd = GET_HOP_ISD (hop_from);
               auto as_num = GET_HOP_AS (hop_from);
-              ScionAs *as_node = dynamic_cast<ScionAs *> (PeekPointer (nodes.Get (as_num))); // TODO currently only supports one ISD
+              ScionAs *as_node = dynamic_cast<ScionAs *> (
+                  PeekPointer (nodes.Get (as_num))); // TODO currently only supports one ISD
               //std::cout << as_node->isd_number << ":" << as_node->as_number << std::endl;
               auto ing = GET_HOP_ING_IF (hop_from);
               BorderRouter *br = as_node->GetBr (ing);
@@ -216,20 +225,20 @@ BackgroundTrafficApp::AddBackgroundTraffic (std::vector<std::vector<const PathSe
               auto key = std::make_pair (br, local_if);
               if (backgroundTrafficApps.find (key) == backgroundTrafficApps.end ())
                 {
-                  BackgroundTrafficApp *app = new BackgroundTrafficApp (br, GET_HOP_IA (hop_to), all_paths, i, inf, hopf);
+                  BackgroundTrafficApp *app =
+                      new BackgroundTrafficApp (br, GET_HOP_IA (hop_to), all_paths, i, inf, hopf);
                   app->SetBwdFactor (bwdFactor, avail_bwd_Mbit);
                   backgroundTrafficApps[key] = app;
                   app->StartAppTraffic ();
                 }
-              else {
-                backgroundTrafficApps.at (key)->SetBwdFactor (bwdFactor, avail_bwd_Mbit);
-              }
-              
+              else
+                {
+                  backgroundTrafficApps.at (key)->SetBwdFactor (bwdFactor, avail_bwd_Mbit);
+                }
+
               //std::cout << "BR " << br->GetLogitude () << ", " << br->GetLatitude () << ", if " << local_if << std::endl;
             }
         }
-
-
     }
 }
 } // namespace ns3
