@@ -165,7 +165,8 @@ void
 UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as_no,
                              std::string src_local_address, std::string dst_isd_number,
                              std::string real_dst_as_no, std::string dst_local_address,
-                             std::string app_type, std::string backgroundBwdFactor)
+                             std::string app_type, std::string backgroundBwdFactor,
+                             std::string enable_logging)
 {
   if (std::stoi (src_isd_number) != 0)
     {
@@ -178,7 +179,7 @@ UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as
   ia_t dst_ia =
       MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
   src_host->StartApplication (app_type, dst_ia, std::stoi (dst_local_address),
-                              std::stod (backgroundBwdFactor));
+                              std::stod (backgroundBwdFactor), std::stoi (enable_logging));
 }
 
 void

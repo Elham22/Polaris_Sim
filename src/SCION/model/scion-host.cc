@@ -398,7 +398,7 @@ ScionHost::SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host)
 
 void
 ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host,
-                             double backgroundBwdFactor)
+                             double backgroundBwdFactor, bool enable_logging)
 {
   std::vector<const PathSegment *> the_path;
   /*ScionHost::active_path = the_path;
