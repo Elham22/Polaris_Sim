@@ -52,6 +52,20 @@ enum PayloadType {
   APPLICATION_DATA = 11,
   APPLICATION_RESP = 12,
   BACKGROUND_TRAFFIC = 13,
+  SCMP = 14,
+};
+
+enum SCMPType {
+  DESTINATION_UNREACHABLE = 1,
+  PACKET_TOO_BIG = 2,
+  PARAMETER_PROBLEM = 4,
+  EXTERNAL_INTERFACE_DOWN = 5,
+  INTERNAL_CONNECTIVITY_DOWN = 6,
+  LINK_CONGESTED = 7,
+  ECHO_REQUEST = 128,
+  ECHO_REPLY = 129,
+  TRACEROUTE_REQUEST = 130,
+  TRACEROUTE_REPLY = 131,
 };
 
 struct PathReqFromHost
@@ -118,11 +132,20 @@ struct AppResp
   uint64_t bytes_received;
 };
 
+struct ScmpReqOrResp
+{
+  int64_t scmp_type;
+  int64_t scmp_code;
+
+  // Fields not implemented: Checksum, InfoBlock, DataBlock
+};
+
 union Payload {
   PathReqFromHost path_req_from_host;
   RegPathsFromLocalPs registered_paths_from_local_ps;
   ListOfAllASes list_of_all_ases;
   NtpReqOrResp ntp_req_or_resp;
+  ScmpReqOrResp scmp_req_or_resp;
   ProbeReq probe_req;
   ProbeResp probe_resp;
   AppData app_data;
