@@ -417,28 +417,32 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
       App *app;
       if (app_type == "video conference active")
         {
-          app = new VideoConferenceApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths);
+          app = new VideoConferenceApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
+                                        enable_logging);
         }
       else if (app_type == "video conference passive")
         {
-          app = new VCAPassive (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths);
+          app = new VCAPassive (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
+                                enable_logging);
         }
       else if (app_type == "video conference naive")
         {
-          app = new VCANaive (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths);
+          app = new VCANaive (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
+                              enable_logging);
         }
       else if (app_type.find ("video conference given:") == 0)
         {
           app = new VCAGiven (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
-                              app_type.substr (23));
+                              app_type.substr (23), enable_logging);
         }
       else if (app_type == "general traffic")
         {
-          app = new GeneralTrafficApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths);
+          app = new GeneralTrafficApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
+                                       enable_logging);
         }
       else
         {
-          app = new App (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths);
+          app = new App (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths, enable_logging);
         }
       apps.push_back (app);
       BackgroundTrafficApp::AddBackgroundTraffic (all_paths, backgroundBwdFactor);
@@ -450,7 +454,7 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
       // no paths registered, request paths
       RequestForPathSegments (dst_ia);
       Simulator::Schedule (MilliSeconds (300), &ScionHost::StartApplication, this, app_type, dst_ia,
-                           dst_host, backgroundBwdFactor);
+                           dst_host, backgroundBwdFactor, enable_logging);
     }
 }
 

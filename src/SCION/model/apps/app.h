@@ -58,13 +58,15 @@ class App
 {
 public:
   App (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
-       host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths)
+       host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
+       bool enable_logging)
       : dst_ia (app_dst_ia),
         dst_host_addr (app_dst_host_addr),
         host (host),
         app_id (app_id),
         ia_addr (ia_addr),
-        all_paths (all_paths)
+        all_paths (all_paths),
+        enable_logging (enable_logging)
   {
   }
 
@@ -103,6 +105,7 @@ protected:
   double acceptable_loss = 1.0;
   Time next_scoring = Time (0);
   bool stopped = false;
+  bool enable_logging = false;
 
   virtual bool rescore (double active_loss);
 

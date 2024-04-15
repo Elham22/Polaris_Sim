@@ -32,7 +32,7 @@ namespace ns3 {
  * Realistic internet traffic generate according to a Poisson Pareto Burst Process (PPBP).
  * Propsed by and implemented by [1], implementation adapted for this use case, original
  * code at [2].
- * 
+ *
  * References:
  * - - - - - -
  * [1]	A new tool for generating realistic Internet traffic in NS-3,
@@ -46,8 +46,8 @@ class GeneralTrafficApp : public App
 public:
   GeneralTrafficApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
                      host_addr_t app_dst_host_addr,
-                     std::vector<std::vector<const PathSegment *>> all_paths)
-      : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths)
+                     std::vector<std::vector<const PathSegment *>> all_paths, bool enable_logging)
+      : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, enable_logging)
   {
   }
   void PrintResults () override;
@@ -102,7 +102,7 @@ public:
   BackgroundTrafficApp (BorderRouter *br, ia_t dst_ia,
                         std::vector<std::vector<const PathSegment *>> all_paths, int32_t path_id,
                         uint16_t inf, uint16_t hopf)
-      : GeneralTrafficApp (NULL, 0, 0, dst_ia, 0, all_paths), br (br), inf (inf), hopf (hopf)
+      : GeneralTrafficApp (NULL, 0, 0, dst_ia, 0, all_paths, false), br (br), inf (inf), hopf (hopf)
   {
     best_path_id = path_id;
   }
