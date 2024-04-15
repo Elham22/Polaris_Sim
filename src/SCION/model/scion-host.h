@@ -41,6 +41,7 @@ struct AppInfo
   uint32_t num_packets = 0;
   uint64_t bytes_received = 0;
   int64_t aggregated_latencies = 0;
+  int8_t ecn = 0;
 };
 
 class ScionHost : public ScionCapableNode

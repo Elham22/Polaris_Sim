@@ -43,6 +43,7 @@ public:
     probe_sent_time = Simulator::Now ();
   }
 
+  uint16_t ecn;
   u_int32_t num_hops;
   u_int32_t num_expected_responses;
   std::vector<ProbeResp> probe_responses;

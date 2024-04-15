@@ -87,6 +87,14 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
       Drop (packet);
       return;
     }
+  else if (packet->ecn_capable &&
+           new_size > max_transmission_queues_lengths.at (local_if) / 2)
+    {
+
+      // NOTE: Here, tagging packets could be done probabilistically. 'ecn'
+      // could also be more than just binary, e.g., indicate queue fullness factor
+      packet->ecn = 1;
+    }
 
   transmission_queues_lengths.at (local_if) = new_size;
   Time delay = transmission_delays.at (local_if) * transmission_queues_lengths.at (local_if);

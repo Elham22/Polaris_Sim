@@ -114,6 +114,7 @@ struct AppResp
   app_id_t app_id;
   double avg_latency;
   double loss;
+  uint8_t ecn; // explicit congestion notification
   uint64_t bytes_received;
 };
 
@@ -155,6 +156,13 @@ public:
   std::vector<uint8_t> shortcut_hopfs;
 
   bool path_reversed;
+
+  // TODO: Think about where the following would be stored. For reference.
+  // In IP it's the two LSB in the Traffic Class field.
+
+  uint8_t ecn = 0; // Explicit Congestion Notification (ECN)
+
+  uint8_t ecn_capable = 0; // End hosts able to handle ECN
 
   ScionPacket (ScionCapableNode *const packet_originator, packet_id_t id)
       : packet_originator (packet_originator), id (id)

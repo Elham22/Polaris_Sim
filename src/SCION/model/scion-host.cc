@@ -509,12 +509,21 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   auto info = app_infos.at (key);
   info.num_packets++;
   info.bytes_received += packet->size;
+
+  // Update path since sender can change it over lifetime of connection
+  info.path = packet->path;
   if (info.packet_id_last < packet->payload.app_data.app_packet_id)
     {
       info.packet_id_last = packet->payload.app_data.app_packet_id;
     }
   auto latency = local_time.ToInteger (Time::Unit::US) - packet->payload.app_data.timestamp;
   info.aggregated_latencies += latency;
+
+  if (packet->ecn)
+    {
+      info.ecn = packet->ecn;
+      //   std::cout << "ECN detected: " << packet->ecn << std::endl;
+    }
   app_infos[key] = info;
 }
 
@@ -541,6 +550,7 @@ ScionHost::SendAppResp (std::tuple<ia_t, host_addr_t, app_id_t> key)
       ((double) num_packets_expected - info.num_packets) / num_packets_expected / 2;
   payload.app_resp.avg_latency = ((double) info.aggregated_latencies) / info.num_packets;
   payload.app_resp.bytes_received = info.bytes_received;
+  payload.app_resp.ecn = info.ecn;
 
   /*std::cout << "Sending app resp for app_id " << payload.app_resp.app_id << ", exp_num_packets " << num_packets_expected << ", packets arrived "
             << info.num_packets << ", loss " << payload.app_resp.loss << ", latency " << payload.app_resp.avg_latency << std::endl;
@@ -560,6 +570,7 @@ ScionHost::SendAppResp (std::tuple<ia_t, host_addr_t, app_id_t> key)
   info.num_packets = 0;
   info.bytes_received = 0;
   info.packet_id_start = info.packet_id_last + 1;
+  info.ecn = 0;
   app_infos[key] = info;
 
   Simulator::Schedule (Seconds (app_info_period_s), &ScionHost::SendAppResp, this, key);
