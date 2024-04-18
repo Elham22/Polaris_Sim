@@ -317,7 +317,16 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
     {
       ReceiveAppResp (packet->payload.app_resp);
     }
-
+  if (packet->payload_type == PayloadType::SCMP)
+    {
+      // NOTE: SCMP packet is just addressed to our host, we don't know which
+      // application. If we want to run many applications on one host we need a
+      // better concept here.
+      for (auto app : apps)
+        {
+          app->HandleSCMP (packet->payload.scmp_req_or_resp);
+        }
+    }
   packet->packet_originator->DestroyScionPacket (packet);
   /*
         if (packet->packet_originator == this) {

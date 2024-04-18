@@ -45,6 +45,7 @@ ScionCapableNode::Receive (uint16_t local_if, ScionPacket *packet)
   Time delay = processing_throughput_delay * processing_queue_length + processing_delay;
   Simulator::Schedule (delay, &ScionCapableNode::ProcessReceivedPacket, this, local_if, packet,
                        local_time);
+  // TODO: Should probaby implement dropping here as well, as currently it's only done when send buffer is full
 }
 
 void
@@ -70,6 +71,7 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
     }*/
   auto new_size = transmission_queues_lengths.at (local_if) + packet->size;
   if (new_size > max_transmission_queues_lengths.at (local_if) &&
+      packet->payload_type != PayloadType::SCMP &&
       packet->payload_type != PayloadType::QOS_PROBE_REQ &&
       packet->payload_type != PayloadType::QOS_PROBE_RESP &&
       packet->payload_type != PayloadType::APPLICATION_RESP)
@@ -85,10 +87,25 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
       current_loss_bytes.at (local_if) += packet->size;
       lost_packets.at (local_if) += 1;
       Drop (packet);
+
+      if (ia_addr == packet->dst_ia && local_address == packet->dst_host)
+        {
+          // We're overloading our own send buffer. Can't exactly send "back" an SCMP for this.
+          // Might still be useful to signal the application directly somehow.
+          return;
+        }
+
+      // TODO: When / how often do we return an SCMP packet when dropping?
+      if (std::rand () % 5)
+        {
+          ScmpReqOrResp scmp;
+          scmp.type = LINK_CONGESTED;
+          scmp.code = 1;
+          ReturnSCMPResponse (packet, scmp);
+        }
       return;
     }
-  else if (packet->ecn_capable &&
-           new_size > max_transmission_queues_lengths.at (local_if) / 2)
+  else if (packet->ecn_capable && new_size > max_transmission_queues_lengths.at (local_if) / 2)
     {
 
       // NOTE: Here, tagging packets could be done probabilistically. 'ecn'
@@ -263,8 +280,12 @@ ScionCapableNode::SendScionPacket (ScionPacket *packet)
 
       local_if_to_send = forwarding_table_to_other_as_ifaces.at (as_if_to_send);
     }
-  else
+  else // packet->dst_ia == ia_addr
     {
+      if (this->local_address == packet->dst_host)
+        {
+          NS_FATAL_ERROR ("Attempted to send packet to self");
+        }
       local_if_to_send = forwarding_table_to_addresses_inside_as.at (packet->dst_host);
     }
 
@@ -309,6 +330,41 @@ ScionCapableNode::CreateScionPacket (const Payload &payload, PayloadType payload
     }
 
   return packet;
+}
+
+void
+ScionCapableNode::ReturnSCMPResponse (ScionPacket *src_packet, ScmpReqOrResp resp)
+{
+  Payload payload;
+  payload.scmp_req_or_resp = resp;
+  std::vector<const PathSegment *> path_copy (src_packet->path);
+
+  ScionPacket *packet =
+      CreateScionPacket (payload, PayloadType::SCMP, src_packet->src_ia, src_packet->src_host,
+                         sizeof (ScmpReqOrResp), path_copy, src_packet->shortcut_hopfs);
+  packet->path_reversed = !src_packet->path_reversed;
+  packet->cur_hopf = src_packet->cur_hopf;
+  packet->curr_inf = src_packet->curr_inf;
+
+  SendScionPacket (packet);
+}
+
+void
+ScionCapableNode::PrintPath (std::vector<const PathSegment *> the_path)
+{
+  std::cout << "Printing path: ";
+  for (PathSegment const *segment : the_path)
+    {
+      std::cout << "[";
+      for (uint64_t const hop : segment->hops)
+        {
+          std::cout << "-" << GET_HOP_ING_IF (hop) << "->(" << GET_HOP_ISD (hop) << ":"
+                    << GET_HOP_AS (hop) << ")-" << GET_HOP_EG_IF (hop) << "->"
+                    << ", ";
+        }
+      std::cout << "], ";
+    }
+  std::cout << std::endl;
 }
 
 void

@@ -56,16 +56,18 @@ enum PayloadType {
 };
 
 enum SCMPType {
+  // Error types
   DESTINATION_UNREACHABLE = 1,
   PACKET_TOO_BIG = 2,
   PARAMETER_PROBLEM = 4,
   EXTERNAL_INTERFACE_DOWN = 5,
   INTERNAL_CONNECTIVITY_DOWN = 6,
-  LINK_CONGESTED = 7,
+  // Informational types
   ECHO_REQUEST = 128,
   ECHO_REPLY = 129,
   TRACEROUTE_REQUEST = 130,
   TRACEROUTE_REPLY = 131,
+  LINK_CONGESTED = 132,
 };
 
 struct PathReqFromHost
@@ -134,9 +136,8 @@ struct AppResp
 
 struct ScmpReqOrResp
 {
-  int64_t scmp_type;
-  int64_t scmp_code;
-
+  SCMPType type;
+  uint16_t code;
   // Fields not implemented: Checksum, InfoBlock, DataBlock
 };
 

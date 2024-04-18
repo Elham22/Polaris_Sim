@@ -336,4 +336,10 @@ App::PrintPathInfo ()
   std::cout << "End of app path info" << std::endl;
 }
 
+void
+App::HandleSCMP (ScmpReqOrResp scmp)
+{
+  // Implement in subclass
+}
+
 } // namespace ns3

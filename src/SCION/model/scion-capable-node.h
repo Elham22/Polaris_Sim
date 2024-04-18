@@ -136,6 +136,8 @@ protected:
       const std::vector<uint8_t> &shortcut_hopfs = std::vector<uint8_t> ());
 
   void ReturnScionPacket (ScionPacket *packet);
+  void ReturnSCMPResponse (ScionPacket *packet, ScmpReqOrResp resp);
+  void PrintPath (std::vector<const PathSegment *> the_path);
 };
 } // namespace ns3
 #endif //SCION_SIMULATOR_SCION_CAPABLE_NODE_H
