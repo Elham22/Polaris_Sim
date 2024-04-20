@@ -31,6 +31,7 @@
 #include "ns3/ptr.h"
 
 #include "src/SCION/model/apps/general-traffic-app.h"
+#include "src/SCION/model/apps/rtc-app.h"
 #include "src/SCION/model/beaconing/baseline.h"
 #include "src/SCION/model/beaconing/beacon-server.h"
 #include "src/SCION/model/beaconing/diversity-age-based.h"

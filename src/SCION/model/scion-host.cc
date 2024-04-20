@@ -29,6 +29,7 @@
 #include "apps/app.h"
 #include "apps/general-traffic-app.h"
 #include "apps/video-conference-app.h"
+#include "apps/rtc-app.h"
 
 namespace ns3 {
 NS_LOG_COMPONENT_DEFINE ("ScionHost");
@@ -448,6 +449,11 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
         {
           app = new GeneralTrafficApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
                                        enable_logging);
+        }
+      else if (app_type == "rtc like")
+        {
+          app =
+              new RTCApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths, enable_logging);
         }
       else
         {

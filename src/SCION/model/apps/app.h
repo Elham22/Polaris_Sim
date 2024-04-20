@@ -76,10 +76,10 @@ public:
   static const uint16_t scale = 1; // scaling factor for app data packets
 
   virtual void StartAppTraffic ();
-  void StopAppTraffic ();
-  void StartAppTrafficDelayed (Time delay);
-  void ReceiveProbeResponse (ProbeResp probe_resp);
-  void ReceiveAppResponse (AppResp app_resp);
+  virtual void StopAppTraffic ();
+  virtual void StartAppTrafficDelayed (Time delay);
+  virtual void ReceiveProbeResponse (ProbeResp probe_resp);
+  virtual void ReceiveAppResponse (AppResp app_resp);
   virtual void PrintResults ();
   virtual void PrintPathInfo ();
   virtual void HandleSCMP (ScmpReqOrResp scmp);
