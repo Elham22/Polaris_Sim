@@ -375,7 +375,7 @@ ScionHost::PrintAppsEval ()
 void
 ScionHost::SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host)
 {
-  Payload payload;
+  Payload payload = {};
   PayloadType payload_type = PayloadType::EMPTY;
 
   if (dst_ia == ia_addr)

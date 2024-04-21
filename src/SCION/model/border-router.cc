@@ -268,7 +268,7 @@ BorderRouter::SendBackgroundPacket (uint32_t size, ia_t dst_ia,
                                     std::vector<const ns3::PathSegment *> path, uint16_t inf,
                                     uint16_t hopf)
 {
-  Payload payload;
+  Payload payload = {};
   PayloadType payload_type = PayloadType::BACKGROUND_TRAFFIC;
   ScionPacket *packet = CreateScionPacket (payload, payload_type, dst_ia, 0, size, path);
   packet->curr_inf = inf;
