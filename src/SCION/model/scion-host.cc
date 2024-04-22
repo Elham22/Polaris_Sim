@@ -513,6 +513,8 @@ void
 ScionHost::ReceiveAppData (ScionPacket *packet)
 {
   auto key = std::make_tuple (packet->src_ia, packet->src_host, packet->payload.app_data.app_id);
+
+  // Create new AppInfo for new connection
   if (app_infos.find (key) == app_infos.end ())
     {
       AppInfo info;
@@ -521,12 +523,16 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
       app_infos[key] = info;
       Simulator::Schedule (Seconds (app_info_period_s), &ScionHost::SendAppResp, this, key);
     }
+
+  // Add received packet to statistics for current interval
   auto info = app_infos.at (key);
   info.num_packets++;
   info.bytes_received += packet->size;
 
   // Update path since sender can change it over lifetime of connection
   info.path = packet->path;
+  // TODO maybe reset the ecn field when we observe a path change instead of
+  // waiting for the window to pass?
   if (info.packet_id_last < packet->payload.app_data.app_packet_id)
     {
       info.packet_id_last = packet->payload.app_data.app_packet_id;
@@ -534,6 +540,7 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   auto latency = local_time.ToInteger (Time::Unit::US) - packet->payload.app_data.timestamp;
   info.aggregated_latencies += latency;
 
+  // If packet got marked with an ecn tag on the way here, notify the sender
   if (packet->ecn)
     {
       info.ecn = packet->ecn;
@@ -581,6 +588,7 @@ ScionHost::SendAppResp (std::tuple<ia_t, host_addr_t, app_id_t> key)
   packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
   SendScionPacket (packet);
 
+  // Reset values again for next window
   info.aggregated_latencies = 0;
   info.num_packets = 0;
   info.bytes_received = 0;
