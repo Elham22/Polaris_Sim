@@ -34,6 +34,7 @@ typedef uint16_t host_addr_t;
 typedef uint32_t packet_id_t;
 typedef uint32_t app_packet_id_t;
 typedef uint32_t app_id_t;
+typedef uint32_t app_path_id_t;
 
 class ScionCapableNode;
 
@@ -121,13 +122,17 @@ struct ProbeResp
 struct AppData
 {
   app_id_t app_id;
-  app_packet_id_t app_packet_id;
+  app_path_id_t path_id; // identifies the sender path
+  app_packet_id_t seq_no;
   int64_t timestamp; // timestamp of sending in US
 };
 
 struct AppResp
 {
   app_id_t app_id;
+  app_path_id_t path_id; // identifies the sender path
+  app_packet_id_t seq_no; // separate sequence number for the responses
+  int64_t timestamp; // timestamp of sending in US
   double avg_latency;
   double loss;
   uint8_t ecn; // explicit congestion notification

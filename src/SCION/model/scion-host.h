@@ -31,13 +31,16 @@
 
 namespace ns3 {
 
+// We keep state per source, app and path. These together make up a unique key.
+typedef std::tuple<ia_t, host_addr_t, app_path_id_t, app_id_t> app_connection_key_t;
+
 class App;
 
 struct AppInfo
 {
   std::vector<const ns3::PathSegment *> path; // path over which to send response
-  app_packet_id_t packet_id_start = 0;
-  app_packet_id_t packet_id_last = 0;
+  app_packet_id_t seq_no_start = 0;
+  app_packet_id_t seq_no_last = 0;
   uint32_t num_packets = 0;
   uint64_t bytes_received = 0;
   int64_t aggregated_latencies = 0;
@@ -71,7 +74,7 @@ protected:
   cached_path_segs_dataset_t cached_down_path_segments;
 
   uint32_t app_info_period_s = 2; // how long between app responses
-  std::map<std::tuple<ia_t, host_addr_t, app_id_t>, AppInfo> app_infos;
+  std::map<std::tuple<ia_t, host_addr_t, int, app_id_t>, AppInfo> app_infos;
 
   virtual void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet,
                                       Time receive_time) override;
@@ -98,7 +101,7 @@ protected:
                              ProbeResp probe_resp); // TODO score is just a placeholder
   void ReceiveAppData (ScionPacket *packet);
   void ReceiveAppResp (AppResp app_resp);
-  void SendAppResp (std::tuple<ia_t, host_addr_t, app_id_t> key);
+  void SendAppResp (app_connection_key_t key);
 };
 } // namespace ns3
 

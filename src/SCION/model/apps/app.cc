@@ -92,8 +92,10 @@ void
 App::SendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
 {
   Payload payload;
+  // set to 0 for backwards compatibility, existing code didn't keep state per path
+  payload.app_data.path_id = 0;
   payload.app_data.app_id = app_id;
-  payload.app_data.app_packet_id = packet_id++;
+  payload.app_data.seq_no = packet_id++;
   payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
   PayloadType payload_type = PayloadType::APPLICATION_DATA;
   host->SendAppPacket (this, payload, payload_type, size * scale, path);

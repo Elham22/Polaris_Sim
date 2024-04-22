@@ -512,13 +512,15 @@ ScionHost::SendAppPacket (App *app, Payload payload, PayloadType payload_type, u
 void
 ScionHost::ReceiveAppData (ScionPacket *packet)
 {
-  auto key = std::make_tuple (packet->src_ia, packet->src_host, packet->payload.app_data.app_id);
+  app_connection_key_t key =
+      std::make_tuple (packet->src_ia, packet->src_host, packet->payload.app_data.path_id,
+                       packet->payload.app_data.app_id);
 
   // Create new AppInfo for new connection
   if (app_infos.find (key) == app_infos.end ())
     {
       AppInfo info;
-      info.packet_id_start = packet->payload.app_data.app_packet_id;
+      info.seq_no_start = packet->payload.app_data.seq_no;
       info.path = packet->path;
       app_infos[key] = info;
       Simulator::Schedule (Seconds (app_info_period_s), &ScionHost::SendAppResp, this, key);
@@ -529,28 +531,22 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   info.num_packets++;
   info.bytes_received += packet->size;
 
-  // Update path since sender can change it over lifetime of connection
-  info.path = packet->path;
-  // TODO maybe reset the ecn field when we observe a path change instead of
-  // waiting for the window to pass?
-  if (info.packet_id_last < packet->payload.app_data.app_packet_id)
+  if (info.seq_no_last < packet->payload.app_data.seq_no)
     {
-      info.packet_id_last = packet->payload.app_data.app_packet_id;
+      info.seq_no_last = packet->payload.app_data.seq_no;
     }
   auto latency = local_time.ToInteger (Time::Unit::US) - packet->payload.app_data.timestamp;
   info.aggregated_latencies += latency;
 
-  // If packet got marked with an ecn tag on the way here, notify the sender
-  if (packet->ecn)
-    {
-      info.ecn = packet->ecn;
-      //   std::cout << "ECN detected: " << packet->ecn << std::endl;
-    }
+  // Keep updating the ecn status. The ecn tag of the last packet in the
+  // response interval will dictate what the sender will see.
+  info.ecn = packet->ecn;
+
   app_infos[key] = info;
 }
 
 void
-ScionHost::SendAppResp (std::tuple<ia_t, host_addr_t, app_id_t> key)
+ScionHost::SendAppResp (app_connection_key_t key)
 {
   if (app_infos.find (key) == app_infos.end ())
     {
@@ -559,7 +555,7 @@ ScionHost::SendAppResp (std::tuple<ia_t, host_addr_t, app_id_t> key)
   auto info = app_infos.at (key);
   PayloadType payload_type = PayloadType::APPLICATION_RESP;
   Payload payload;
-  auto num_packets_expected = info.packet_id_last - info.packet_id_start +
+  auto num_packets_expected = info.seq_no_last - info.seq_no_start +
                               1; // +1 because id_start is id of first packet in period
   if (num_packets_expected == 0)
     {
@@ -572,7 +568,8 @@ ScionHost::SendAppResp (std::tuple<ia_t, host_addr_t, app_id_t> key)
       ((double) num_packets_expected - info.num_packets) / num_packets_expected / 2;
   payload.app_resp.avg_latency = ((double) info.aggregated_latencies) / info.num_packets;
   payload.app_resp.bytes_received = info.bytes_received;
-  payload.app_resp.ecn = info.ecn;
+  payload.app_resp.ecn = info.ecn; // Notify sender of latest ecn status
+  payload.app_resp.timestamp = local_time.ToInteger (Time::Unit::US);
 
   /*std::cout << "Sending app resp for app_id " << payload.app_resp.app_id << ", exp_num_packets " << num_packets_expected << ", packets arrived "
             << info.num_packets << ", loss " << payload.app_resp.loss << ", latency " << payload.app_resp.avg_latency << std::endl;
@@ -592,8 +589,7 @@ ScionHost::SendAppResp (std::tuple<ia_t, host_addr_t, app_id_t> key)
   info.aggregated_latencies = 0;
   info.num_packets = 0;
   info.bytes_received = 0;
-  info.packet_id_start = info.packet_id_last + 1;
-  info.ecn = 0;
+  info.seq_no_start = info.seq_no_last + 1;
   app_infos[key] = info;
 
   Simulator::Schedule (Seconds (app_info_period_s), &ScionHost::SendAppResp, this, key);
