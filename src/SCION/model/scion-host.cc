@@ -29,7 +29,7 @@
 #include "apps/app.h"
 #include "apps/general-traffic-app.h"
 #include "apps/video-conference-app.h"
-#include "apps/rtc-app.h"
+#include "apps/rtc-app.cc"
 
 namespace ns3 {
 NS_LOG_COMPONENT_DEFINE ("ScionHost");
