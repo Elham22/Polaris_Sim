@@ -86,23 +86,25 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
         }*/
       current_loss_bytes.at (local_if) += packet->size;
       lost_packets.at (local_if) += 1;
-      Drop (packet);
 
-      if (ia_addr == packet->dst_ia && local_address == packet->dst_host)
+      if (ia_addr == packet->src_ia && local_address == packet->src_host)
         {
           // We're overloading our own send buffer. Can't exactly send "back" an SCMP for this.
-          // Might still be useful to signal the application directly somehow.
-          return;
+          // TODO: Should probably signal the application somehow.
         }
+      else
+        // TODO: When / how often do we return an SCMP packet when dropping?
+        // Sending one for every dropped packet is clearly not the solution, but
+        // we also cannot keep too much state
+        if (std::rand () % 5)
+          {
+            ScmpReqOrResp scmp;
+            scmp.type = LINK_CONGESTED;
+            scmp.code = 1;
+            ReturnSCMPResponse (packet, scmp);
+          }
 
-      // TODO: When / how often do we return an SCMP packet when dropping?
-      if (std::rand () % 5)
-        {
-          ScmpReqOrResp scmp;
-          scmp.type = LINK_CONGESTED;
-          scmp.code = 1;
-          ReturnSCMPResponse (packet, scmp);
-        }
+      Drop (packet);
       return;
     }
   else if (packet->ecn_capable && new_size > max_transmission_queues_lengths.at (local_if) / 2)
@@ -337,11 +339,10 @@ ScionCapableNode::ReturnSCMPResponse (ScionPacket *src_packet, ScmpReqOrResp res
 {
   Payload payload;
   payload.scmp_req_or_resp = resp;
-  std::vector<const PathSegment *> path_copy (src_packet->path);
 
   ScionPacket *packet =
       CreateScionPacket (payload, PayloadType::SCMP, src_packet->src_ia, src_packet->src_host,
-                         sizeof (ScmpReqOrResp), path_copy, src_packet->shortcut_hopfs);
+                         sizeof (ScmpReqOrResp), src_packet->path, src_packet->shortcut_hopfs);
   packet->path_reversed = !src_packet->path_reversed;
   packet->cur_hopf = src_packet->cur_hopf;
   packet->curr_inf = src_packet->curr_inf;
