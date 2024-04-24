@@ -142,6 +142,8 @@ main (int argc, char *argv[])
   SchedulePeriodicEvents (config);
   UserDefinedEvents user_defined_events (config, nodes, real_to_alias_as_no, alias_to_real_as_no);
 
+  // LogComponentEnable ("ScionCapableNode", LOG_LEVEL_ALL);
+
   Simulator::Stop (simulation_end_time);
   Simulator::Run ();
 
