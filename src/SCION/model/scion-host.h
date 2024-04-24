@@ -32,7 +32,7 @@
 namespace ns3 {
 
 // We keep state per source, app and path. These together make up a unique key.
-typedef std::tuple<ia_t, host_addr_t, app_path_id_t, app_id_t> app_connection_key_t;
+typedef std::tuple<ia_t, host_addr_t, app_id_t, app_path_id_t> app_connection_key_t;
 
 class App;
 

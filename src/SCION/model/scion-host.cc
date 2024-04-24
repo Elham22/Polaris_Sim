@@ -450,7 +450,7 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
           app = new GeneralTrafficApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
                                        enable_logging);
         }
-      else if (app_type == "rtc like")
+      else if (app_type == "rtc")
         {
           app =
               new RTCApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths, enable_logging);
@@ -512,9 +512,11 @@ ScionHost::SendAppPacket (App *app, Payload payload, PayloadType payload_type, u
 void
 ScionHost::ReceiveAppData (ScionPacket *packet)
 {
+  std::cout << "[host] Receiving app data packet from " << packet->payload.app_data.app_id
+            << " via path " << packet->payload.app_data.path_id << std::endl;
   app_connection_key_t key =
-      std::make_tuple (packet->src_ia, packet->src_host, packet->payload.app_data.path_id,
-                       packet->payload.app_data.app_id);
+      std::make_tuple (packet->src_ia, packet->src_host, packet->payload.app_data.app_id,
+                       packet->payload.app_data.path_id);
 
   // Create new AppInfo for new connection
   if (app_infos.find (key) == app_infos.end ())
@@ -563,6 +565,7 @@ ScionHost::SendAppResp (app_connection_key_t key)
       app_infos.erase (key);
       return;
     }
+  // std::cout << "app resp 1 from " << std::get<2> (key) << std::endl;
   payload.app_resp.app_id = std::get<2> (key);
   payload.app_resp.loss =
       ((double) num_packets_expected - info.num_packets) / num_packets_expected / 2;
@@ -570,6 +573,7 @@ ScionHost::SendAppResp (app_connection_key_t key)
   payload.app_resp.bytes_received = info.bytes_received;
   payload.app_resp.ecn = info.ecn; // Notify sender of latest ecn status
   payload.app_resp.timestamp = local_time.ToInteger (Time::Unit::US);
+  payload.app_resp.path_id = std::get<3> (key);
 
   /*std::cout << "Sending app resp for app_id " << payload.app_resp.app_id << ", exp_num_packets " << num_packets_expected << ", packets arrived "
             << info.num_packets << ", loss " << payload.app_resp.loss << ", latency " << payload.app_resp.avg_latency << std::endl;
@@ -583,6 +587,8 @@ ScionHost::SendAppResp (app_connection_key_t key)
   packet->path_reversed = true;
   packet->curr_inf = packet->path.size () - 1;
   packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
+  std::cout << "[host] Sending app feedback to " << payload.app_resp.app_id
+            << " via path " << payload.app_resp.path_id << std::endl;
   SendScionPacket (packet);
 
   // Reset values again for next window
