@@ -51,6 +51,10 @@ protected:
   uint32_t selected_bitrate = 0;
   const uint16_t fps = 30;
 
+  double moving_average_weight = 0.75;
+  double steering_treshold_u = 20;
+  double steering_treshold_l = 0;
+
 public:
   RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
           host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
@@ -60,7 +64,7 @@ public:
     num_paths = all_paths.size ();
 
     // initialize path infos
-    for (int i = 0; i < num_paths; i++)
+    for (uint32_t i = 0; i < num_paths; i++)
       {
         PathStatistics path_info;
         path_infos.push_back (path_info);
@@ -75,24 +79,136 @@ public:
   {
     // TODO
     // Need information from host here about which path is affected
+    // and then decide how exactly it influences the scoring
   }
 
   void
   ReceiveAppResponse (AppResp app_resp)
   {
     auto path_id = app_resp.path_id;
+    std::cout << "[rtc] Receiving response on path " << path_id << std::endl;
     if (path_id != active_path)
       {
-        std::cout << "Receiving feedback about inactive (old) path" << std::endl;
+        std::cout << "[rtc] Receiving feedback about inactive (old) path: " << path_id << std::endl;
       }
     Time resp_time = MicroSeconds (app_resp.timestamp);
+
+    // Very basic bandwidth estimation, this is basically just a lower bound
+    // ...and apparently sometimes even negative (TODO)
     path_infos[path_id].bandwidth =
         app_resp.bytes_received /
         Seconds (resp_time - path_infos[path_id].last_update).GetSeconds ();
+
     path_infos[path_id].ecn = app_resp.ecn;
     path_infos[path_id].last_update = resp_time;
     path_infos[path_id].latency = app_resp.avg_latency;
-    path_infos[path_id].loss = app_resp.loss;
+
+    // Update loss with moving average
+    path_infos[path_id].loss *= (1 - moving_average_weight);
+    path_infos[path_id].loss += (moving_average_weight * app_resp.loss);
+
+    UpdateScore (path_id);
+
+    std::cout << "    Loss: " << app_resp.loss << std::endl
+              << "    Latency: " << app_resp.avg_latency << std::endl
+              << "    Bandwidth: " << path_infos[path_id].bandwidth << std::endl
+              << "    Score: " << path_infos[path_id].score << std::endl;
+
+    if (path_id == active_path)
+      {
+        Steer ();
+      }
+  }
+
+  void
+  UpdateScore (uint32_t path_id)
+  {
+    // Lots of TODOs here, this is just a starting point
+    double score = 0.0;
+    score += 0.050 * path_infos[path_id].bandwidth;
+    score -= 100.0 * path_infos[path_id].loss;
+    score -= 0.001 * path_infos[path_id].latency - 100;
+
+    path_infos[path_id].score = score;
+  }
+
+  void
+  Steer ()
+  {
+    // Compute the sigmoid of the score
+    // NOTE: subject to change
+    double alpha = 1. / (1. + exp (-path_infos[active_path].score));
+    bool E_alpha = rand () % 100 < 100 * alpha;
+    std::cout << "alpha " << alpha << std::endl;
+
+    // if score lower than treshold_l, switch to a different random path
+    if (path_infos[active_path].score < steering_treshold_l)
+      {
+        // with probability (1-alpha), pick a new random path
+        if (E_alpha)
+          {
+            // Pick a random path from all other candidates, we can't afford to be picky now
+            std::set<uint32_t> candidate_paths;
+            for (uint32_t i = 0; i < num_paths; i++)
+              {
+                // TODO: add additional conditions, e.g., score > treshold_l
+                if (i != active_path)
+                  {
+                    candidate_paths.insert (i);
+                  }
+              }
+            if (candidate_paths.size () > 0)
+              {
+                uint32_t new_path = rand () % candidate_paths.size ();
+                active_path = new_path;
+                std::cout << "[rtc] Steering to a different path " << active_path << std::endl;
+              }
+          }
+        else
+          {
+            // Lower the bitrate instead, if we can still go lower
+            if (selected_bitrate > 0)
+              {
+                selected_bitrate--;
+                std::cout << "[rtc] Lowering bitrate to " << bitrates[selected_bitrate]
+                          << std::endl;
+              }
+          }
+      }
+    else if (path_infos[active_path].score > steering_treshold_u)
+      {
+        if (E_alpha)
+          {
+            // Increase sending rate if we can
+            if (selected_bitrate < bitrates.size () - 1)
+              {
+                selected_bitrate++;
+                std::cout << "[rtc] Increasing bitrate to " << bitrates[selected_bitrate]
+                          << std::endl;
+              }
+          }
+      }
+    else
+      {
+        if (E_alpha)
+          {
+            // Pick a random path from all good ones
+            std::set<uint32_t> candidate_paths;
+            for (uint32_t i = 0; i < num_paths; i++)
+              {
+                if (i != active_path && path_infos[i].score > steering_treshold_u)
+                  {
+                    candidate_paths.insert (i);
+                  }
+              }
+            if (candidate_paths.size () > 0)
+              {
+                uint32_t new_path = rand () % candidate_paths.size ();
+                active_path = new_path;
+                std::cout << "[rtc] Steering to a different path " << active_path << std::endl;
+              }
+          }
+      }
   }
 
   void
@@ -104,13 +220,18 @@ public:
   void
   ProbeRandomPath ()
   {
+    // TODO: implement a way to probe non-working paths, both for latency and
+    // even to make a bandwidth estimation, e.g., by sending consecutive probe
+    // pairs
   }
 
   void
   SendPacket (double packetSize, std::vector<const PathSegment *> path)
   {
+    std::cout << "[rtc] Sending data packet via path " << active_path << std::endl;
     Payload payload;
     payload.app_data.app_id = app_id;
+    payload.app_data.path_id = active_path;
     payload.app_data.seq_no = packet_id++;
     payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
     PayloadType payload_type = PayloadType::APPLICATION_DATA;
