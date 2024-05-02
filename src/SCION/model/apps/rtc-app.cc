@@ -138,35 +138,59 @@ public:
     // Compute the sigmoid of the score
     // NOTE: subject to change
     double alpha = 1. / (1. + exp (-path_infos[active_path].score));
-    bool E_alpha = rand () % 100 < 100 * alpha;
-    std::cout << "alpha " << alpha << std::endl;
 
-    // if score lower than treshold_l, switch to a different random path
+    // With probability (1 - alpha), try to switch paths
+    bool try_switch = !(rand () % 100 < 100 * alpha);
+    std::cout << "    alpha " << alpha << std::endl;
+    std::cout << "    try_switch " << try_switch << std::endl;
+
+    // print scores of all other paths for debugging
+    for (uint32_t i = 0; i < num_paths; i++)
+      {
+        if (i == active_path)
+          {
+            continue;
+          }
+        std::cout << "    path " << i << " score " << path_infos[i].score << std::endl;
+      }
+
+    // score lower than treshold_l
     if (path_infos[active_path].score < steering_treshold_l)
       {
-        // with probability (1-alpha), pick a new random path
-        if (E_alpha)
+        std::set<uint32_t> candidate_paths;
+
+        // with probability (1-alpha), switch paths
+        if (try_switch)
           {
-            // Pick a random path from all other candidates, we can't afford to be picky now
-            std::set<uint32_t> candidate_paths;
+            // find alternative candidate paths with score > treshold_l
             for (uint32_t i = 0; i < num_paths; i++)
               {
-                // TODO: add additional conditions, e.g., score > treshold_l
-                if (i != active_path)
+                if (i == active_path)
+                  {
+                    continue;
+                  }
+                if (path_infos[i].score > steering_treshold_l)
                   {
                     candidate_paths.insert (i);
                   }
               }
+
             if (candidate_paths.size () > 0)
               {
                 uint32_t new_path = rand () % candidate_paths.size ();
                 active_path = new_path;
-                std::cout << "[rtc] Steering to a different path " << active_path << std::endl;
+                std::cout << "[rtc] Switching to a different path " << active_path << std::endl;
+              }
+            else
+              {
+                std::cout << "[rtc] No better path > treshold_l found" << std::endl;
               }
           }
-        else
+
+        // with probability alpha or if no other path is available
+        if (!try_switch || candidate_paths.size () == 0)
           {
-            // Lower the bitrate instead, if we can still go lower
+            // lower the bitrate, if we can still go lower
             if (selected_bitrate > 0)
               {
                 selected_bitrate--;
@@ -175,9 +199,10 @@ public:
               }
           }
       }
+    // score higher than upper treshold
     else if (path_infos[active_path].score > steering_treshold_u)
       {
-        if (E_alpha)
+        if (!try_switch)
           {
             // Increase sending rate if we can
             if (selected_bitrate < bitrates.size () - 1)
@@ -190,9 +215,9 @@ public:
       }
     else
       {
-        if (E_alpha)
+        if (try_switch)
           {
-            // Pick a random path from all good ones
+            // Try to find a better path with score > treshold_u
             std::set<uint32_t> candidate_paths;
             for (uint32_t i = 0; i < num_paths; i++)
               {
@@ -206,6 +231,10 @@ public:
                 uint32_t new_path = rand () % candidate_paths.size ();
                 active_path = new_path;
                 std::cout << "[rtc] Steering to a different path " << active_path << std::endl;
+              }
+            else
+              {
+                std::cout << "[rtc] No better path > treshold_u found" << std::endl;
               }
           }
       }
