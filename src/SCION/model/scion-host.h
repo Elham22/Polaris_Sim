@@ -102,6 +102,8 @@ protected:
   void ReceiveAppData (ScionPacket *packet);
   void ReceiveAppResp (AppResp app_resp);
   void SendAppResp (app_connection_key_t key);
+  void RespondToAppProbe (ia_t src_ia, host_addr_t src_addr,
+                          std::vector<const ns3::PathSegment *> path, AppProbe app_probe);
 };
 } // namespace ns3
 

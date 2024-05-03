@@ -52,8 +52,9 @@ enum PayloadType {
   QOS_PROBE_RESP = 10,
   APPLICATION_DATA = 11,
   APPLICATION_RESP = 12,
-  BACKGROUND_TRAFFIC = 13,
-  SCMP = 14,
+  APPLICATION_PROBE,
+  BACKGROUND_TRAFFIC,
+  SCMP,
 };
 
 enum SCMPType {
@@ -127,6 +128,23 @@ struct AppData
   int64_t timestamp; // timestamp of sending in US
 };
 
+enum class AppProbeType {
+  HEARTBEAT = 0,
+  LATENCY = 1,
+  BANDWIDTH = 2,
+};
+
+struct AppProbe
+{
+  app_id_t app_id;
+  AppProbeType type;
+  app_path_id_t path_id; // identifies the sender path
+  app_packet_id_t probe_id; // identifies the probe action
+  app_packet_id_t probe_seq_no; // seq no of packets belonging to a probe
+  int64_t time_tx;
+  int64_t time_rx;
+};
+
 struct AppResp
 {
   app_id_t app_id;
@@ -156,6 +174,7 @@ union Payload {
   ProbeResp probe_resp;
   AppData app_data;
   AppResp app_resp;
+  AppProbe app_probe;
 };
 
 struct ScionPacket

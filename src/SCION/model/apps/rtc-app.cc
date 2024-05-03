@@ -29,10 +29,15 @@ struct PathStatistics
   uint16_t ecn;
   Time last_update; // time of last ecn mark
   Time last_scmp; // time of last scmp congestion response
+  app_packet_id_t seq_no = 1; // Next seq no to send
+  app_packet_id_t seq_no_ack = 0; // Highest acked package
   double score = -INFINITY;
   double latency; // observed latency
   double bandwidth; // estimated bandwidth
   double loss; // estimated loss
+
+  Time probed_last = Seconds (0); // time the last probing was initiated
+  app_packet_id_t probe_seq_no = 0; // probe packet seq_no
 };
 
 /**
@@ -47,6 +52,8 @@ protected:
   // vector to store information each path
   std::vector<PathStatistics> path_infos;
 
+  std::map<app_packet_id_t, AppProbe> in_flight_probes;
+
   std::vector<double> bitrates{10 * 0.7e6, 10 * 1.5e6, 10 * 5e6};
   uint32_t selected_bitrate = 0;
   const uint16_t fps = 30;
@@ -54,6 +61,10 @@ protected:
   double moving_average_weight = 0.75;
   double steering_treshold_u = 20;
   double steering_treshold_l = 0;
+
+  Time probe_interval = Seconds (0.25); // How often new probes are sent out
+  uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
+  app_packet_id_t probe_id = 0; // Identifies a probe, not the packet though, that is probe_seq_no
 
 public:
   RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
@@ -72,6 +83,139 @@ public:
 
     // choose a random path to start with
     active_path = rand () % num_paths;
+  }
+
+  void
+  StartAppTraffic ()
+  {
+    SendTraffic ();
+    SendProbes ();
+  }
+
+  /**
+   * Returns a list of path indexes that are candidates for probing.
+   * Candidates are paths that have not been probed in the longest time
+   * and haven't been probed in at least a second.
+  */
+  std::vector<app_path_id_t>
+  FindProbeCandidates ()
+  {
+    std::vector<app_path_id_t> candidates;
+    Time probed_last_min = Simulator::Now () - Seconds (1);
+    for (uint32_t i = 0; i < num_paths; i++)
+      {
+        // Don't probe active path
+        if (i == active_path)
+          {
+            continue;
+          }
+        if (path_infos[i].probed_last < probed_last_min)
+          {
+            candidates.clear ();
+            candidates.push_back (i);
+            probed_last_min = path_infos[i].probed_last;
+          }
+        else if (path_infos[i].probed_last == probed_last_min)
+          {
+            candidates.push_back (i);
+          }
+      }
+    // Shuffle the candidates to avoid multiple applications probing in sync
+    std::random_shuffle (candidates.begin (), candidates.end ());
+
+    // Return only the first probe_simultaneous candidates
+    candidates.resize (probe_simultaneous);
+
+    // Print all the candidates we selected
+    std::cout << "[rtc] Selected candidates for probing: ";
+    for (auto candidate : candidates)
+      {
+        std::cout << candidate << " ";
+      }
+    std::cout << std::endl;
+    return candidates;
+  }
+
+  void
+  ProbePath (app_path_id_t path_id)
+  {
+    // First set the probe id. This belongs to the entire probing action that
+    // we're performing right now, not to the individual packet. Performing a
+    // BWE for example involves sending multiple packets, all with the same probe id.
+    app_path_id_t current_probe_id = probe_id++;
+
+    AppProbe probe;
+    probe.app_id = app_id;
+    probe.type = AppProbeType::LATENCY;
+    probe.path_id = path_id;
+    probe.probe_id = current_probe_id++;
+    probe.probe_seq_no = path_infos[path_id].probe_seq_no++;
+    probe.time_tx = Simulator::Now ().ToInteger (Time::Unit::US);
+    in_flight_probes[probe.probe_id] = probe;
+
+    Payload payload;
+    payload.app_probe = probe;
+    host->SendAppPacket (this, payload, PayloadType::APPLICATION_PROBE, sizeof (AppProbe),
+                         all_paths[path_id]);
+  }
+
+  void
+  SendProbes ()
+  {
+    if (stopped)
+      {
+        return;
+      }
+
+    auto candidates = FindProbeCandidates ();
+    if (!candidates.empty ())
+      {
+        Time now = Simulator::Now ();
+        for (app_path_id_t candidate : candidates)
+          {
+            ProbePath (candidate);
+
+            // NOTE: Set probed_last to the exact same time for all candidates
+            // we probe now. This way, when we find candidates in the future
+            // with the oldest probed_last, it's actually likely to find a set,
+            // and not just a single oldest one.
+            path_infos[candidate].probed_last = now;
+          }
+      }
+
+    // Schedule the next round of probing
+    Simulator::Schedule (probe_interval, &RTCApp::SendProbes, this);
+  }
+
+  void
+  ReceiveAppProbeResponse (AppProbe probe_resp)
+  {
+    auto probe_id = probe_resp.probe_id;
+    auto path_id = probe_resp.path_id;
+    auto seq_no = probe_resp.probe_seq_no;
+
+    // Find the corresponding probe
+    auto it = in_flight_probes.find (probe_id);
+    if (it == in_flight_probes.end ())
+      {
+        std::cout << "[rtc] Received probe response for unknown probe id " << probe_id << std::endl;
+        return;
+      }
+
+    // Compute latency
+    auto latency = probe_resp.time_rx - probe_resp.time_tx;
+    std::cout << "[rtc] Received probe response received on path " << path_id << std::endl
+              << "    Latency: " << latency << std::endl;
+
+    // Update path info
+    path_infos[path_id].latency = latency;
+    // path_infos[path_id].probed_last = Simulator::Now ();
+
+    // Update score
+    UpdateScore (path_id);
+
+    // Remove the probe from the in-flight list
+    in_flight_probes.erase (it);
   }
 
   void
@@ -241,30 +385,16 @@ public:
   }
 
   void
-  StartAppTraffic ()
-  {
-    SendTraffic ();
-  }
-
-  void
-  ProbeRandomPath ()
-  {
-    // TODO: implement a way to probe non-working paths, both for latency and
-    // even to make a bandwidth estimation, e.g., by sending consecutive probe
-    // pairs
-  }
-
-  void
   SendPacket (double packetSize, std::vector<const PathSegment *> path)
   {
     std::cout << "[rtc] Sending data packet via path " << active_path << std::endl;
     Payload payload;
     payload.app_data.app_id = app_id;
     payload.app_data.path_id = active_path;
-    payload.app_data.seq_no = packet_id++;
+    payload.app_data.seq_no = path_infos[active_path].seq_no++;
     payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
     PayloadType payload_type = PayloadType::APPLICATION_DATA;
-    host->SendAppPacket (this, payload, payload_type, packetSize * scale, path);
+    host->SendAppPacket (this, payload, payload_type, packetSize * scale + sizeof (AppData), path);
   }
 
   void

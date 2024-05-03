@@ -314,6 +314,28 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
     {
       ReceiveAppData (packet);
     }
+  if (packet->payload_type == PayloadType::APPLICATION_PROBE)
+    {
+      auto app_id = packet->payload.app_probe.app_id;
+
+      if (app_id < apps.size ())
+        {
+          RTCApp *rtc_app = dynamic_cast<RTCApp *> (apps.at (app_id));
+          if (rtc_app != nullptr)
+            {
+              rtc_app->ReceiveAppProbeResponse (packet->payload.app_probe);
+            }
+          else
+            {
+              NS_FATAL_ERROR ("App with id " << app_id << " is not an RTC app");
+            }
+        }
+      else
+        {
+          RespondToAppProbe (packet->src_ia, packet->src_host, packet->path,
+                             packet->payload.app_probe);
+        }
+    }
   if (packet->payload_type == PayloadType::APPLICATION_RESP)
     {
       ReceiveAppResp (packet->payload.app_resp);
@@ -341,6 +363,26 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
             ReturnScionPacket(packet);
         }
 */
+}
+
+void
+ScionHost::RespondToAppProbe (ia_t src_ia, host_addr_t src_addr,
+                              std::vector<const ns3::PathSegment *> path, AppProbe app_probe)
+{
+  PayloadType payload_type = PayloadType::APPLICATION_PROBE;
+  
+  // Everything stays the same, we can just set the RX time and send it back
+  app_probe.time_rx = local_time.ToInteger (Time::Unit::MS);
+
+  Payload payload;
+  payload.app_probe = app_probe;
+
+  ScionPacket *packet = CreateScionPacket (payload, payload_type, src_ia, src_addr, 0, path);
+  packet->path_reversed = true;
+  packet->curr_inf = path.size () - 1;
+  packet->cur_hopf = path.at (packet->curr_inf)->hops.size () - 1;
+  SendScionPacket (packet);
+  std::cout << "[host] Send response to probe from " << src_ia << ":" << src_addr << std::endl;
 }
 
 void
@@ -512,8 +554,8 @@ ScionHost::SendAppPacket (App *app, Payload payload, PayloadType payload_type, u
 void
 ScionHost::ReceiveAppData (ScionPacket *packet)
 {
-  std::cout << "[host] Receiving app data packet from " << packet->payload.app_data.app_id
-            << " via path " << packet->payload.app_data.path_id << std::endl;
+  // std::cout << "[host] Receiving app data packet from " << packet->payload.app_data.app_id
+  //           << " via path " << packet->payload.app_data.path_id << std::endl;
   app_connection_key_t key =
       std::make_tuple (packet->src_ia, packet->src_host, packet->payload.app_data.app_id,
                        packet->payload.app_data.path_id);
@@ -587,8 +629,8 @@ ScionHost::SendAppResp (app_connection_key_t key)
   packet->path_reversed = true;
   packet->curr_inf = packet->path.size () - 1;
   packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
-  std::cout << "[host] Sending app feedback to " << payload.app_resp.app_id
-            << " via path " << payload.app_resp.path_id << std::endl;
+  std::cout << "[host] Sending app feedback to " << payload.app_resp.app_id << " via path "
+            << payload.app_resp.path_id << std::endl;
   SendScionPacket (packet);
 
   // Reset values again for next window
