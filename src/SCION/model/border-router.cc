@@ -68,7 +68,7 @@ BorderRouter::ProcessReceivedPacket (uint16_t if_rcv, ScionPacket *packet, Time 
           forwarding_table_to_addresses_inside_as.end ())
         {
           NS_LOG_FUNCTION ("Address not in the forwarding table");
-          std::cout << "BR process received: Address not in the forwarding table" << std::endl;
+          std::cout << "BR process received at IA: " << ia_addr << " Address not in the forwarding table " << packet->dst_host << std::endl;
           return;
         }
 

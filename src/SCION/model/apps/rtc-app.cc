@@ -31,7 +31,7 @@ struct PathStatistics
   Time last_scmp; // time of last scmp congestion response
   app_packet_id_t seq_no = 1; // Next seq no to send
   app_packet_id_t seq_no_ack = 0; // Highest acked package
-  double score = -INFINITY;
+  double score = 0;
   double latency; // observed latency
   double bandwidth; // estimated bandwidth
   double loss; // estimated loss
@@ -73,6 +73,9 @@ public:
       : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, enable_logging)
   {
     num_paths = all_paths.size ();
+
+    // set the log prefix
+    log_prefix = "[rtc-" + std::to_string (app_id) + "] ";
 
     // initialize path infos
     for (uint32_t i = 0; i < num_paths; i++)
@@ -146,11 +149,14 @@ public:
 
     AppProbe probe;
     probe.app_id = app_id;
-    probe.type = AppProbeType::LATENCY;
+    probe.type = AppProbeType::BANDWIDTH;
     probe.path_id = path_id;
     probe.probe_id = current_probe_id++;
     probe.probe_seq_no = path_infos[path_id].probe_seq_no++;
     probe.time_tx = Simulator::Now ().ToInteger (Time::Unit::US);
+    probe.min_fair_share = INFINITY;
+    probe.min_fair_share_hop = 0xFFFFFFFFFFFFFFFF;
+    probe.max_queuing_delay = 0;
     in_flight_probes[probe.probe_id] = probe;
 
     Payload payload;
@@ -204,8 +210,16 @@ public:
 
     // Compute latency
     auto latency = probe_resp.time_rx - probe_resp.time_tx;
-    std::cout << "[rtc] Received probe response received on path " << path_id << std::endl
-              << "    Latency: " << latency << std::endl;
+    auto hop = probe_resp.min_fair_share_hop;
+
+    if (enable_logging)
+      {
+        std::cout << log_prefix << "Received probe response on path " << path_id << std::endl
+                  << "    Latency [ms]: " << latency / 1000.0 << std::endl
+                  << "    min fair share: " << probe_resp.min_fair_share << std::endl
+                  << "    min fair share seen at AS " << GET_HOP_AS (hop) << " and hop "
+                  << GET_HOP_EG_IF (hop) << std::endl;
+      }
 
     // Update path info
     path_infos[path_id].latency = latency;

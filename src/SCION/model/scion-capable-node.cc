@@ -69,6 +69,15 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
                 << " Q before " << transmission_queues_lengths.at (local_if) << "/" << max_transmission_queues_lengths.at (local_if)
                 << std::endl;
     }*/
+
+  // store the arrival time of data packets in the map based on their app id
+  // we use this to estimate the number of flows based on active app ids
+  if (packet->payload_type == PayloadType::APPLICATION_DATA)
+    {
+      app_id_last_seen.at (local_if).insert (
+          std::make_pair (packet->payload.app_data.app_id, local_time));
+    }
+
   auto new_size = transmission_queues_lengths.at (local_if) + packet->size;
   if (new_size > max_transmission_queues_lengths.at (local_if) &&
       packet->payload_type != PayloadType::SCMP &&
@@ -107,12 +116,48 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
       Drop (packet);
       return;
     }
-  else if (packet->ecn_capable && new_size > max_transmission_queues_lengths.at (local_if) / 2)
+
+  if (packet->ecn_capable && new_size > max_transmission_queues_lengths.at (local_if) / 2)
     {
 
       // NOTE: Here, tagging packets could be done probabilistically. 'ecn'
       // could also be more than just binary, e.g., indicate queue fullness factor
       packet->ecn = 1;
+    }
+
+  // Handle bandwidth probe packets
+  if (packet->dst_ia != ia_addr && dynamic_cast<BorderRouter *> (this) &&
+      packet->payload_type == PayloadType::APPLICATION_PROBE)
+    {
+      auto probe = packet->payload.app_probe;
+      if (probe.type == AppProbeType::BANDWIDTH)
+        {
+          int64_t transmission_delay = transmission_delays.at (local_if).ToInteger (Time::Unit::PS);
+          if (transmission_delay <= 0)
+            {
+              std::cout << "Warning: Link capacity was not defined." << std::endl;
+              transmission_delay = 20;
+            }
+          auto total_bw = 8000.0 / transmission_delay; // in Gbps
+          // Assume one extra flow for the probe because we want to know the would-be fair share if
+          // the probing application was to send a flow through this link as well
+          // TODO: this could pose a problem when probe goes through link where probing app has an active flow (paths share links)
+          auto available_fair_share = total_bw / (no_flows.at (local_if) + 1.0);
+          // std::cout << "host fair share: " << total_bw << " / " << no_flows.at (local_if) + 1.0 << " = " << available_fair_share << std::endl;
+          if (available_fair_share < probe.min_fair_share)
+            {
+              packet->payload.app_probe.min_fair_share = available_fair_share;
+              packet->payload.app_probe.min_fair_share_hop =
+                  packet->path.at (packet->curr_inf)->hops.at (packet->cur_hopf);
+              ;
+            }
+          uint64_t queuing_delay = transmission_queues_lengths.at (local_if) /
+                                   transmission_delays.at (local_if).ToInteger (Time::Unit::PS);
+          if (queuing_delay > probe.max_queuing_delay)
+            {
+              packet->payload.app_probe.max_queuing_delay = queuing_delay;
+            }
+        }
     }
 
   transmission_queues_lengths.at (local_if) = new_size;
@@ -212,9 +257,12 @@ ScionCapableNode::InitializeTransmissionQueues ()
   estimated_throughput.resize (n_devices);
   predicted_new_throughput.resize (n_devices);
   arrived_packets.resize (n_devices);
+  no_flows.resize (n_devices);
   lost_packets.resize (n_devices);
   estimated_packetloss.resize (n_devices);
+  estimated_no_flows.resize (n_devices);
   estimation_times.resize (n_devices);
+  app_id_last_seen.resize (n_devices);
 
   // set the max_queue sizes to the bwd-delay product
   for (uint32_t i = 0; i < n_devices; ++i)
@@ -360,8 +408,7 @@ ScionCapableNode::PrintPath (std::vector<const PathSegment *> the_path)
       for (uint64_t const hop : segment->hops)
         {
           std::cout << "-" << GET_HOP_ING_IF (hop) << "->(" << GET_HOP_ISD (hop) << ":"
-                    << GET_HOP_AS (hop) << ")-" << GET_HOP_EG_IF (hop) << "->"
-                    << ", ";
+                    << GET_HOP_AS (hop) << ")-" << GET_HOP_EG_IF (hop) << "->" << ", ";
         }
       std::cout << "], ";
     }
@@ -436,6 +483,30 @@ ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
                                &ScionCapableNode::UpdateInterfaceEstimation, this, local_if);
         }
       //std::cout << "Lost / arrived " << lost_packets.at (local_if) << "/" << arrived_packets.at (local_if) << std::endl;
+
+      estimated_no_flows.at (local_if).push_back (no_flows.at (local_if));
+
+      // std::cout << "[node-" << as_number << "] " << "estimated number of flows at local iface "
+      //           << local_if << ": " << no_flows.at (local_if) << std::endl;
+
+      // remove all the app ids that have not been seen for a while
+      auto app_id_last_seen_local = app_id_last_seen.at (local_if);
+      for (auto it = app_id_last_seen_local.begin (); it != app_id_last_seen_local.end ();)
+        {
+          if (local_time - it->second > collection_period)
+            {
+              it = app_id_last_seen_local.erase (it);
+            }
+          else
+            {
+              ++it;
+            }
+        }
+
+      // now the estimated number of flows is simply how many app ids we have seen in the last period
+      no_flows.at (local_if) = app_id_last_seen_local.size ();
+
+      // reset the counters
       current_loss_bytes.at (local_if) = 0;
       current_throughput_bytes.at (local_if) = 0;
       lost_packets.at (local_if) = 0;

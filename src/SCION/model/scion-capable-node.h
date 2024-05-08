@@ -103,11 +103,14 @@ protected:
   std::vector<uint64_t> current_loss_bytes;
   std::vector<uint64_t> arrived_packets;
   std::vector<uint64_t> lost_packets;
+  std::vector<uint64_t> no_flows; // the estimated number of active flows on each link
   std::vector<Time> last_update;
   std::vector<std::vector<uint64_t>> estimated_throughput; // throughput of arriving bytes
   std::vector<std::vector<uint64_t>> predicted_new_throughput;
   std::vector<std::vector<double>> estimated_packetloss;
+  std::vector<std::vector<uint64_t>> estimated_no_flows; // estimated number of flows per link per time unit
   std::vector<std::vector<Time>> estimation_times;
+  std::vector<std::map<uint64_t, Time>> app_id_last_seen; // used to estimate the number of flows
 
   packet_id_t next_packet_id;
 

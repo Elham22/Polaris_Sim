@@ -141,8 +141,11 @@ struct AppProbe
   app_path_id_t path_id; // identifies the sender path
   app_packet_id_t probe_id; // identifies the probe action
   app_packet_id_t probe_seq_no; // seq no of packets belonging to a probe
-  int64_t time_tx;
-  int64_t time_rx;
+  int64_t time_tx; // transmission time of the probe
+  int64_t time_rx; // time of arrival at the app receiver (one-way)
+  double min_fair_share; // minimum fair share bw along the path, in Gbps
+  uint64_t min_fair_share_hop; // link where minimum was found
+  uint64_t max_queuing_delay; // highest queuing delay along the path
 };
 
 struct AppResp
