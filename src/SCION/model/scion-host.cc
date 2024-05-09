@@ -117,6 +117,14 @@ ScionHost::CachePathSegment (PathSegmentType seg_type, ia_t src_ia, ia_t dst_ia,
           std::make_pair (src_ia, new cached_path_segs_per_src_dst_t ()));
     }
 
+  // make sure this path segment is not already in the cache
+  for (auto const &[key, path_segment] : *cached_path_segs_data_set->at (dst_ia)->at (src_ia))
+    {
+      if (path_segment == path_seg)
+        {
+          return;
+        }
+    }
   cached_path_segs_data_set->at (dst_ia)->at (src_ia)->insert (
       std::make_pair (path_seg->hops.size (), path_seg));
 }
