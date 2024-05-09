@@ -1,0 +1,29 @@
+{"events":
+[
+  {
+    "time": "5min",
+    "type": "start_application",
+    "args": ["0", "0", "2", "0", "5", "2", "rtc", "0.0", "1"]
+  },
+  {
+    "time": "6min",
+    "type": "start_application",
+    "args": ["0", "0", "2", "0", "5", "2", "rtc", "0.0", "0"]
+  },
+  {
+    "time": "10min",
+    "type": "start_application",
+    "args": ["0", "0", "2", "0", "5", "2", "rtc", "0.0", "0"]
+  },
+  {
+    "time": "11min",
+    "type": "start_application",
+    "args": ["0", "0", "2", "0", "5", "2", "rtc", "0.0", "0"]
+  },
+  {
+    "time": "15min",
+    "type": "start_application",
+    "args": ["0", "0", "2", "0", "5", "2", "video conference active", "0.0", "0"]
+  }
+]
+}

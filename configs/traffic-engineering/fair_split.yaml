@@ -1,0 +1,25 @@
+time_resolution: PS
+topology: configs/traffic-engineering/fair_split.xml
+events_file: configs/traffic-engineering/fair_split.json
+output: configs/traffic-engineering/fair_split.out.txt
+simulation_duration: 50min
+NUM_CORE: 24
+beacon_service:
+  policy: baseline
+  write_beacons_directory: out/
+  period: 10min
+  expiration_period: 6h
+  first_beaconing: 0min
+  last_beaconing: 50min
+path_service: True
+only_propagation_delay: 0
+border_router:
+        truly_random_malicious: 0
+        percent_of_ASes_with_malicious_br: 0
+end_user:
+  number_per_as: 1
+post_eval:
+  - func: PrintAllDiscoveredPaths
+  - func: PrintHostApps
+  - func: PrintLinkStatistics
+  - func: PrintAppPathInfo
