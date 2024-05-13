@@ -63,13 +63,18 @@ def parse_args():
 
 def parse_app_results(host, app_id, file):
     app_info_tokens = file.readline().strip().split(' ')
-    if not (len(app_info_tokens) >= 7 and "VCA" == app_info_tokens[1]):
+    if not (len(app_info_tokens) >= 7 and "VCA" == app_info_tokens[1] or "rtc" == app_info_tokens[1]):
         return
     app_type = app_info_tokens[2]
+    print("Type: " + app_type)
     file.readline()
 
     results = AppResults(host, app_id, app_type)
-    tokens = file.readline().strip().split(', ')
+    tokens = file.readline().strip().split(',')
+
+    # strip all tokens
+    tokens = [token.strip() for token in tokens]
+
     while len(tokens) > 6 and not "End of app" in tokens[0]:
         i = 0
         if "ComputeScore" in tokens[i]:
@@ -87,11 +92,11 @@ def parse_app_results(host, app_id, file):
         i += 1
         results.loss.append(float(tokens[i])*100)
         i += 1
-        results.bytes.append(int(tokens[i]))
+        results.bytes.append(float(tokens[i]))
         i += 1
         results.path.append(int(tokens[i]))
         i += 1
-        results.quality.append(int(tokens[i]))
+        results.quality.append(float(tokens[i]))
         i += 1
         results.score.append(float(tokens[i]))
 
@@ -148,10 +153,11 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
         plt.subplot(plot_number, sharex=ax1)
         plot_number += 1
         for res in results:
-            pathInfo = [x for x in pathInfos if x.host == res.host and x.app_id == res.app_id][0]
-            #paths = list(map(lambda path_id: pathInfo.paths[path_id], res.path))
-            paths = list(map(lambda path_id: f"id {int(path_id % (len(pathInfo.paths)/3))}", res.path))
-            plt.plot (res.time, paths, label = res.get_name())
+            # pathInfo = [x for x in pathInfos if x.host == res.host and x.app_id == res.app_id][0]
+            # #paths = list(map(lambda path_id: pathInfo.paths[path_id], res.path))
+            # paths = list(map(lambda path_id: f"id {int(path_id % (len(pathInfo.paths)/3))}", res.path))
+            # plt.plot (res.time, paths, label = res.get_name())
+            plt.plot (res.time, res.path, label = res.get_name())
         if not args.nolegend:
             plt.legend()
         if args.milliseconds:
@@ -394,6 +400,7 @@ def main():
                     pathInfos = path_eval(file)
 
         if len(appRes) == 0:
+            print(f"No app results found in {filepath}")
             continue
 
         with open(results_file, "a") as outf:

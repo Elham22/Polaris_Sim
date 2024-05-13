@@ -20,6 +20,7 @@
 #include "src/SCION/model/externs.h"
 #include "src/SCION/model/scion-core-as.h"
 #include "src/SCION/model/apps/app.h"
+#include <iomanip>
 
 namespace ns3 {
 
@@ -34,10 +35,21 @@ struct PathStatistics
   double score = 0;
   double latency; // observed latency
   double bandwidth; // estimated bandwidth
+  double fair_share; // estimated fair share from probe, in Gbps
   double loss; // estimated loss
 
   Time probed_last = Seconds (0); // time the last probing was initiated
   app_packet_id_t probe_seq_no = 0; // probe packet seq_no
+};
+
+// struct to store application state
+struct AppState
+{
+  Time timestamp;
+  // active path
+  app_path_id_t active_path;
+  // path information
+  std::vector<PathStatistics> path_stats;
 };
 
 /**
@@ -48,6 +60,8 @@ class RTCApp : public App
 protected:
   uint32_t num_paths;
   app_path_id_t active_path;
+
+  std::string log_prefix;
 
   // vector to store information each path
   std::vector<PathStatistics> path_infos;
@@ -65,6 +79,9 @@ protected:
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
   app_packet_id_t probe_id = 0; // Identifies a probe, not the packet though, that is probe_seq_no
+
+  // Store app state at different time points for evaluation
+  std::vector<AppState> statistics;
 
 public:
   RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
@@ -86,6 +103,8 @@ public:
 
     // choose a random path to start with
     active_path = rand () % num_paths;
+    std::cout << log_prefix << "Initiated." << " Starting path : " << active_path
+              << ", Logging: " << enable_logging << std::endl;
   }
 
   void
@@ -93,6 +112,40 @@ public:
   {
     SendTraffic ();
     SendProbes ();
+    TrackState ();
+  }
+
+  void
+  TrackState ()
+  {
+    if (stopped)
+      {
+        return;
+      }
+
+    // store current state of the app
+    AppState state;
+    state.timestamp = Simulator::Now ();
+    state.active_path = active_path;
+    state.path_stats = path_infos;
+    statistics.push_back (state);
+
+    // if logging enabled, print all path infos
+    if (enable_logging)
+      {
+        std::cout << log_prefix << "Current state:" << std::endl;
+        for (uint32_t i = 0; i < num_paths; i++)
+          {
+            std::cout << "    Path " << i << ", latency: " << path_infos[i].latency
+                      << ", loss: " << path_infos[i].loss
+                      << ", bandwidth: " << path_infos[i].bandwidth
+                      << ", score: " << path_infos[i].score << std::endl;
+          }
+      }
+
+    // Schedule next state tracking
+    Time next = Seconds (1.0);
+    Simulator::Schedule (next, &RTCApp::TrackState, this);
   }
 
   /**
@@ -127,15 +180,18 @@ public:
     std::random_shuffle (candidates.begin (), candidates.end ());
 
     // Return only the first probe_simultaneous candidates
-    candidates.resize (probe_simultaneous);
+    candidates.resize (std::min (probe_simultaneous, (uint16_t) candidates.size ()));
 
-    // Print all the candidates we selected
-    std::cout << "[rtc] Selected candidates for probing: ";
-    for (auto candidate : candidates)
+    if (enable_logging)
       {
-        std::cout << candidate << " ";
+        // Print all the candidates we selected
+        std::cout << log_prefix << "Selected candidates for probing: [";
+        for (auto candidate : candidates)
+          {
+            std::cout << candidate << " ";
+          }
+        std::cout << "]" << std::endl;
       }
-    std::cout << std::endl;
     return candidates;
   }
 
@@ -178,6 +234,7 @@ public:
       {
         Time now = Simulator::Now ();
         for (app_path_id_t candidate : candidates)
+          // for (app_path_id_t candidate = 0; candidate < num_paths; candidate++) // TODO: remove
           {
             ProbePath (candidate);
 
@@ -204,7 +261,11 @@ public:
     auto it = in_flight_probes.find (probe_id);
     if (it == in_flight_probes.end ())
       {
-        std::cout << "[rtc] Received probe response for unknown probe id " << probe_id << std::endl;
+        if (enable_logging)
+          {
+            std::cout << log_prefix << "Received probe response for unknown probe id " << probe_id
+                      << std::endl;
+          }
         return;
       }
 
@@ -244,10 +305,18 @@ public:
   ReceiveAppResponse (AppResp app_resp)
   {
     auto path_id = app_resp.path_id;
-    std::cout << "[rtc] Receiving response on path " << path_id << std::endl;
-    if (path_id != active_path)
+
+    if (enable_logging)
       {
-        std::cout << "[rtc] Receiving feedback about inactive (old) path: " << path_id << std::endl;
+        if (path_id != active_path)
+          {
+            std::cout << log_prefix << "Receiving feedback on inactive (old) path: " << path_id
+                      << std::endl;
+          }
+        else
+          {
+            std::cout << log_prefix << "Receiving feedback on active path " << path_id << std::endl;
+          }
       }
     Time resp_time = MicroSeconds (app_resp.timestamp);
 
@@ -267,10 +336,13 @@ public:
 
     UpdateScore (path_id);
 
-    std::cout << "    Loss: " << app_resp.loss << std::endl
-              << "    Latency: " << app_resp.avg_latency << std::endl
-              << "    Bandwidth: " << path_infos[path_id].bandwidth << std::endl
-              << "    Score: " << path_infos[path_id].score << std::endl;
+    if (enable_logging)
+      {
+        std::cout << "    Loss: " << app_resp.loss << std::endl
+                  << "    Latency: " << app_resp.avg_latency << std::endl
+                  << "    Bandwidth: " << path_infos[path_id].bandwidth << std::endl
+                  << "    Score: " << path_infos[path_id].score << std::endl;
+      }
 
     if (path_id == active_path)
       {
@@ -299,23 +371,28 @@ public:
 
     // With probability (1 - alpha), try to switch paths
     bool try_switch = !(rand () % 100 < 100 * alpha);
-    std::cout << "    alpha " << alpha << std::endl;
-    std::cout << "    try_switch " << try_switch << std::endl;
 
-    // print scores of all other paths for debugging
-    for (uint32_t i = 0; i < num_paths; i++)
+    if (enable_logging)
       {
-        if (i == active_path)
+        std::cout << log_prefix << "Steering decision:" << std::endl;
+        std::cout << "    alpha " << alpha << std::endl;
+        std::cout << "    try_switch " << try_switch << std::endl;
+
+        // print scores of all other paths for debugging
+        for (uint32_t i = 0; i < num_paths; i++)
           {
-            continue;
+            if (i == active_path)
+              {
+                continue;
+              }
+            std::cout << "    path " << i << " score " << path_infos[i].score << std::endl;
           }
-        std::cout << "    path " << i << " score " << path_infos[i].score << std::endl;
       }
 
     // score lower than treshold_l
     if (path_infos[active_path].score < steering_treshold_l)
       {
-        std::set<uint32_t> candidate_paths;
+        std::vector<uint32_t> candidate_paths;
 
         // with probability (1-alpha), switch paths
         if (try_switch)
@@ -329,19 +406,27 @@ public:
                   }
                 if (path_infos[i].score > steering_treshold_l)
                   {
-                    candidate_paths.insert (i);
+                    candidate_paths.push_back (i);
                   }
               }
 
             if (candidate_paths.size () > 0)
               {
-                uint32_t new_path = rand () % candidate_paths.size ();
+                uint32_t new_path = candidate_paths.at (rand () % candidate_paths.size ());
+
+                if (enable_logging)
+                  {
+                    std::cout << log_prefix << "Switching from path " << active_path << " to "
+                              << new_path << std::endl;
+                  }
                 active_path = new_path;
-                std::cout << "[rtc] Switching to a different path " << active_path << std::endl;
               }
             else
               {
-                std::cout << "[rtc] No better path > treshold_l found" << std::endl;
+                if (enable_logging)
+                  {
+                    std::cout << log_prefix << "No better path > treshold_l found" << std::endl;
+                  }
               }
           }
 
@@ -352,8 +437,11 @@ public:
             if (selected_bitrate > 0)
               {
                 selected_bitrate--;
-                std::cout << "[rtc] Lowering bitrate to " << bitrates[selected_bitrate]
-                          << std::endl;
+                if (enable_logging)
+                  {
+                    std::cout << log_prefix << "Lowering bitrate to " << bitrates[selected_bitrate]
+                              << std::endl;
+                  }
               }
           }
       }
@@ -366,8 +454,11 @@ public:
             if (selected_bitrate < bitrates.size () - 1)
               {
                 selected_bitrate++;
-                std::cout << "[rtc] Increasing bitrate to " << bitrates[selected_bitrate]
-                          << std::endl;
+                if (enable_logging)
+                  {
+                    std::cout << log_prefix << "Increasing bitrate to "
+                              << bitrates[selected_bitrate] << std::endl;
+                  }
               }
           }
       }
@@ -388,11 +479,18 @@ public:
               {
                 uint32_t new_path = rand () % candidate_paths.size ();
                 active_path = new_path;
-                std::cout << "[rtc] Steering to a different path " << active_path << std::endl;
+                if (enable_logging)
+                  {
+                    std::cout << log_prefix << "Steering to a different path " << active_path
+                              << std::endl;
+                  }
               }
             else
               {
-                std::cout << "[rtc] No better path > treshold_u found" << std::endl;
+                if (enable_logging)
+                  {
+                    std::cout << log_prefix << "No better path > treshold_u found" << std::endl;
+                  }
               }
           }
       }
@@ -401,7 +499,10 @@ public:
   void
   SendPacket (double packetSize, std::vector<const PathSegment *> path)
   {
-    std::cout << "[rtc] Sending data packet via path " << active_path << std::endl;
+    if (enable_logging)
+      {
+        std::cout << log_prefix << "Sending data packet via path " << active_path << std::endl;
+      }
     Payload payload;
     payload.app_data.app_id = app_id;
     payload.app_data.path_id = active_path;
@@ -434,10 +535,44 @@ public:
     stopped = true;
   }
 
+  std::string
+  InfoString ()
+  {
+    return "rtc fair_share_probing";
+  }
+
   void
   PrintResults ()
   {
-    // TODO
+    std::cout << "----- " << InfoString () << " id " << app_id << " dst " << dst_ia << ":"
+              << dst_host_addr << "-------" << std::endl
+              << "----- Timestamp, latency, loss, bytes, path, quality, score ------- "
+              << std::endl;
+
+    // print all the app statistics
+    for (auto state : statistics)
+      {
+        std::cout << std::setw (8) << state.timestamp.ToInteger (Time::Unit::MS) << std::setw (16)
+                  << "(" << state.timestamp.ToDouble (Time::Unit::MIN) << " min), "
+                  << std::setw (16) << state.path_stats[state.active_path].latency << ", "
+                  << std::setw (16) << state.path_stats[state.active_path].loss << ", "
+                  << std::setw (16) << state.path_stats[state.active_path].bandwidth << ", "
+                  << std::setw (4) << state.active_path << ", " << std::setw (16)
+                  << state.path_stats[state.active_path].score << ", " << std::setw (16)
+                  << state.path_stats[state.active_path].score << std::endl;
+
+        // format string with fixed spacing
+
+        // std::cout << "----- Path statistics: -----" << std::endl;
+        // for (uint32_t i = 0; i < num_paths; i++)
+        //   {
+        //     std::cout << "    Path " << i << ", latency: " << state.path_stats[i].latency
+        //               << ", loss: " << state.path_stats[i].loss
+        //               << ", bandwidth: " << state.path_stats[i].bandwidth
+        //               << ", score: " << state.path_stats[i].score << std::endl;
+        //   }
+      }
+    std::cout << "----- End of app " << app_id << " results ------" << std::endl;
   }
 
   /**
