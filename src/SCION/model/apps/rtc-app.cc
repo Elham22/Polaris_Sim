@@ -28,15 +28,15 @@ namespace ns3 {
 struct PathStatistics
 {
   uint16_t ecn;
-  Time last_update; // time of last ecn mark
+  Time last_report; // time of last ecn mark
   Time last_scmp; // time of last scmp congestion response
   app_packet_id_t seq_no = 1; // Next seq no to send
   app_packet_id_t seq_no_ack = 0; // Highest acked package
   double score = 0;
   double latency; // observed latency
-  double bandwidth; // estimated bandwidth
-  double fair_share; // estimated fair share from probe, in Gbps
-  double loss; // estimated loss
+  double bandwidth; // estimated bandwidth in Gbps
+  double fair_share; // estimated fair share in Gbps
+  double loss; // estimated loss ratio
 
   Time probed_last = Seconds (0); // time the last probing was initiated
   app_packet_id_t probe_seq_no = 0; // probe packet seq_no
@@ -46,6 +46,21 @@ struct PathStatistics
 struct AppState
 {
   Time timestamp;
+  // bitrate
+  double bitrate;
+
+  // latency
+  double latency;
+
+  //score
+  double score;
+
+  // loss
+  double loss;
+
+  // bandwidth
+  double bandwidth;
+
   // active path
   app_path_id_t active_path;
   // path information
@@ -61,7 +76,14 @@ protected:
   uint32_t num_paths;
   app_path_id_t active_path;
 
-  std::string log_prefix;
+  std::string
+  log_prefix ()
+  {
+    // print current time in ms
+    std::string log_prefix = "[" + std::to_string (Simulator::Now ().ToDouble (Time::Unit::MIN)) +
+                             "][rtc-" + std::to_string (app_id) + "] ";
+    return log_prefix;
+  }
 
   // vector to store information each path
   std::vector<PathStatistics> path_infos;
@@ -70,11 +92,15 @@ protected:
 
   std::vector<double> bitrates{10 * 0.7e6, 10 * 1.5e6, 10 * 5e6};
   uint32_t selected_bitrate = 0;
+  double bitrate = 10 * 0.7e6;
   const uint16_t fps = 30;
 
   double moving_average_weight = 0.75;
   double steering_treshold_u = 20;
   double steering_treshold_l = 0;
+
+  Time last_path_change = Time (0);
+  Time tracking_interval = Seconds (1);
 
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
@@ -91,9 +117,6 @@ public:
   {
     num_paths = all_paths.size ();
 
-    // set the log prefix
-    log_prefix = "[rtc-" + std::to_string (app_id) + "] ";
-
     // initialize path infos
     for (uint32_t i = 0; i < num_paths; i++)
       {
@@ -102,8 +125,8 @@ public:
       }
 
     // choose a random path to start with
-    active_path = rand () % num_paths;
-    std::cout << log_prefix << "Initiated." << " Starting path : " << active_path
+    active_path = app_id % num_paths;
+    std::cout << log_prefix () << "Initiated." << " Starting path : " << active_path
               << ", Logging: " << enable_logging << std::endl;
   }
 
@@ -127,18 +150,25 @@ public:
     AppState state;
     state.timestamp = Simulator::Now ();
     state.active_path = active_path;
-    state.path_stats = path_infos;
+    // state.path_stats = path_infos;
+    state.bitrate = bitrate;
+    state.latency = path_infos[active_path].latency;
+    state.loss = path_infos[active_path].loss;
+    state.bandwidth = path_infos[active_path].bandwidth;
+    state.score = path_infos[active_path].score;
     statistics.push_back (state);
 
     // if logging enabled, print all path infos
     if (enable_logging)
       {
-        std::cout << log_prefix << "Current state:" << std::endl;
+        std::cout << log_prefix () << "Current state:" << std::endl;
         for (uint32_t i = 0; i < num_paths; i++)
           {
-            std::cout << "    Path " << i << ", latency: " << path_infos[i].latency
+            std::string prefix = (i == active_path) ? "    -> " : "       ";
+            std::cout << prefix << "Path " << i
+                      << ", latency [ms]: " << path_infos[i].latency / 1000.0
                       << ", loss: " << path_infos[i].loss
-                      << ", bandwidth: " << path_infos[i].bandwidth
+                      << ", fair_share: " << path_infos[i].fair_share
                       << ", score: " << path_infos[i].score << std::endl;
           }
       }
@@ -184,13 +214,19 @@ public:
 
     if (enable_logging)
       {
-        // Print all the candidates we selected
-        std::cout << log_prefix << "Selected candidates for probing: [";
-        for (auto candidate : candidates)
+        if (candidates.empty ())
           {
-            std::cout << candidate << " ";
+            std::cout << log_prefix () << "No candidates for probing." << std::endl;
           }
-        std::cout << "]" << std::endl;
+        else
+          {
+            std::cout << log_prefix () << "Selected candidates for probing: [";
+            for (auto candidate : candidates)
+              {
+                std::cout << candidate << " ";
+              }
+            std::cout << "]" << std::endl;
+          }
       }
     return candidates;
   }
@@ -251,6 +287,100 @@ public:
   }
 
   void
+  HandleSCMP (ScmpReqOrResp scmp)
+  {
+    // TODO
+    // Need information from host here about which path is affected
+    // and then decide how exactly it influences the scoring
+  }
+
+  void
+  SendTraffic ()
+  {
+    if (stopped)
+      {
+        return;
+      }
+
+    // Send packet of selected bitrate
+    // TODO: implement realistic sending (with natural variation)
+    // SendPacket (bitrates[selected_bitrate] / fps, all_paths[active_path]);
+    // SendPacket (bitrate / fps, all_paths[active_path]);
+    auto frame_bytes = bitrate / fps;
+
+    // split up into multiple packets if larger than max pkt size
+    while (frame_bytes > m_pktSize)
+      {
+        SendPacket (m_pktSize, all_paths[active_path]);
+        frame_bytes -= m_pktSize;
+      }
+    if (frame_bytes > 0)
+      {
+        SendPacket (frame_bytes, all_paths[active_path]);
+      }
+
+    // Schedule next packet
+    Time next = Seconds (1.0 / fps);
+    Simulator::Schedule (next, &RTCApp::SendTraffic, this);
+  }
+
+  /***
+   * Handle receiver report
+  */
+  void
+  ReceiveAppResponse (AppResp app_resp)
+  {
+    auto path_id = app_resp.path_id;
+
+    if (enable_logging)
+      {
+        if (path_id != active_path)
+          {
+            std::cout << log_prefix () << "Receiving report on inactive (old) path: " << path_id
+                      << std::endl;
+          }
+        else
+          {
+            std::cout << log_prefix () << "Receiving report on active path " << path_id
+                      << std::endl;
+          }
+      }
+    Time resp_time = MicroSeconds (app_resp.timestamp);
+    path_infos[path_id].last_report = resp_time;
+
+    path_infos[path_id].ecn = app_resp.ecn;
+    path_infos[path_id].latency = app_resp.avg_latency;
+
+    path_infos[path_id].loss = app_resp.loss;
+
+    // Update loss with moving average
+    // path_infos[path_id].loss *= (1 - moving_average_weight);
+    // path_infos[path_id].loss += (moving_average_weight * app_resp.loss);
+
+    // Very basic bandwidth estimation, this is basically just a lower bound
+    // ...and apparently sometimes even negative (TODO)
+    path_infos[path_id].bandwidth =
+        app_resp.bytes_received /
+        Seconds (resp_time - path_infos[path_id].last_report).GetSeconds ();
+
+    UpdateScore (path_id);
+
+    if (enable_logging)
+      {
+        std::cout << "    Loss: " << app_resp.loss << std::endl
+                  << "    Latency: " << app_resp.avg_latency << std::endl
+                  << "    Bitrate: " << bitrate << std::endl;
+        // << "    Score: " << path_infos[path_id].score << std::endl;
+      }
+
+    if (path_id == active_path)
+      {
+        // SteerTreshold ();
+        SteerCC ();
+      }
+  }
+
+  void
   ReceiveAppProbeResponse (AppProbe probe_resp)
   {
     auto probe_id = probe_resp.probe_id;
@@ -263,8 +393,8 @@ public:
       {
         if (enable_logging)
           {
-            std::cout << log_prefix << "Received probe response for unknown probe id " << probe_id
-                      << std::endl;
+            std::cout << log_prefix () << "Received probe response for unknown probe id "
+                      << probe_id << std::endl;
           }
         return;
       }
@@ -275,7 +405,7 @@ public:
 
     if (enable_logging)
       {
-        std::cout << log_prefix << "Received probe response on path " << path_id << std::endl
+        std::cout << log_prefix () << "Received probe response on path " << path_id << std::endl
                   << "    Latency [ms]: " << latency / 1000.0 << std::endl
                   << "    min fair share: " << probe_resp.min_fair_share << std::endl
                   << "    min fair share seen at AS " << GET_HOP_AS (hop) << " and hop "
@@ -284,6 +414,7 @@ public:
 
     // Update path info
     path_infos[path_id].latency = latency;
+    path_infos[path_id].fair_share = probe_resp.min_fair_share;
     // path_infos[path_id].probed_last = Simulator::Now ();
 
     // Update score
@@ -291,63 +422,6 @@ public:
 
     // Remove the probe from the in-flight list
     in_flight_probes.erase (it);
-  }
-
-  void
-  HandleSCMP (ScmpReqOrResp scmp)
-  {
-    // TODO
-    // Need information from host here about which path is affected
-    // and then decide how exactly it influences the scoring
-  }
-
-  void
-  ReceiveAppResponse (AppResp app_resp)
-  {
-    auto path_id = app_resp.path_id;
-
-    if (enable_logging)
-      {
-        if (path_id != active_path)
-          {
-            std::cout << log_prefix << "Receiving feedback on inactive (old) path: " << path_id
-                      << std::endl;
-          }
-        else
-          {
-            std::cout << log_prefix << "Receiving feedback on active path " << path_id << std::endl;
-          }
-      }
-    Time resp_time = MicroSeconds (app_resp.timestamp);
-
-    // Very basic bandwidth estimation, this is basically just a lower bound
-    // ...and apparently sometimes even negative (TODO)
-    path_infos[path_id].bandwidth =
-        app_resp.bytes_received /
-        Seconds (resp_time - path_infos[path_id].last_update).GetSeconds ();
-
-    path_infos[path_id].ecn = app_resp.ecn;
-    path_infos[path_id].last_update = resp_time;
-    path_infos[path_id].latency = app_resp.avg_latency;
-
-    // Update loss with moving average
-    path_infos[path_id].loss *= (1 - moving_average_weight);
-    path_infos[path_id].loss += (moving_average_weight * app_resp.loss);
-
-    UpdateScore (path_id);
-
-    if (enable_logging)
-      {
-        std::cout << "    Loss: " << app_resp.loss << std::endl
-                  << "    Latency: " << app_resp.avg_latency << std::endl
-                  << "    Bandwidth: " << path_infos[path_id].bandwidth << std::endl
-                  << "    Score: " << path_infos[path_id].score << std::endl;
-      }
-
-    if (path_id == active_path)
-      {
-        Steer ();
-      }
   }
 
   void
@@ -363,7 +437,75 @@ public:
   }
 
   void
-  Steer ()
+  SteerCC ()
+  {
+    // Simple, loss based congestion control based on
+    // https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02
+    if (path_infos[active_path].loss < 0.02)
+      {
+        bitrate *= 1.05;
+      }
+    else if (path_infos[active_path].loss > 0.1)
+      {
+        bitrate *= (1 - 0.5 * path_infos[active_path].loss);
+      }
+    // else { keep bitrate the same }
+
+    // if latency is higher than 2s, reduce bitrate
+    if (path_infos[active_path].latency > 2e6)
+      {
+        bitrate *= 0.9;
+      }
+
+    // Set the fair share to our current sending bitrate. Assuming that the CC
+    // is performing decently enough, the bitrate should roughly equate our fair
+    // share.
+    path_infos[active_path].fair_share = bitrate / 1000000000.0;
+
+    // If the loss is very low, don't even bother switching paths
+    // if (path_infos[active_path].loss < 0.02)
+    //   {
+    //     return;
+    //   }
+
+    // // If we switched paths only recently, and the loss is still tolerable, don't switch
+    // if (path_infos[active_path].loss < 0.5 && Simulator::Now () - last_path_change < Seconds (0.5))
+    //   {
+    //     return;
+    //   }
+
+    // Switch paths if other paths have a significantly higher fair_share
+    for (uint32_t i = 0; i < num_paths; i++)
+      {
+        if (i == active_path)
+          {
+            continue;
+          }
+        if (path_infos[i].fair_share > path_infos[active_path].fair_share)
+          {
+            auto ratio = path_infos[i].fair_share / path_infos[active_path].fair_share;
+
+            // With probability (1 - ratio), switch paths
+            if (!(rand () % 100 < 100 * ratio))
+              {
+                continue;
+              }
+
+            if (true)
+              {
+                std::cout << log_prefix () << "Switching path from " << active_path << " to " << i
+                          << " due to higher fair share: " << path_infos[i].fair_share << " > "
+                          << path_infos[active_path].fair_share << std::endl;
+              }
+            active_path = i;
+            // last_path_change = Simulator::Now ();
+            break;
+          }
+      }
+  }
+
+  void
+  SteerTreshold ()
   {
     // Compute the sigmoid of the score
     // NOTE: subject to change
@@ -374,7 +516,7 @@ public:
 
     if (enable_logging)
       {
-        std::cout << log_prefix << "Steering decision:" << std::endl;
+        std::cout << log_prefix () << "Steering decision:" << std::endl;
         std::cout << "    alpha " << alpha << std::endl;
         std::cout << "    try_switch " << try_switch << std::endl;
 
@@ -416,7 +558,7 @@ public:
 
                 if (enable_logging)
                   {
-                    std::cout << log_prefix << "Switching from path " << active_path << " to "
+                    std::cout << log_prefix () << "Switching from path " << active_path << " to "
                               << new_path << std::endl;
                   }
                 active_path = new_path;
@@ -425,7 +567,7 @@ public:
               {
                 if (enable_logging)
                   {
-                    std::cout << log_prefix << "No better path > treshold_l found" << std::endl;
+                    std::cout << log_prefix () << "No better path > treshold_l found" << std::endl;
                   }
               }
           }
@@ -439,8 +581,8 @@ public:
                 selected_bitrate--;
                 if (enable_logging)
                   {
-                    std::cout << log_prefix << "Lowering bitrate to " << bitrates[selected_bitrate]
-                              << std::endl;
+                    std::cout << log_prefix () << "Lowering bitrate to "
+                              << bitrates[selected_bitrate] << std::endl;
                   }
               }
           }
@@ -456,7 +598,7 @@ public:
                 selected_bitrate++;
                 if (enable_logging)
                   {
-                    std::cout << log_prefix << "Increasing bitrate to "
+                    std::cout << log_prefix () << "Increasing bitrate to "
                               << bitrates[selected_bitrate] << std::endl;
                   }
               }
@@ -481,7 +623,7 @@ public:
                 active_path = new_path;
                 if (enable_logging)
                   {
-                    std::cout << log_prefix << "Steering to a different path " << active_path
+                    std::cout << log_prefix () << "Steering to a different path " << active_path
                               << std::endl;
                   }
               }
@@ -489,7 +631,7 @@ public:
               {
                 if (enable_logging)
                   {
-                    std::cout << log_prefix << "No better path > treshold_u found" << std::endl;
+                    std::cout << log_prefix () << "No better path > treshold_u found" << std::endl;
                   }
               }
           }
@@ -501,7 +643,7 @@ public:
   {
     if (enable_logging)
       {
-        std::cout << log_prefix << "Sending data packet via path " << active_path << std::endl;
+        // std::cout << log_prefix () << "Sending data packet via path " << active_path << std::endl;
       }
     Payload payload;
     payload.app_data.app_id = app_id;
@@ -510,23 +652,6 @@ public:
     payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
     PayloadType payload_type = PayloadType::APPLICATION_DATA;
     host->SendAppPacket (this, payload, payload_type, packetSize * scale + sizeof (AppData), path);
-  }
-
-  void
-  SendTraffic ()
-  {
-    if (stopped)
-      {
-        return;
-      }
-
-    // Send packet of selected bitrate
-    // TODO: implement realistic sending (with natural variation)
-    SendPacket (bitrates[selected_bitrate] / fps, all_paths[active_path]);
-
-    // Schedule next packet
-    Time next = Seconds (1.0 / fps);
-    Simulator::Schedule (next, &RTCApp::SendTraffic, this);
   }
 
   void
@@ -554,12 +679,10 @@ public:
       {
         std::cout << std::setw (8) << state.timestamp.ToInteger (Time::Unit::MS) << std::setw (16)
                   << "(" << state.timestamp.ToDouble (Time::Unit::MIN) << " min), "
-                  << std::setw (16) << state.path_stats[state.active_path].latency << ", "
-                  << std::setw (16) << state.path_stats[state.active_path].loss << ", "
-                  << std::setw (16) << state.path_stats[state.active_path].bandwidth << ", "
-                  << std::setw (4) << state.active_path << ", " << std::setw (16)
-                  << state.path_stats[state.active_path].score << ", " << std::setw (16)
-                  << state.path_stats[state.active_path].score << std::endl;
+                  << std::setw (16) << state.latency / 1000.0 << ", " << std::setw (16)
+                  << state.loss << ", " << std::setw (16) << state.bandwidth << ", "
+                  << std::setw (4) << state.active_path << ", " << std::setw (16) << state.score
+                  << ", " << std::setw (16) << state.bitrate << std::endl;
 
         // format string with fixed spacing
 

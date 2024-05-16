@@ -378,9 +378,9 @@ ScionHost::RespondToAppProbe (ia_t src_ia, host_addr_t src_addr,
                               std::vector<const ns3::PathSegment *> path, AppProbe app_probe)
 {
   PayloadType payload_type = PayloadType::APPLICATION_PROBE;
-  
+
   // Everything stays the same, we can just set the RX time and send it back
-  app_probe.time_rx = local_time.ToInteger (Time::Unit::MS);
+  app_probe.time_rx = local_time.ToInteger (Time::Unit::US);
 
   Payload payload;
   payload.app_probe = app_probe;
@@ -390,21 +390,20 @@ ScionHost::RespondToAppProbe (ia_t src_ia, host_addr_t src_addr,
   packet->curr_inf = path.size () - 1;
   packet->cur_hopf = path.at (packet->curr_inf)->hops.size () - 1;
   SendScionPacket (packet);
-  std::cout << "[host] Send response to probe from " << src_ia << ":" << src_addr << std::endl;
+  // std::cout << "[host] Sent response to probe from " << src_ia << ":" << src_addr << std::endl;
 }
 
 void
 ScionHost::PrintPath (std::vector<const PathSegment *> the_path)
 {
   std::cout << "Printing path: ";
-  for (auto const seg : the_path)
+  for (PathSegment const *segment : the_path)
     {
       std::cout << "[";
-      for (link_information const hop : seg->hops)
+      for (uint64_t const hop : segment->hops)
         {
-          std::cout << "(" << GET_HOP_ISD (hop) << ":" << GET_HOP_AS (hop)
-                    << ", ing: " << GET_HOP_ING_IF (hop) << ", eg: " << GET_HOP_EG_IF (hop)
-                    << "), ";
+          std::cout << "-" << GET_HOP_ING_IF (hop) << "->(" << GET_HOP_ISD (hop) << ":"
+                    << GET_HOP_AS (hop) << ")-" << GET_HOP_EG_IF (hop) << "->" << ", ";
         }
       std::cout << "], ";
     }
@@ -467,10 +466,15 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
 
   std::vector<std::vector<const PathSegment *>> all_paths;
   SearchAllInCachedSegments (dst_ia, all_paths);
-  /*std::cout << "Paths found: " << std::endl;
-  for (auto const path: all_paths) {
-    PrintPath(path);
-  }*/
+
+  if (!all_paths.empty ())
+    {
+      std::cout << "Paths found: " << std::endl;
+      for (auto const &path : all_paths)
+        {
+          PrintPath (path);
+        }
+    }
 
   if (dst_ia == ia_addr || all_paths.size () != 0)
     {
@@ -604,22 +608,34 @@ ScionHost::SendAppResp (app_connection_key_t key)
     {
       return;
     }
+
+  if (app_infos[key].num_packets == 0)
+    {
+      // no packets arrived in interval. assume connection is dead.
+      app_infos.erase (key);
+      return;
+    }
+
   auto info = app_infos.at (key);
   PayloadType payload_type = PayloadType::APPLICATION_RESP;
   Payload payload;
   auto num_packets_expected = info.seq_no_last - info.seq_no_start +
                               1; // +1 because id_start is id of first packet in period
-  if (num_packets_expected == 0)
-    {
-      // no packets arrived in interval. Stop sending updates.
-      app_infos.erase (key);
-      return;
-    }
   // std::cout << "app resp 1 from " << std::get<2> (key) << std::endl;
   payload.app_resp.app_id = std::get<2> (key);
   payload.app_resp.loss =
       ((double) num_packets_expected - info.num_packets) / num_packets_expected / 2;
   payload.app_resp.avg_latency = ((double) info.aggregated_latencies) / info.num_packets;
+
+  // Warn if avg_latency is larger than 5 seconds
+  if (payload.app_resp.avg_latency > 5000000)
+    {
+      std::cout << "[host] Very high latency detected " << payload.app_resp.app_id
+                << ", exp_num_packets " << num_packets_expected << ", packets arrived "
+                << info.num_packets << ", loss " << payload.app_resp.loss << ", latency "
+                << payload.app_resp.avg_latency << std::endl;
+    }
+
   payload.app_resp.bytes_received = info.bytes_received;
   payload.app_resp.ecn = info.ecn; // Notify sender of latest ecn status
   payload.app_resp.timestamp = local_time.ToInteger (Time::Unit::US);

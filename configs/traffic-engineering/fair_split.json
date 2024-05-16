@@ -19,11 +19,6 @@
     "time": "11min",
     "type": "start_application",
     "args": ["0", "0", "2", "0", "5", "2", "rtc", "0.0", "0"]
-  },
-  {
-    "time": "15min",
-    "type": "start_application",
-    "args": ["0", "0", "2", "0", "5", "2", "video conference active", "0.0", "0"]
   }
 ]
 }
