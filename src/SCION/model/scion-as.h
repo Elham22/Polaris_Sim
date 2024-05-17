@@ -105,7 +105,7 @@ public:
   std::vector<std::pair<ld, ld>> interfaces_coordinates;
   std::multimap<std::pair<ld, ld>, uint16_t> coordinates_to_interfaces;
   std::vector<std::vector<ld>> latencies_between_interfaces;
-  std::vector<int32_t> inter_as_bwds;
+  std::vector<double> inter_as_bwds;
 
   void DoInitializations (uint32_t num_ases, rapidxml::xml_node<> *xml_node,
                           const YAML::Node &config, bool only_propagation_delay);

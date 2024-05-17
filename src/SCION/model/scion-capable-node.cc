@@ -267,11 +267,11 @@ ScionCapableNode::InitializeTransmissionQueues ()
   // set the max_queue sizes to the bwd-delay product
   for (uint32_t i = 0; i < n_devices; ++i)
     {
-      uint64_t bwd_Gbit = 400; // default 400 Gbps
+      double bwd_Gbit = 400; // default 400 Gbps
       auto transmission_delay = transmission_delays.at (i);
       if (transmission_delay != 0)
         {
-          bwd_Gbit = 8000 / transmission_delay.ToInteger (Time::Unit::PS);
+          bwd_Gbit = 8000.0 / transmission_delay.ToInteger (Time::Unit::PS);
         }
       auto propagation_delay = propagation_delays.at (i).ToInteger (Time::Unit::NS);
       if (propagation_delay < 100000)
@@ -281,7 +281,11 @@ ScionCapableNode::InitializeTransmissionQueues ()
       // units cancel out, 1Gbit = 10^9bit, 1NS = 10^(-9)s
       //max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay;
       // factor of 20 for testing
-      max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay * 20;
+      max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay * 200; // TODO
+      std::cout << GetLogPrefix ()
+                << ", transmission_delay: " << transmission_delay.ToInteger (Time::Unit::PS)
+                << "bwd_Gbit: " << bwd_Gbit << ", queue len: " << max_transmission_queues_lengths[i]
+                << std::endl;
     }
 }
 
@@ -540,4 +544,14 @@ ScionCapableNode::GetAddressAsString ()
   return std::to_string (isd_number) + ":" + std::to_string (as_number) + ":" +
          std::to_string (local_address);
 }
+
+std::string
+ScionCapableNode::GetLogPrefix ()
+{
+  // print current time in ms
+  std::string log_prefix = "[" + std::to_string (Simulator::Now ().ToDouble (Time::Unit::MIN)) +
+                           "][host-" + ScionCapableNode::GetAddressAsString () + "] ";
+  return log_prefix;
+}
+
 } // namespace ns3

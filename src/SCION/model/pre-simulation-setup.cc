@@ -370,7 +370,7 @@ InstantiateLinksFromTopo (rapidxml::xml_node<> *xml_root, NodeContainer &as_node
 
       ld latitude = std::stod (p.GetProperty ("latitude"));
       ld longitude = std::stod (p.GetProperty ("longitude"));
-      int32_t bwd = std::stoi (p.GetProperty ("capacity"));
+      double bwd = std::stod (p.GetProperty ("capacity"));
       std::string rel = "core"; //p.GetProperty("rel");
       NeighbourRelation relation;
 
