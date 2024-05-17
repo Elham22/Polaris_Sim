@@ -70,12 +70,12 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
                 << std::endl;
     }*/
 
-  // store the arrival time of data packets in the map based on their app id
+  // store and update the arrival time of data packets in the map based on their app id
   // we use this to estimate the number of flows based on active app ids
   if (packet->payload_type == PayloadType::APPLICATION_DATA)
     {
-      app_id_last_seen.at (local_if).insert (
-          std::make_pair (packet->payload.app_data.app_id, local_time));
+      app_id_last_seen.at (local_if).insert_or_assign (packet->payload.app_data.app_id,
+                                                       Simulator::Now ());
     }
 
   auto new_size = transmission_queues_lengths.at (local_if) + packet->size;
@@ -113,6 +113,17 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
             ReturnSCMPResponse (packet, scmp);
           }
 
+      std::string app_id = "";
+      if (packet->payload_type == PayloadType::APPLICATION_DATA)
+        {
+          app_id = std::to_string (packet->payload.app_data.app_id);
+        }
+
+      std::cout << GetLogPrefix () << "Dropping packet of type " << packet->payload_type << " size "
+                << packet->size << " on interface " << local_if
+                << " due to congestion: " << new_size << "/"
+                << max_transmission_queues_lengths.at (local_if) << " app_id: " << app_id
+                << std::endl;
       Drop (packet);
       return;
     }
@@ -490,15 +501,16 @@ ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
 
       estimated_no_flows.at (local_if).push_back (no_flows.at (local_if));
 
-      // std::cout << "[node-" << as_number << "] " << "estimated number of flows at local iface "
-      //           << local_if << ": " << no_flows.at (local_if) << std::endl;
-
       // remove all the app ids that have not been seen for a while
       auto app_id_last_seen_local = app_id_last_seen.at (local_if);
       for (auto it = app_id_last_seen_local.begin (); it != app_id_last_seen_local.end ();)
         {
           if (local_time - it->second > collection_period)
             {
+              std::cout << GetLogPrefix () << "Removing flow with app_id " << it->first
+                        << " from interface " << local_if << " ("
+                        << (local_time - it->second).ToDouble (Time::Unit::S) << " seconds old)"
+                        << std::endl;
               it = app_id_last_seen_local.erase (it);
             }
           else
@@ -506,7 +518,15 @@ ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
               ++it;
             }
         }
+      app_id_last_seen.at (local_if) = app_id_last_seen_local;
 
+      if (no_flows.at (local_if) != app_id_last_seen_local.size ())
+        {
+
+          std::cout << GetLogPrefix () << "New estimated number of flows at local iface "
+                    << local_if << ": " << app_id_last_seen_local.size ()
+                    << " (before: " << no_flows.at (local_if) << ")" << std::endl;
+        }
       // now the estimated number of flows is simply how many app ids we have seen in the last period
       no_flows.at (local_if) = app_id_last_seen_local.size ();
 

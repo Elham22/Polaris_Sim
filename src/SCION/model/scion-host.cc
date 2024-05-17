@@ -566,8 +566,9 @@ ScionHost::SendAppPacket (App *app, Payload payload, PayloadType payload_type, u
 void
 ScionHost::ReceiveAppData (ScionPacket *packet)
 {
-  // std::cout << "[host] Receiving app data packet from " << packet->payload.app_data.app_id
-  //           << " via path " << packet->payload.app_data.path_id << std::endl;
+  std::cout << GetLogPrefix () << "Receiving app data packet from "
+            << packet->payload.app_data.app_id << " via path " << packet->payload.app_data.path_id
+            << std::endl;
   app_connection_key_t key =
       std::make_tuple (packet->src_ia, packet->src_host, packet->payload.app_data.app_id,
                        packet->payload.app_data.path_id);
@@ -575,6 +576,8 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   // Create new AppInfo for new connection
   if (app_infos.find (key) == app_infos.end ())
     {
+      std::cout << GetLogPrefix () << "Connection opened: New packets arrived for app_id "
+                << std::get<2> (key) << " on path " << std::get<3> (key) << std::endl;
       AppInfo info;
       info.seq_no_start = packet->payload.app_data.seq_no;
       info.path = packet->path;
@@ -612,6 +615,8 @@ ScionHost::SendAppResp (app_connection_key_t key)
   if (app_infos[key].num_packets == 0)
     {
       // no packets arrived in interval. assume connection is dead.
+      std::cout << GetLogPrefix () << "Connection closed: No new packets arrived for app_id "
+                << std::get<2> (key) << " on path " << std::get<3> (key) << std::endl;
       app_infos.erase (key);
       return;
     }
@@ -641,20 +646,13 @@ ScionHost::SendAppResp (app_connection_key_t key)
   payload.app_resp.timestamp = local_time.ToInteger (Time::Unit::US);
   payload.app_resp.path_id = std::get<3> (key);
 
-  /*std::cout << "Sending app resp for app_id " << payload.app_resp.app_id << ", exp_num_packets " << num_packets_expected << ", packets arrived "
-            << info.num_packets << ", loss " << payload.app_resp.loss << ", latency " << payload.app_resp.avg_latency << std::endl;
-  for (uint64_t i = 0; i < num_packets_expected - info.num_packets; ++i)
-    {
-      std::cout << "Missing packet" << std::endl;
-    }*/
-
   ScionPacket *packet = CreateScionPacket (payload, payload_type, std::get<0> (key),
                                            std::get<1> (key), sizeof (AppResp), info.path);
   packet->path_reversed = true;
   packet->curr_inf = packet->path.size () - 1;
   packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
-  std::cout << "[host] Sending app feedback to " << payload.app_resp.app_id << " via path "
-            << payload.app_resp.path_id << std::endl;
+  std::cout << GetLogPrefix () << "Sending app feedback to " << payload.app_resp.app_id
+            << " via path " << payload.app_resp.path_id << std::endl;
   SendScionPacket (packet);
 
   // Reset values again for next window

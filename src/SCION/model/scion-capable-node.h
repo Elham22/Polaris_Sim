@@ -67,6 +67,7 @@ public:
   Time GetLocalTime (void) const;
 
   std::string GetAddressAsString ();
+  std::string GetLogPrefix ();
   void PrintLinkInfo (uint16_t local_if);
 
   virtual void AdvanceLocalTime ();
@@ -108,7 +109,8 @@ protected:
   std::vector<std::vector<uint64_t>> estimated_throughput; // throughput of arriving bytes
   std::vector<std::vector<uint64_t>> predicted_new_throughput;
   std::vector<std::vector<double>> estimated_packetloss;
-  std::vector<std::vector<uint64_t>> estimated_no_flows; // estimated number of flows per link per time unit
+  std::vector<std::vector<uint64_t>>
+      estimated_no_flows; // estimated number of flows per link per time unit
   std::vector<std::vector<Time>> estimation_times;
   std::vector<std::map<uint64_t, Time>> app_id_last_seen; // used to estimate the number of flows
 
