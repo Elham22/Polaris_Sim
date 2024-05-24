@@ -73,6 +73,10 @@ struct AppState
 class RTCApp : public App
 {
 protected:
+  const double LOSS_TRESHOLD_LOW = 0.02;
+  const double LOSS_TRESHOLD_HIGH = 0.10;
+  const double PATH_SWITCH_TRESHOLD = 1.5;
+  const Time TRACKING_INTERVAL = Seconds (0.1);
   uint32_t num_paths;
   app_path_id_t active_path;
 
@@ -92,7 +96,7 @@ protected:
 
   std::vector<double> bitrates{10 * 0.7e6, 10 * 1.5e6, 10 * 5e6};
   uint32_t selected_bitrate = 0;
-  double bitrate = 10 * 0.7e6;
+  double bitrate = 0.2e6; // in Bytes per second
   const uint16_t fps = 30;
 
   double moving_average_weight = 0.75;
@@ -100,7 +104,6 @@ protected:
   double steering_treshold_l = 0;
 
   Time last_path_change = Time (0);
-  Time tracking_interval = Seconds (1);
 
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
@@ -125,7 +128,7 @@ public:
       }
 
     // choose a random path to start with
-    active_path = app_id % num_paths;
+    active_path = rand () % num_paths;
     std::cout << log_prefix () << "Initiated." << " Starting path : " << active_path
               << ", Logging: " << enable_logging << std::endl;
   }
@@ -174,8 +177,7 @@ public:
       }
 
     // Schedule next state tracking
-    Time next = Seconds (1.0);
-    Simulator::Schedule (next, &RTCApp::TrackState, this);
+    Simulator::Schedule (TRACKING_INTERVAL, &RTCApp::TrackState, this);
   }
 
   /**
@@ -283,7 +285,9 @@ public:
       }
 
     // Schedule the next round of probing
-    Simulator::Schedule (probe_interval, &RTCApp::SendProbes, this);
+    Simulator::Schedule (probe_interval +
+                             RandomDelay ((probe_interval / 2).ToInteger (Time::Unit::MS)),
+                         &RTCApp::SendProbes, this);
   }
 
   void
@@ -321,7 +325,8 @@ public:
 
     // Schedule next packet
     Time next = Seconds (1.0 / fps);
-    Simulator::Schedule (next, &RTCApp::SendTraffic, this);
+    Simulator::Schedule (next + RandomDelay ((next / 4).ToInteger (Time::Unit::MS)),
+                         &RTCApp::SendTraffic, this);
   }
 
   /***
@@ -350,6 +355,12 @@ public:
 
     path_infos[path_id].ecn = app_resp.ecn;
     path_infos[path_id].latency = app_resp.avg_latency;
+
+    if (app_resp.loss < 0)
+      {
+        std::cout << log_prefix () << "Loss <0 detected" << std::endl;
+        app_resp.loss = 0;
+      }
 
     path_infos[path_id].loss = app_resp.loss;
 
@@ -407,14 +418,16 @@ public:
       {
         std::cout << log_prefix () << "Received probe response on path " << path_id << std::endl
                   << "    Latency [ms]: " << latency / 1000.0 << std::endl
-                  << "    min fair share: " << probe_resp.min_fair_share << std::endl
+                  << "    min fair share: " << probe_resp.min_fair_share * 1e6 / 8 << std::endl
                   << "    min fair share seen at AS " << GET_HOP_AS (hop) << " and hop "
                   << GET_HOP_EG_IF (hop) << std::endl;
       }
 
     // Update path info
     path_infos[path_id].latency = latency;
-    path_infos[path_id].fair_share = probe_resp.min_fair_share;
+
+    // Probe contains fair share in Gbps, convert to Bps
+    path_infos[path_id].fair_share = probe_resp.min_fair_share * 1e9 / 8;
     // path_infos[path_id].probed_last = Simulator::Now ();
 
     // Update score
@@ -441,11 +454,11 @@ public:
   {
     // Simple, loss based congestion control based on
     // https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02
-    if (path_infos[active_path].loss < 0.02)
+    if (path_infos[active_path].loss < LOSS_TRESHOLD_LOW)
       {
         bitrate *= 1.05;
       }
-    else if (path_infos[active_path].loss > 0.1)
+    else if (path_infos[active_path].loss > LOSS_TRESHOLD_HIGH)
       {
         bitrate *= (1 - 0.5 * path_infos[active_path].loss);
       }
@@ -457,51 +470,71 @@ public:
         bitrate *= 0.9;
       }
 
-    // Set the fair share to our current sending bitrate. Assuming that the CC
-    // is performing decently enough, the bitrate should roughly equate our fair
-    // share.
-    path_infos[active_path].fair_share = bitrate / 1000000000.0;
+    // If the loss is very low, don't bother switching paths as we're still upping the send rate
+    if (path_infos[active_path].loss < LOSS_TRESHOLD_LOW)
+      {
+        return;
+      }
 
-    // If the loss is very low, don't even bother switching paths
-    // if (path_infos[active_path].loss < 0.02)
-    //   {
-    //     return;
-    //   }
+    // If we switched paths only recently, and the loss is still tolerable, don't switch
+    if (path_infos[active_path].loss < 0.5 && Simulator::Now () - last_path_change < Seconds (0.5))
+      {
+        return;
+      }
 
-    // // If we switched paths only recently, and the loss is still tolerable, don't switch
-    // if (path_infos[active_path].loss < 0.5 && Simulator::Now () - last_path_change < Seconds (0.5))
-    //   {
-    //     return;
-    //   }
-
-    // Switch paths if other paths have a significantly higher fair_share
+    // Choose as candidates all paths that have a significantly higher
+    // fair_share than what is our current send rate. We also include the active
+    // path, to provide a chance to stay on the current path and desynchronize
+    // applications. A nice side effect is that the more better paths are
+    // available, the more likely we are to switch. This is good, because if
+    // there's just one better path, we don't want all applications to switch to
+    // it at the same time. Whereas if we have many, applications are likely to
+    // spread out.
+    std::vector<uint32_t> switch_candidates;
     for (uint32_t i = 0; i < num_paths; i++)
       {
         if (i == active_path)
           {
-            continue;
+            switch_candidates.push_back (i);
           }
-        if (path_infos[i].fair_share > path_infos[active_path].fair_share)
+        else if (path_infos[i].fair_share > bitrate * PATH_SWITCH_TRESHOLD)
           {
-            auto ratio = path_infos[i].fair_share / path_infos[active_path].fair_share;
-
-            // With probability (1 - ratio), switch paths
-            if (!(rand () % 100 < 100 * ratio))
-              {
-                continue;
-              }
-
-            if (true)
-              {
-                std::cout << log_prefix () << "Switching path from " << active_path << " to " << i
-                          << " due to higher fair share: " << path_infos[i].fair_share << " > "
-                          << path_infos[active_path].fair_share << std::endl;
-              }
-            active_path = i;
-            // last_path_change = Simulator::Now ();
-            break;
+            std::cout << log_prefix () << "Selecting candidate: " << active_path << " to " << i
+                      << ". Estimated fair share is higher than current bitrate "
+                      << path_infos[i].fair_share << " > " << bitrate << std::endl;
+            switch_candidates.push_back (i);
+          }
+        else
+          {
+            std::cout << log_prefix () << "Excluding candidate: " << active_path << " to " << i
+                      << ". Estimated fair share is not high enough " << path_infos[i].fair_share
+                      << " / " << bitrate << std::endl;
           }
       }
+
+    // We should always have at least the active path as a candidate
+    NS_ASSERT (!switch_candidates.empty ());
+
+    // Pick a candidate at random
+    uint32_t new_path = switch_candidates.at (rand () % switch_candidates.size ());
+    SwitchToPath (new_path);
+  }
+
+  void
+  SwitchToPath (uint32_t new_path)
+  {
+    if (new_path == active_path)
+      {
+        std::cout << log_prefix () << "Staying on current path " << active_path << std::endl;
+        return;
+      }
+    if (enable_logging)
+      {
+        std::cout << log_prefix () << "Switching from path " << active_path << " to " << new_path
+                  << std::endl;
+      }
+    active_path = new_path;
+    last_path_change = Simulator::Now ();
   }
 
   void
@@ -671,7 +704,7 @@ public:
   {
     std::cout << "----- " << InfoString () << " id " << app_id << " dst " << dst_ia << ":"
               << dst_host_addr << "-------" << std::endl
-              << "----- Timestamp, latency, loss, bytes, path, quality, score ------- "
+              << "----- Timestamp, latency[ms], loss, bitrate[Mbps], path, quality, score ------- "
               << std::endl;
 
     // print all the app statistics
@@ -680,7 +713,7 @@ public:
         std::cout << std::setw (8) << state.timestamp.ToInteger (Time::Unit::MS) << std::setw (16)
                   << "(" << state.timestamp.ToDouble (Time::Unit::MIN) << " min), "
                   << std::setw (16) << state.latency / 1000.0 << ", " << std::setw (16)
-                  << state.loss << ", " << std::setw (16) << state.bandwidth << ", "
+                  << state.loss << ", " << std::setw (16) << state.bitrate / 1e6 << ", "
                   << std::setw (4) << state.active_path << ", " << std::setw (16) << state.score
                   << ", " << std::setw (16) << state.bitrate << std::endl;
 
@@ -705,6 +738,13 @@ public:
   ReceiveProbeResponse (ProbeResp probe_resp)
   {
     NS_FATAL_ERROR ("[rtc-app] should not have received probe response");
+  }
+
+  // Returns a random time between -Nms and Nms where N is an integer parameter in ms
+  Time
+  RandomDelay (int N)
+  {
+    return MilliSeconds (rand () % (2 * N) - N);
   }
 };
 

@@ -140,14 +140,14 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
     plt.subplot(plot_number, sharex=ax1)
     plot_number += 1
     for res in results:
-        plt.plot (res.time, res.score, label = res.get_name())
+        plt.plot (res.time, res.bytes, label = res.get_name())
     if not args.nolegend:
         plt.legend()
     """if args.milliseconds:
         plt.xlabel("Time (ms)")
     else:
         plt.xlabel("Time (min)")"""
-    plt.ylabel("Score")
+    plt.ylabel("Bitrate [MB/s]")
 
     if not args.pathnumber:
         plt.subplot(plot_number, sharex=ax1)
