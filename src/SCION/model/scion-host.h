@@ -73,7 +73,7 @@ protected:
   cached_path_segs_dataset_t cached_core_path_segments;
   cached_path_segs_dataset_t cached_down_path_segments;
 
-  uint32_t app_info_period_s = 2; // how long between app responses
+  Time app_info_period = MilliSeconds(100); // how long between app responses
   std::map<std::tuple<ia_t, host_addr_t, int, app_id_t>, AppInfo> app_infos;
 
   virtual void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet,

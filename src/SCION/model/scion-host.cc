@@ -582,7 +582,7 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
       info.seq_no_start = packet->payload.app_data.seq_no;
       info.path = packet->path;
       app_infos[key] = info;
-      Simulator::Schedule (Seconds (app_info_period_s), &ScionHost::SendAppResp, this, key);
+      Simulator::Schedule (app_info_period, &ScionHost::SendAppResp, this, key);
     }
 
   // Add received packet to statistics for current interval
@@ -662,7 +662,7 @@ ScionHost::SendAppResp (app_connection_key_t key)
   info.seq_no_start = info.seq_no_last + 1;
   app_infos[key] = info;
 
-  Simulator::Schedule (Seconds (app_info_period_s), &ScionHost::SendAppResp, this, key);
+  Simulator::Schedule (app_info_period, &ScionHost::SendAppResp, this, key);
 }
 
 void
