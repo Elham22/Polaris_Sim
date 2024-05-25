@@ -96,22 +96,22 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
       current_loss_bytes.at (local_if) += packet->size;
       lost_packets.at (local_if) += 1;
 
-      if (ia_addr == packet->src_ia && local_address == packet->src_host)
-        {
-          // We're overloading our own send buffer. Can't exactly send "back" an SCMP for this.
-          // TODO: Should probably signal the application somehow.
-        }
-      else
-        // TODO: When / how often do we return an SCMP packet when dropping?
-        // Sending one for every dropped packet is clearly not the solution, but
-        // we also cannot keep too much state
-        if (std::rand () % 5)
-          {
-            ScmpReqOrResp scmp;
-            scmp.type = LINK_CONGESTED;
-            scmp.code = 1;
-            ReturnSCMPResponse (packet, scmp);
-          }
+      // if (ia_addr == packet->src_ia && local_address == packet->src_host)
+      //   {
+      //     // We're overloading our own send buffer. Can't exactly send "back" an SCMP for this.
+      //     // TODO: Should probably signal the application somehow.
+      //   }
+      // else
+      //   // TODO: When / how often do we return an SCMP packet when dropping?
+      //   // Sending one for every dropped packet is clearly not the solution, but
+      //   // we also cannot keep too much state
+      //   if (std::rand () % 5)
+      //     {
+      //       ScmpReqOrResp scmp;
+      //       scmp.type = LINK_CONGESTED;
+      //       scmp.code = 1;
+      //       ReturnSCMPResponse (packet, scmp);
+      //     }
 
       std::string app_id = "";
       if (packet->payload_type == PayloadType::APPLICATION_DATA)
