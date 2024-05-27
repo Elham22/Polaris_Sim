@@ -125,6 +125,7 @@ struct AppData
   app_id_t app_id;
   app_path_id_t path_id; // identifies the sender path
   app_packet_id_t seq_no;
+  uint32_t frame_no; // number of the video frame this packet is part of
   int64_t timestamp; // timestamp of sending in US
 };
 

@@ -98,6 +98,7 @@ protected:
   uint32_t selected_bitrate = 0;
   double bitrate = 0.2e6; // in Bytes per second
   const uint16_t fps = 30;
+  uint32_t frame_no = 0; // number of the video frame
 
   double moving_average_weight = 0.75;
   double steering_treshold_u = 20;
@@ -136,7 +137,7 @@ public:
   void
   StartAppTraffic ()
   {
-    SendTraffic ();
+    SendVideoFrame ();
     SendProbes ();
     TrackState ();
   }
@@ -299,17 +300,13 @@ public:
   }
 
   void
-  SendTraffic ()
+  SendVideoFrame ()
   {
     if (stopped)
       {
         return;
       }
 
-    // Send packet of selected bitrate
-    // TODO: implement realistic sending (with natural variation)
-    // SendPacket (bitrates[selected_bitrate] / fps, all_paths[active_path]);
-    // SendPacket (bitrate / fps, all_paths[active_path]);
     auto frame_bytes = bitrate / fps;
 
     // split up into multiple packets if larger than max pkt size
@@ -323,10 +320,12 @@ public:
         SendPacket (frame_bytes, all_paths[active_path]);
       }
 
+    frame_no++;
+
     // Schedule next packet
     Time next = Seconds (1.0 / fps);
     Simulator::Schedule (next + RandomDelay ((next / 4).ToInteger (Time::Unit::MS)),
-                         &RTCApp::SendTraffic, this);
+                         &RTCApp::SendVideoFrame, this);
   }
 
   /***
@@ -682,6 +681,7 @@ public:
     payload.app_data.app_id = app_id;
     payload.app_data.path_id = active_path;
     payload.app_data.seq_no = path_infos[active_path].seq_no++;
+    payload.app_data.frame_no = frame_no;
     payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
     PayloadType payload_type = PayloadType::APPLICATION_DATA;
     host->SendAppPacket (this, payload, payload_type, packetSize * scale + sizeof (AppData), path);
