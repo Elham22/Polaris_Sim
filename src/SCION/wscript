@@ -10,6 +10,7 @@ def build(bld):
                    'model/apps/general-traffic-app.cc',
                    'model/apps/video-conference-app.cc',
                    'model/apps/rtc-app.cc',
+                   'model/apps/delay-based-controller.cc',
                    'model/beaconing/baseline.cc',
                    'model/beaconing/beacon.cc',
                    'model/beaconing/beacon-server.cc',

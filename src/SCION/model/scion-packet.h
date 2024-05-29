@@ -159,6 +159,7 @@ struct AppResp
   double loss;
   uint8_t ecn; // explicit congestion notification
   uint64_t bytes_received;
+  double A_r; // rate estimate by the delay based controller
 };
 
 struct ScmpReqOrResp

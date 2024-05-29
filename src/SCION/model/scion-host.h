@@ -28,6 +28,7 @@
 #include "path-segment.h"
 #include "scion-capable-node.h"
 #include "scion-packet.h"
+#include "apps/delay-based-controller.cc"
 
 namespace ns3 {
 
@@ -39,12 +40,14 @@ class App;
 struct AppInfo
 {
   std::vector<const ns3::PathSegment *> path; // path over which to send response
+  DelayBasedController controller;
   app_packet_id_t seq_no_start = 0;
   app_packet_id_t seq_no_last = 0;
   uint32_t num_packets = 0;
   uint64_t bytes_received = 0;
   int64_t aggregated_latencies = 0;
   int8_t ecn = 0;
+  Time last_report_time = Seconds(0);
 };
 
 class ScionHost : public ScionCapableNode
@@ -101,7 +104,7 @@ protected:
                              ProbeResp probe_resp); // TODO score is just a placeholder
   void ReceiveAppData (ScionPacket *packet);
   void ReceiveAppResp (AppResp app_resp);
-  void SendAppResp (app_connection_key_t key);
+  void SendAppResp (app_connection_key_t key, bool immediate = false);
   void RespondToAppProbe (ia_t src_ia, host_addr_t src_addr,
                           std::vector<const ns3::PathSegment *> path, AppProbe app_probe);
 };

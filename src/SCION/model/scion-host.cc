@@ -569,9 +569,10 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   std::cout << GetLogPrefix () << "Receiving app data packet from "
             << packet->payload.app_data.app_id << " via path " << packet->payload.app_data.path_id
             << std::endl;
+
+  AppData data = packet->payload.app_data;
   app_connection_key_t key =
-      std::make_tuple (packet->src_ia, packet->src_host, packet->payload.app_data.app_id,
-                       packet->payload.app_data.path_id);
+      std::make_tuple (packet->src_ia, packet->src_host, data.app_id, data.path_id);
 
   // Create new AppInfo for new connection
   if (app_infos.find (key) == app_infos.end ())
@@ -579,7 +580,7 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
       std::cout << GetLogPrefix () << "Connection opened: New packets arrived for app_id "
                 << std::get<2> (key) << " on path " << std::get<3> (key) << std::endl;
       AppInfo info;
-      info.seq_no_start = packet->payload.app_data.seq_no;
+      info.seq_no_start = data.seq_no;
       info.path = packet->path;
       app_infos[key] = info;
       Simulator::Schedule (app_info_period, &ScionHost::SendAppResp, this, key);
@@ -590,31 +591,57 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   info.num_packets++;
   info.bytes_received += packet->size;
 
-  if (info.seq_no_last < packet->payload.app_data.seq_no)
+  if (info.seq_no_last < data.seq_no)
     {
-      info.seq_no_last = packet->payload.app_data.seq_no;
+      info.seq_no_last = data.seq_no;
     }
-  auto latency = local_time.ToInteger (Time::Unit::US) - packet->payload.app_data.timestamp;
+  auto latency = local_time.ToInteger (Time::Unit::US) - data.timestamp;
   info.aggregated_latencies += latency;
 
   // Keep updating the ecn status. The ecn tag of the last packet in the
   // response interval will dictate what the sender will see.
   info.ecn = packet->ecn;
 
+  // Feed data to the delay based controller
+  bool rate_updated =
+      info.controller.RecordPacket (data, packet->size, MilliSeconds (data.timestamp), local_time);
+
+  // If the controller computed a new rate, immediately inform the sender
+  if (rate_updated)
+    {
+      SendAppResp (key, true);
+    }
+
   app_infos[key] = info;
 }
 
 void
-ScionHost::SendAppResp (app_connection_key_t key)
+ScionHost::SendAppResp (app_connection_key_t key, bool immediate = false)
 {
   if (app_infos.find (key) == app_infos.end ())
     {
       return;
     }
 
+  // If not immediate, make sure it has been at least app_info_period since last report
+  // We want to send a report immediately whenever a frame is received and the
+  // controller updates its estimates, but in general at least every app_info_period.
+  if (!immediate)
+    {
+      auto info = app_infos.at (key);
+      Time time_since_last_report = local_time - info.last_report_time;
+      if (time_since_last_report < app_info_period)
+        {
+          // re-schedule
+          Simulator::Schedule (app_info_period - time_since_last_report, &ScionHost::SendAppResp,
+                               this, key);
+          return;
+        }
+    }
+
+  // If no packets arrived in this interval, assume connection is dead
   if (app_infos[key].num_packets == 0)
     {
-      // no packets arrived in interval. assume connection is dead.
       std::cout << GetLogPrefix () << "Connection closed: No new packets arrived for app_id "
                 << std::get<2> (key) << " on path " << std::get<3> (key) << std::endl;
       app_infos.erase (key);
@@ -645,6 +672,7 @@ ScionHost::SendAppResp (app_connection_key_t key)
   payload.app_resp.ecn = info.ecn; // Notify sender of latest ecn status
   payload.app_resp.timestamp = local_time.ToInteger (Time::Unit::US);
   payload.app_resp.path_id = std::get<3> (key);
+  payload.app_resp.A_r = info.controller.GetCurrentRate ();
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, std::get<0> (key),
                                            std::get<1> (key), sizeof (AppResp), info.path);
