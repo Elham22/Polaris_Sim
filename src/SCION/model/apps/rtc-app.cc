@@ -130,6 +130,7 @@ public:
 
     // choose a random path to start with
     active_path = rand () % num_paths;
+    active_path = 0; // TODO: For testing
     std::cout << log_prefix () << "Initiated." << " Starting path : " << active_path
               << ", Logging: " << enable_logging << std::endl;
   }
@@ -193,11 +194,11 @@ public:
     Time probed_last_min = Simulator::Now () - Seconds (1);
     for (uint32_t i = 0; i < num_paths; i++)
       {
-        // Don't probe active path
-        if (i == active_path)
-          {
-            continue;
-          }
+        // // Don't probe active path
+        // if (i == active_path)
+        //   {
+        //     continue;
+        //   }
         if (path_infos[i].probed_last < probed_last_min)
           {
             candidates.clear ();
