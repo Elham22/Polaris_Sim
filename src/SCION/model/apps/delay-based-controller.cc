@@ -1,6 +1,6 @@
 /* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
 /*
- * Copyright (c) 2022 ETH Zuerich
+ * Copyright (c) 2024 ETH Zuerich
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -20,16 +20,27 @@
 #include "src/core/model/simulator.h"
 #include "src/SCION/model/scion-packet.h"
 #include "src/SCION/model/externs.h"
-#include <nstime.h>
 
 namespace ns3 {
 
+/**
+ * A delay-based congestion controller based on the GCC algorithm
+ * Sources:
+ * https://c3lab.poliba.it/images/6/65/Gcc-analysis.pdf
+ * https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02
+*/
 class DelayBasedController
 {
-  enum class DetectorState {
+  enum class DetectorSignal {
     OVERUSE,
     NORMAL,
     UNDERUSE,
+  };
+
+  enum class ControllerState {
+    HOLD,
+    INCREASE,
+    DECREASE,
   };
 
   struct VideoFrameInfo
@@ -60,7 +71,8 @@ protected:
   const double beta = 0.85; // Decrease rate factor
 
   // State variables
-  DetectorState state = DetectorState::NORMAL;
+  DetectorSignal signal = DetectorSignal::NORMAL;
+  ControllerState state = ControllerState::INCREASE;
   Time overuse_detected_since = Seconds (0);
   bool overuse_detected = false;
 
@@ -86,7 +98,7 @@ protected:
   Time receive_rate_window = MilliSeconds (500);
   double receive_rate; // Rate of traffic arriving in the last receive_rate_window, in Bytes/s
 
-  double A_r = 0; // Final rate computed by the controller
+  double A_r = 0; // Rate estimate computed by the controller, in Bytes/s
 
   /**
    * Returns the measured one way delay gradient in ms
@@ -103,13 +115,6 @@ protected:
 
     // return in ms as double
     return delay_grad.GetMilliSeconds ();
-  }
-
-  // Compute the residual z(t_i) = d_m (t_i) − m (t_i−1)
-  double
-  Residual (double measured_gradient, double previous_gradient)
-  {
-    return measured_gradient - previous_gradient;
   }
 
   /**
@@ -147,13 +152,11 @@ protected:
     // Update the variance σ̂ 2n (ti ) = β · σ̂ 2v(t_i−1 ) + (1 − β) · z(t_i)^2
     double beta = 0.95;
     measurement_noise_variance = beta * measurement_noise_variance + (1 - beta) * z * z;
-    // TODO: ^ not really used right now
+    // TODO: ^ not really used right now, where does this come into play?
 
-    /*
-      Compute the Kalman gain
-      kγ (ti ) = kd if |m(ti )| < γ(ti−1 )
-      kγ (ti ) = ku otherwise
-    */
+    // Compute the Kalman gain
+    // kγ (t_i ) = k_d if |m(t_i )| < γ(t_i−1 )
+    // kγ (t_i ) = k_u otherwise
     if (std::abs (m) < adaptive_treshold)
       {
         kalman_gain = K_d;
@@ -170,14 +173,17 @@ protected:
     // Update the adaptive treshold
     // γ(t_i ) = γ(t_i−1 ) + ∆T · kγ (t_i )(|m(t_i )| − γ(t_i−1 ))
     // ∆T = t_i − t_i−1
+    double delta_t =
+        (frame_current->last_pkt_rcv_time - frame_previous->last_pkt_rcv_time).GetMilliSeconds ();
     adaptive_treshold =
-        adaptive_treshold +
-        (frame_current->last_pkt_rcv_time - frame_previous->last_pkt_rcv_time).GetMilliSeconds () *
-            kalman_gain * (std::abs (m) - adaptive_treshold);
+        adaptive_treshold + delta_t * kalman_gain * (std::abs (m) - adaptive_treshold);
   }
 
   /**
-   * Compute the current receive rate and clean up values outside the window
+   * Compute the rate at which we've received packets in the last window and
+   * clean up old values
+   *
+   * @return the current receive rate in Bytes/s over the last receive_rate_window
   */
   void
   UpdateReceiveRate ()
@@ -199,8 +205,11 @@ protected:
     receive_rate = total_bytes / receive_rate_window.GetSeconds ();
   }
 
+  /**
+   * Update the signal based on the current gradient estimate and treshold
+  */
   void
-  UpdateState ()
+  UpdateSignal ()
   {
     if (m > adaptive_treshold)
       {
@@ -209,7 +218,7 @@ protected:
           {
             if (Simulator::Now () - overuse_detected_since > Seconds (overuse_time_th))
               {
-                state = DetectorState::OVERUSE;
+                signal = DetectorSignal::OVERUSE;
               }
             else
               {
@@ -220,32 +229,95 @@ protected:
           {
             overuse_detected = true;
             overuse_detected_since = Simulator::Now ();
-            state = DetectorState::NORMAL;
+            signal = DetectorSignal::NORMAL;
           }
       }
     else if (m < -adaptive_treshold)
       {
         overuse_detected = false;
-        state = DetectorState::UNDERUSE;
+        signal = DetectorSignal::UNDERUSE;
       }
-    else
+    else // -adaptive_treshold <= m <= adaptive_treshold
       {
         overuse_detected = false;
-        state = DetectorState::NORMAL;
+        signal = DetectorSignal::NORMAL;
       }
   }
 
+  /**
+   * Run the FSM
+  */
+  void
+  UpdateStateMachine()
+  {
+    switch (state)
+      {
+      case ControllerState::DECREASE:
+        switch (signal)
+          {
+          case DetectorSignal::OVERUSE:
+            // Delay still increasing, so keep lowering rate
+            break;
+          default: // NORMAL or UNDERUSE
+            // Queue is draining, keep rate steady
+            state = ControllerState::HOLD;
+            break;
+          }
+        break;
+      case ControllerState::HOLD:
+        switch (signal)
+          {
+          case DetectorSignal::OVERUSE:
+            // Queue is filling up, so decrease rate
+            state = ControllerState::DECREASE;
+            break;
+          case DetectorSignal::NORMAL:
+            // Queue is drained, can start increasing again
+            state = ControllerState::INCREASE;
+            break;
+          case DetectorSignal::UNDERUSE:
+            // Queue is draining, keep rate steady
+            break;
+          }
+        break;
+      case ControllerState::INCREASE:
+        switch (signal)
+          {
+          case DetectorSignal::OVERUSE:
+            // Queue is filling up, so decrease rate
+            state = ControllerState::DECREASE;
+            break;
+          case DetectorSignal::NORMAL:
+            // Delay steady, can keep increasing
+            break;
+          case DetectorSignal::UNDERUSE:
+            // Queue is draining, keep rate steady
+            state = ControllerState::HOLD;
+            break;
+          }
+        break;
+      }
+  }
+
+  /**
+   * Update the rate estimate according to the current state
+  */
   void
   UpdateRate ()
   {
     switch (state)
       {
-      case DetectorState::OVERUSE:
+      case ControllerState::DECREASE:
         A_r = 0.85 * receive_rate;
         break;
-      case DetectorState::NORMAL:
+      case ControllerState::HOLD:
+        // If A_r does not have any previous value, start with the current receive_rate
+        if (A_r == 0)
+          {
+            A_r = receive_rate;
+          }
         break;
-      case DetectorState::UNDERUSE:
+      case ControllerState::INCREASE:
         A_r = 1.05 * A_r;
         // Cap at 1.5x the receive_rate
         if (A_r > 1.5 * receive_rate)
@@ -269,12 +341,20 @@ public:
   /**
    * Feed a packet into the controller
    *
-   * @return true if an updated rate is available, which happens after we have
-   * fully received two recent frames
+   * The rate is updated whenever a new frame is received and we already have at
+   * least two frames.
+   *
+   * @return true if an updated rate is available
+   *
+   * @param app_data the application data of the packet
+   * @param size the size of the packet in Bytes
+   * @param time_tx the time the packet departed at the sender
+   * @param time_rx the time the packet arrived at the receiver
   */
   bool
   RecordPacket (AppData app_data, uint16_t size, Time time_tx, Time time_rx)
   {
+    received_bytes[time_rx] = size;
     // Check if this packet belongs to a new frame
     if (frames.find (app_data.frame_no) == frames.end ())
       {
@@ -295,7 +375,8 @@ public:
           {
             UpdateGradientEstimate ();
             UpdateReceiveRate ();
-            UpdateState ();
+            UpdateSignal ();
+            UpdateStateMachine ();
             UpdateRate ();
             ClearOldFrames ();
             return true;
@@ -305,10 +386,10 @@ public:
       {
         VideoFrameInfo &frame = frames[app_data.frame_no];
 
-        // if the last pkt seq no is not higher, ignore this packet
+        // ignore out-of-order packets (should never be the case in the simulation)
         if (app_data.seq_no <= frame.last_pkt_seq_no)
           {
-            return;
+            return false;
           }
         frame.last_pkt_seq_no = app_data.seq_no;
         frame.last_pkt_send_time = time_tx;
@@ -317,12 +398,15 @@ public:
     return false;
   }
 
-  // Copy assignment operator
+  /**
+   * Copy constructor
+  */
   DelayBasedController &
   operator= (const DelayBasedController &other)
   {
     if (this != &other)
       {
+        signal = other.signal;
         state = other.state;
         overuse_detected_since = other.overuse_detected_since;
         overuse_detected = other.overuse_detected;
