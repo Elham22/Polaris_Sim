@@ -290,9 +290,9 @@ ScionCapableNode::InitializeTransmissionQueues ()
           propagation_delay = 100000; // 0.1ms delay minimum
         }
       // units cancel out, 1Gbit = 10^9bit, 1NS = 10^(-9)s
-      //max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay;
+      // max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay;
       // factor of 20 for testing
-      max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay * 200; // TODO
+      max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay * 2; // TODO
       std::cout << GetLogPrefix ()
                 << ", transmission_delay: " << transmission_delay.ToInteger (Time::Unit::PS)
                 << "bwd_Gbit: " << bwd_Gbit << ", queue len: " << max_transmission_queues_lengths[i]

@@ -51,6 +51,7 @@
     <property name="latitude" type="float">39.04372</property>
     <property name="longitude" type="float">-77.48749</property>
     <property name="capacity" type="int">100</property>
+    <property name="delay" type="int">5</property>
   </link>
   <link>
     <from type="int">2</from>
@@ -59,6 +60,7 @@
     <property name="latitude" type="float">39.04372</property>
     <property name="longitude" type="float">-87.48749</property>
     <property name="capacity" type="float">100</property>
+    <property name="delay" type="int">5</property>
   </link>
   <link>
     <from type="int">1</from>
@@ -67,6 +69,7 @@
     <property name="latitude" type="float">39.04372</property>
     <property name="longitude" type="float">-87.48749</property>
     <property name="capacity" type="float">0.08</property>
+    <property name="delay" type="int">5</property>
   </link>
   <link>
     <from type="int">4</from>
@@ -75,6 +78,7 @@
     <property name="latitude" type="float">49.04372</property>
     <property name="longitude" type="float">-77.48749</property>
     <property name="capacity" type="float">0.08</property>
+    <property name="delay" type="int">5</property>
   </link>
   <link>
     <from type="int">1</from>
@@ -83,6 +87,7 @@
     <property name="latitude" type="float">49.04372</property>
     <property name="longitude" type="float">-77.48749</property>
     <property name="capacity" type="float">0.08</property>
+    <property name="delay" type="int">5</property>
   </link>
   <link>
     <from type="int">5</from>
@@ -91,5 +96,6 @@
     <property name="latitude" type="float">49.04372</property>
     <property name="longitude" type="float">-77.48749</property>
     <property name="capacity" type="int">0.08</property>
+    <property name="delay" type="int">5</property>
   </link>
 </topology>

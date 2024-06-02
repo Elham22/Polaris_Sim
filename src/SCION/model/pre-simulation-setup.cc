@@ -435,9 +435,13 @@ InstantiateLinksFromTopo (rapidxml::xml_node<> *xml_root, NodeContainer &as_node
           Time to_processing_delay, from_processing_delay;
           Time to_processing_throughput_delay, from_processing_throughput_delay;
 
-          to_propagation_delay = NanoSeconds (
-              5); // Assuming 1m fiber optic between neighboring devices in the same location
-          from_propagation_delay = NanoSeconds (5);
+          // Assuming 1m fiber optic between neighboring devices in the same location
+          to_propagation_delay = NanoSeconds (5);
+          if (p.HasProperty ("delay"))
+            {
+              to_propagation_delay = MilliSeconds (std::stoi (p.GetProperty ("delay")));
+            }
+          from_propagation_delay = to_propagation_delay;
 
           if (only_propagation_delay)
             {
