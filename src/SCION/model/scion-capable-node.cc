@@ -160,7 +160,7 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
               packet->payload.app_probe.min_fair_share = available_fair_share;
               packet->payload.app_probe.min_fair_share_hop =
                   packet->path.at (packet->curr_inf)->hops.at (packet->cur_hopf);
-              ;
+              packet->payload.app_probe.min_fair_share_no_flows = no_flows.at (local_if) + 1;
             }
           uint64_t queuing_delay = transmission_queues_lengths.at (local_if) /
                                    transmission_delays.at (local_if).ToInteger (Time::Unit::PS);

@@ -146,6 +146,7 @@ struct AppProbe
   int64_t time_tx; // transmission time of the probe
   int64_t time_rx; // time of arrival at the app receiver (one-way)
   double min_fair_share; // minimum fair share bw along the path, in Gbps
+  uint32_t min_fair_share_no_flows; // number of flows that share the minimum fair share
   uint64_t min_fair_share_hop; // link where minimum was found
   uint64_t max_queuing_delay; // highest queuing delay along the path
 };

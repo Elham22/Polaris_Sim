@@ -37,6 +37,7 @@ struct PathStatistics
   double latency; // observed latency
   double bandwidth; // estimated bandwidth in Gbps
   double fair_share; // estimated fair share in Gbps
+  double bottleneck_no_flows; // number of flows at the bottleneck link
   double loss; // estimated loss ratio
 
   Time probed_last = Seconds (0); // time the last probing was initiated
@@ -477,10 +478,25 @@ public:
 
     // Update path info
     path_infos[path_id].latency = latency;
+    path_infos[path_id].bottleneck_no_flows = probe_resp.min_fair_share_no_flows;
 
     // Probe contains fair share in Gbps, convert to Bps
     path_infos[path_id].fair_share = probe_resp.min_fair_share * 1e9 / 8;
-    // path_infos[path_id].probed_last = Simulator::Now ();
+
+    // The fair share on the active path needs to be adjusted for the fact that
+    // bottleneck_no_flows already includes a flow from this application.
+    // For example, on a path that has a bottleneck link with 1Gbps and has two
+    // flows from other applications, what we get back in the probe is 1Gbps / (2+1) = 333Mbps
+    // The division by (2+1) is because it's the fair share we would get if we
+    // were to also start sending via this path. But if we ARE already sending
+    // through this path, the fair share is actually 1Gbps / (2) = 500Mbps, so
+    // we need account for this ourselves.
+    if (path_id == active_path)
+      {
+        path_infos[path_id].fair_share = path_infos[path_id].fair_share *
+                                         path_infos[path_id].bottleneck_no_flows /
+                                         (path_infos[path_id].bottleneck_no_flows - 1);
+      }
 
     // Update score
     UpdateScore (path_id);
