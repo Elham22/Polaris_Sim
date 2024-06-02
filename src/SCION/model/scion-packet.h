@@ -28,6 +28,7 @@
 #include "ns3/object.h"
 
 #include "path-segment.h"
+#include "apps/controller-state.h"
 
 namespace ns3 {
 typedef uint16_t host_addr_t;
@@ -161,6 +162,7 @@ struct AppResp
   uint64_t bytes_received;
   bool is_REMB; // contains Receiver Estimated Max Bitrate
   double A_r; // rate estimate by the delay based controller
+  ControllerStateSnapshot state_snapshot; // snapshot of delay based controller state
 };
 
 struct ScmpReqOrResp

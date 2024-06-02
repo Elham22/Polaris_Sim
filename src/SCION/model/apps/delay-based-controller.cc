@@ -17,8 +17,13 @@
  *
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
+
+#ifndef SCION_SIMULATOR_DELAY_BASED_CONTROLLER_H
+#define SCION_SIMULATOR_DELAY_BASED_CONTROLLER_H
+
 #include "src/core/model/simulator.h"
 #include "src/SCION/model/scion-packet.h"
+#include "src/SCION/model/apps/controller-state.h"
 #include "src/SCION/model/externs.h"
 
 namespace ns3 {
@@ -31,17 +36,6 @@ namespace ns3 {
 */
 class DelayBasedController
 {
-  enum class DetectorSignal {
-    OVERUSE,
-    NORMAL,
-    UNDERUSE,
-  };
-
-  enum class ControllerState {
-    HOLD,
-    INCREASE,
-    DECREASE,
-  };
 
   struct VideoFrameInfo
   {
@@ -339,6 +333,25 @@ public:
   }
 
   /**
+   * Get a snapshot of the controllers state at the current time
+  */
+  ControllerStateSnapshot
+  GetStateSnapshot ()
+  {
+    return ControllerStateSnapshot{
+        .signal = signal,
+        .state = state,
+        .A_r = A_r,
+        .kalman_gain = kalman_gain,
+        .adaptive_treshold = adaptive_treshold,
+        .m = m,
+        .d_m = d_m,
+        .z = z,
+        .measurement_noise_variance = measurement_noise_variance,
+    };
+  }
+
+  /**
    * Feed a packet into the controller
    *
    * The rate is updated whenever a new frame is received and we already have at
@@ -431,3 +444,5 @@ public:
 };
 
 } // namespace ns3
+
+#endif // SCION_SIMULATOR_DELAY_BASED_CONTROLLER_H

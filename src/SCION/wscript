@@ -42,6 +42,7 @@ def build(bld):
                          'model/apps/general-traffic-app.h',
                          'model/apps/video-conference-app.h',
                          'model/apps/rtc-app.h',
+                         'model/apps/controller-state.h',
                          'model/beaconing/baseline.h',
                          'model/beaconing/beacon.h',
                          'model/beaconing/beacon-server.h',
