@@ -1,8 +1,8 @@
 time_resolution: PS
 topology: configs/traffic-engineering/fair_split.xml
-events_file: configs/traffic-engineering/fair_split.json
-output: configs/traffic-engineering/fair_split.out.txt
-simulation_duration: 32min
+events_file: configs/traffic-engineering/single-app-cc.json
+output: configs/traffic-engineering/single-app-cc.out.txt
+simulation_duration: 31min
 NUM_CORE: 24
 beacon_service:
   policy: baseline
