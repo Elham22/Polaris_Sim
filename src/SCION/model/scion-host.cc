@@ -331,7 +331,7 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
           RTCApp *rtc_app = dynamic_cast<RTCApp *> (apps.at (app_id));
           if (rtc_app != nullptr)
             {
-              rtc_app->ReceiveAppProbeResponse (packet->payload.app_probe);
+              rtc_app->ReceiveProbeResponse (packet->payload.app_probe);
             }
           else
             {
@@ -340,8 +340,8 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
         }
       else
         {
-          RespondToAppProbe (packet->src_ia, packet->src_host, packet->path,
-                             packet->payload.app_probe);
+          ReturnAppProbe (packet->src_ia, packet->src_host, packet->path,
+                          packet->payload.app_probe);
         }
     }
   if (packet->payload_type == PayloadType::APPLICATION_RESP)
@@ -374,8 +374,8 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
 }
 
 void
-ScionHost::RespondToAppProbe (ia_t src_ia, host_addr_t src_addr,
-                              std::vector<const ns3::PathSegment *> path, AppProbe app_probe)
+ScionHost::ReturnAppProbe (ia_t src_ia, host_addr_t src_addr,
+                           std::vector<const ns3::PathSegment *> path, AppProbe app_probe)
 {
   PayloadType payload_type = PayloadType::APPLICATION_PROBE;
 
@@ -606,37 +606,21 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   bool rate_updated =
       info.controller.RecordPacket (data, packet->size, MilliSeconds (data.timestamp), local_time);
 
-  // If the controller computed a new rate, immediately inform the sender
+  // If the controller computed a new rate, inform the sender
   if (rate_updated)
     {
-      SendAppResp (key, true);
+      SendREMB (key);
     }
 
   app_infos[key] = info;
 }
 
 void
-ScionHost::SendAppResp (app_connection_key_t key, bool immediate = false)
+ScionHost::SendAppResp (app_connection_key_t key)
 {
   if (app_infos.find (key) == app_infos.end ())
     {
       return;
-    }
-
-  // If not immediate, make sure it has been at least app_info_period since last report
-  // We want to send a report immediately whenever a frame is received and the
-  // controller updates its estimates, but in general at least every app_info_period.
-  if (!immediate)
-    {
-      auto info = app_infos.at (key);
-      Time time_since_last_report = local_time - info.last_report_time;
-      if (time_since_last_report < app_info_period)
-        {
-          // re-schedule
-          Simulator::Schedule (app_info_period - time_since_last_report, &ScionHost::SendAppResp,
-                               this, key);
-          return;
-        }
     }
 
   // If no packets arrived in this interval, assume connection is dead
@@ -672,7 +656,7 @@ ScionHost::SendAppResp (app_connection_key_t key, bool immediate = false)
   payload.app_resp.ecn = info.ecn; // Notify sender of latest ecn status
   payload.app_resp.timestamp = local_time.ToInteger (Time::Unit::US);
   payload.app_resp.path_id = std::get<3> (key);
-  payload.app_resp.A_r = info.controller.GetCurrentRate ();
+  payload.app_resp.is_REMB = false;
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, std::get<0> (key),
                                            std::get<1> (key), sizeof (AppResp), info.path);
@@ -691,6 +675,40 @@ ScionHost::SendAppResp (app_connection_key_t key, bool immediate = false)
   app_infos[key] = info;
 
   Simulator::Schedule (app_info_period, &ScionHost::SendAppResp, this, key);
+}
+
+/**
+ * Send a REMB message to the sender
+ 
+*/
+void
+ScionHost::SendREMB (app_connection_key_t key)
+{
+  if (app_infos.find (key) == app_infos.end ())
+    {
+      return;
+    }
+  auto info = app_infos.at (key);
+  AppResp app_resp;
+  app_resp.app_id = std::get<2> (key);
+  app_resp.is_REMB = true;
+  app_resp.A_r = info.controller.GetCurrentRate ();
+  app_resp.state_snapshot = info.controller.GetStateSnapshot ();
+  app_resp.path_id = std::get<3> (key);
+
+  PayloadType payload_type = PayloadType::APPLICATION_RESP;
+  Payload payload;
+  payload.app_resp = app_resp;
+
+  ScionPacket *packet =
+      CreateScionPacket (payload, payload_type, std::get<0> (key), std::get<1> (key),
+                         sizeof (AppResp), app_infos[key].path);
+  packet->path_reversed = true;
+  packet->curr_inf = packet->path.size () - 1;
+  packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
+  std::cout << GetLogPrefix () << "Sending REMB to " << payload.app_resp.app_id << " via path "
+            << payload.app_resp.path_id << ", rate: " << payload.app_resp.A_r << std::endl;
+  SendScionPacket (packet);
 }
 
 void

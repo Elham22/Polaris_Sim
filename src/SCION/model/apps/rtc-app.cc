@@ -329,27 +329,46 @@ public:
                          &RTCApp::SendVideoFrame, this);
   }
 
+  void
+  ReceiveREMB (AppResp app_resp)
+  {
+    if (enable_logging)
+      {
+        std::cout << log_prefix () << "Receiving REMB report on active path " << app_resp.path_id
+                  << std::endl;
+      }
+    A_r = app_resp.A_r;
+    controller_state = app_resp.state_snapshot;
+  }
+
   /***
-   * Handle receiver report
+   * Handle response
   */
   void
   ReceiveAppResponse (AppResp app_resp)
   {
     auto path_id = app_resp.path_id;
 
-    if (enable_logging)
+    if (path_id != active_path)
       {
-        if (path_id != active_path)
+        if (enable_logging)
           {
-            std::cout << log_prefix () << "Receiving report on inactive (old) path: " << path_id
-                      << std::endl;
-          }
-        else
-          {
-            std::cout << log_prefix () << "Receiving report on active path " << path_id
+            std::cout << log_prefix () << "Receiving response on inactive (old) path: " << path_id
                       << std::endl;
           }
       }
+
+    if (app_resp.is_REMB)
+      {
+        ReceiveREMB (app_resp);
+        return;
+      }
+
+    if (enable_logging)
+      {
+        std::cout << log_prefix () << "Processing report on active path " << path_id << std::endl;
+      }
+
     Time resp_time = MicroSeconds (app_resp.timestamp);
     path_infos[path_id].last_report = resp_time;
 
