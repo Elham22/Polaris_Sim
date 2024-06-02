@@ -1,6 +1,6 @@
 /* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
 /*
- * Copyright (c) 2022 ETH Zuerich
+ * Copyright (c) 2024 ETH Zuerich
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -20,6 +20,7 @@
 #include "src/SCION/model/externs.h"
 #include "src/SCION/model/scion-core-as.h"
 #include "src/SCION/model/apps/app.h"
+#include "src/SCION/model/apps/delay-based-controller.cc"
 #include <iomanip>
 
 namespace ns3 {
@@ -96,11 +97,14 @@ protected:
 
   std::vector<double> bitrates{10 * 0.7e6, 10 * 1.5e6, 10 * 5e6};
   uint32_t selected_bitrate = 0;
-  double bitrate = 0.2e6; // in Bytes per second
   const uint16_t fps = 30;
   uint32_t frame_no = 0; // number of the video frame
 
-  double moving_average_weight = 0.75;
+  ControllerStateSnapshot controller_state; // state of the delay based controller
+  double A_r = 0; // send rate estimate by the receiver side loss based controller
+  double A_s = 0; // send rate estimate by the sender side loss based controller
+  double sendrate = 0.2e6; // in Bytes per second
+
   double steering_treshold_u = 20;
   double steering_treshold_l = 0;
 
@@ -151,16 +155,17 @@ public:
         return;
       }
 
+    auto path_info = path_infos[active_path];
+
     // store current state of the app
     AppState state;
     state.timestamp = Simulator::Now ();
     state.active_path = active_path;
     // state.path_stats = path_infos;
-    state.bitrate = bitrate;
-    state.latency = path_infos[active_path].latency;
-    state.loss = path_infos[active_path].loss;
-    state.bandwidth = path_infos[active_path].bandwidth;
-    state.score = path_infos[active_path].score;
+    state.bitrate = sendrate;
+    state.latency = path_info.latency;
+    state.loss = path_info.loss;
+    state.fair_share = path_info.fair_share;
     statistics.push_back (state);
 
     // if logging enabled, print all path infos
@@ -308,7 +313,10 @@ public:
         return;
       }
 
-    auto frame_bytes = bitrate / fps;
+    auto frame_bytes = sendrate / fps;
+
+    std::cout << log_prefix () << "Sending frame " << frame_no << " with " << frame_bytes
+              << " bytes on path " << active_path << std::endl;
 
     // split up into multiple packets if larger than max pkt size
     while (frame_bytes > m_pktSize)
@@ -399,19 +407,44 @@ public:
       {
         std::cout << "    Loss: " << app_resp.loss << std::endl
                   << "    Latency: " << app_resp.avg_latency << std::endl
-                  << "    Bitrate: " << bitrate << std::endl;
-        // << "    Score: " << path_infos[path_id].score << std::endl;
+                  << "    Current sending rate: " << sendrate << std::endl;
       }
 
+    // With feedback on our active path, we can perform congestion control
     if (path_id == active_path)
       {
-        // SteerTreshold ();
-        SteerCC ();
+        UpdateLossController ();
+
+        sendrate = A_s;
+
+        // If we got an estimate from the receiver, use it
+        if (A_r > 0)
+          {
+            if (A_r < A_s)
+              {
+                std::cout << log_prefix ()
+                          << "Receiver estimate lower than sender estimate: " << A_r << " < " << A_s
+                          << ". Using receiver estimate." << std::endl;
+                sendrate = A_r;
+              }
+            else
+              {
+                std::cout << log_prefix ()
+                          << "Receiver estimate higher than sender estimate: " << A_r << " > "
+                          << A_s << ". Using sender estimate." << std::endl;
+              }
+          }
+        else
+          {
+            std::cout << log_prefix () << "No receiver estimate available. Using sender estimate."
+                      << std::endl;
+          }
+        CheckPathSwitch ();
       }
   }
 
   void
-  ReceiveAppProbeResponse (AppProbe probe_resp)
+  ReceiveProbeResponse (AppProbe probe_resp)
   {
     auto probe_id = probe_resp.probe_id;
     auto path_id = probe_resp.path_id;
@@ -469,26 +502,29 @@ public:
   }
 
   void
-  SteerCC ()
+  UpdateLossController ()
   {
     // Simple, loss based congestion control based on
     // https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02
+
     if (path_infos[active_path].loss < LOSS_TRESHOLD_LOW)
       {
-        bitrate *= 1.05;
+        A_s = 1.05 * sendrate + 1e5;
       }
     else if (path_infos[active_path].loss > LOSS_TRESHOLD_HIGH)
       {
-        bitrate *= (1 - 0.5 * path_infos[active_path].loss);
+        A_s = (1 - 0.5 * path_infos[active_path].loss) * sendrate;
       }
-    // else { keep bitrate the same }
-
-    // if latency is higher than 2s, reduce bitrate
-    if (path_infos[active_path].latency > 2e6)
+    else
       {
-        bitrate *= 0.9;
+        // do nothing
       }
+  }
 
+  void
+  CheckPathSwitch ()
+  {
+    return;
     // If the loss is very low, don't bother switching paths as we're still upping the send rate
     if (path_infos[active_path].loss < LOSS_TRESHOLD_LOW)
       {
@@ -516,18 +552,18 @@ public:
           {
             switch_candidates.push_back (i);
           }
-        else if (path_infos[i].fair_share > bitrate * PATH_SWITCH_TRESHOLD)
+        else if (path_infos[i].fair_share > sendrate * PATH_SWITCH_TRESHOLD)
           {
-            std::cout << log_prefix () << "Selecting candidate: " << active_path << " to " << i
-                      << ". Estimated fair share is higher than current bitrate "
-                      << path_infos[i].fair_share << " > " << bitrate << std::endl;
+            std::cout << log_prefix () << "Selecting path switch candidate: " << active_path
+                      << " to " << i << ". Estimated fair share is higher than current bitrate "
+                      << path_infos[i].fair_share << " > " << sendrate << std::endl;
             switch_candidates.push_back (i);
           }
         else
           {
-            std::cout << log_prefix () << "Excluding candidate: " << active_path << " to " << i
-                      << ". Estimated fair share is not high enough " << path_infos[i].fair_share
-                      << " / " << bitrate << std::endl;
+            std::cout << log_prefix () << "Excluding path switch candidate: " << active_path
+                      << " to " << i << ". Estimated fair share is not high enough "
+                      << path_infos[i].fair_share << " / " << sendrate << std::endl;
           }
       }
 

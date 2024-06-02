@@ -159,6 +159,7 @@ struct AppResp
   double loss;
   uint8_t ecn; // explicit congestion notification
   uint64_t bytes_received;
+  bool is_REMB; // contains Receiver Estimated Max Bitrate
   double A_r; // rate estimate by the delay based controller
 };
 
