@@ -44,28 +44,18 @@ struct PathStatistics
   app_packet_id_t probe_seq_no = 0; // probe packet seq_no
 };
 
-// struct to store application state
+// Struct to store application state for visualization
 struct AppState
 {
   Time timestamp;
-  // bitrate
-  double bitrate;
-
-  // latency
-  double latency;
-
-  //score
-  double score;
-
-  // loss
-  double loss;
-
-  // bandwidth
-  double bandwidth;
-
-  // active path
+  double bitrate = 0;
+  ControllerStateSnapshot controller_state;
+  double A_s = 0;
+  double A_r = 0;
+  double fair_share = 0;
+  double latency = 0;
+  double loss = 0;
   app_path_id_t active_path;
-  // path information
   std::vector<PathStatistics> path_stats;
 };
 
@@ -166,6 +156,9 @@ public:
     state.bitrate = sendrate;
     state.latency = path_info.latency;
     state.loss = path_info.loss;
+    state.controller_state = controller_state;
+    state.A_s = A_s;
+    state.A_r = A_r;
     state.fair_share = path_info.fair_share;
     statistics.push_back (state);
 
@@ -183,9 +176,6 @@ public:
                       << ", score: " << path_infos[i].score << std::endl;
           }
       }
-
-    // Schedule next state tracking
-    Simulator::Schedule (TRACKING_INTERVAL, &RTCApp::TrackState, this);
   }
 
   /**
@@ -441,6 +431,7 @@ public:
                       << std::endl;
           }
         CheckPathSwitch ();
+        TrackState ();
       }
   }
 
@@ -776,29 +767,27 @@ public:
   {
     std::cout << "----- " << InfoString () << " id " << app_id << " dst " << dst_ia << ":"
               << dst_host_addr << "-------" << std::endl
-              << "----- Timestamp, latency[ms], loss, bitrate[Mbps], path, quality, score ------- "
+              << "----- Timestamp, latency[ms], loss, path, send_rate, A_s, A_r, fair_share, "
+                 "state, signal, estimate_gradient, treshold, measured_gradient ------- "
               << std::endl;
 
     // print all the app statistics
-    for (auto state : statistics)
+    for (AppState state : statistics)
       {
         std::cout << std::setw (8) << state.timestamp.ToInteger (Time::Unit::MS) << std::setw (16)
-                  << "(" << state.timestamp.ToDouble (Time::Unit::MIN) << " min), "
-                  << std::setw (16) << state.latency / 1000.0 << ", " << std::setw (16)
-                  << state.loss << ", " << std::setw (16) << state.bitrate / 1e6 << ", "
-                  << std::setw (4) << state.active_path << ", " << std::setw (16) << state.score
-                  << ", " << std::setw (16) << state.bitrate << std::endl;
-
-        // format string with fixed spacing
-
-        // std::cout << "----- Path statistics: -----" << std::endl;
-        // for (uint32_t i = 0; i < num_paths; i++)
-        //   {
-        //     std::cout << "    Path " << i << ", latency: " << state.path_stats[i].latency
-        //               << ", loss: " << state.path_stats[i].loss
-        //               << ", bandwidth: " << state.path_stats[i].bandwidth
-        //               << ", score: " << state.path_stats[i].score << std::endl;
-        //   }
+                  << "(" << state.timestamp.ToDouble (Time::Unit::MIN) << " min), ";
+        std::cout << std::setw (16) << state.latency / 1000.0 << ", ";
+        std::cout << std::setw (16) << state.loss << ", ";
+        std::cout << std::setw (4) << state.active_path << ", ";
+        std::cout << std::setw (16) << state.bitrate << ", ";
+        std::cout << std::setw (16) << state.A_s << ", ";
+        std::cout << std::setw (16) << state.A_r << ", ";
+        std::cout << std::setw (16) << state.fair_share << ", ";
+        std::cout << std::setw (16) << static_cast<int> (state.controller_state.state) << ", ";
+        std::cout << std::setw (16) << static_cast<int> (state.controller_state.signal) << ", ";
+        std::cout << std::setw (16) << state.controller_state.m << ", ";
+        std::cout << std::setw (16) << state.controller_state.adaptive_treshold << ", ";
+        std::cout << std::setw (16) << state.controller_state.d_m << std::endl;
       }
     std::cout << "----- End of app " << app_id << " results ------" << std::endl;
   }

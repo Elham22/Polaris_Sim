@@ -2,6 +2,7 @@ out_folder = "./"
 
 import argparse
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 from typing import List, Tuple
 from cycler import cycler
 import os
@@ -20,12 +21,24 @@ class AppResults:
         self.latency = []
         self.quality = []
         self.bytes = []
+        self.send_rate = [] # current send rate
+        self.A_r = [] # receiver estimated send rate
+        self.A_s = [] # sender estimated send rate
+        self.fair_share = [] # fair share for this path as estimated via probing
+        self.controller_state = [] # state of the delay based controller
+        self.controller_signal = [] # signal of the delay based controller
+        self.controller_gradient_estimate = []
+        self.controller_gradient_measured = []
+        self.controller_treshold = []
 
     def get_name(self):
         return f"{self.host}:{self.app_id}, {self.app_type}"
 
     def print(self):
-        print(f"{self.host}:{self.app_id}, type {self.app_type}, avg loss: {sum(self.loss) / len(self.loss)}, avg lat: {sum(self.latency) / len(self.latency)}, avg score: {sum(self.score) / len(self.score)}")
+        if ("VCA" in self.app_type):
+            print(f"{self.host}:{self.app_id}, type {self.app_type}, avg loss: {sum(self.loss) / len(self.loss)}, avg lat: {sum(self.latency) / len(self.latency)}, avg score: {sum(self.score) / len(self.score)}")
+        else:
+            print(f"{self.host}:{self.app_id}, type {self.app_type}, avg loss: {sum(self.loss) / len(self.loss)}, avg lat: {sum(self.latency) / len(self.latency)}, avg send rate: {sum(self.send_rate) / len(self.send_rate)}")
 
 class LinkResults:
     def __init__(self, address, ing, eg) -> None:
@@ -61,48 +74,94 @@ def parse_args():
     parser.add_argument("--excludeStartup", help="Cut the startup phase from the results", action="store_true")
     return parser.parse_args()
 
+
 def parse_app_results(host, app_id, file):
     app_info_tokens = file.readline().strip().split(' ')
-    if not (len(app_info_tokens) >= 7 and "VCA" == app_info_tokens[1] or "rtc" == app_info_tokens[1]):
-        return
-    app_type = app_info_tokens[2]
-    print("Type: " + app_type)
-    file.readline()
 
-    results = AppResults(host, app_id, app_type)
-    tokens = file.readline().strip().split(',')
+    if "rtc" == app_info_tokens[1]:
+        app_type = "rtc"
+        file.readline()
+        results = AppResults(host, app_id, app_type)
+        tokens = file.readline().strip().split(',')
 
-    # strip all tokens
-    tokens = [token.strip() for token in tokens]
+        # strip all tokens
+        tokens = [token.strip() for token in tokens]
 
-    while len(tokens) > 6 and not "End of app" in tokens[0]:
-        i = 0
-        if "ComputeScore" in tokens[i]:
-            i += 3
-        
-        timestamp = float(tokens[i].split("(")[0])
-        if args.milliseconds:
-            relative_timestamp = timestamp
-        else:
-            relative_timestamp = timestamp / 1000 / 60 # convert to minutes
+        while len(tokens) > 6 and not "End of app" in tokens[0]:
+            i = 0
+            timestamp = float(tokens[i].split("(")[0])
+            if args.milliseconds:
+                relative_timestamp = timestamp
+            else:
+                relative_timestamp = timestamp / 1000 / 60  # convert to minutes
 
-        results.time.append(relative_timestamp - args.startTime)
-        i += 1
-        results.latency.append(float(tokens[i]))
-        i += 1
-        results.loss.append(float(tokens[i])*100)
-        i += 1
-        results.bytes.append(float(tokens[i]))
-        i += 1
-        results.path.append(int(tokens[i]))
-        i += 1
-        results.quality.append(float(tokens[i]))
-        i += 1
-        results.score.append(float(tokens[i]))
+            results.time.append(relative_timestamp - args.startTime)
+            i += 1
+            results.latency.append(float(tokens[i]))
+            i += 1
+            results.loss.append(float(tokens[i])*100)
+            i += 1
+            results.path.append(int(tokens[i]))
+            i += 1
+            results.send_rate.append(float(tokens[i]))
+            i += 1
+            results.A_s.append(float(tokens[i]))
+            i += 1
+            results.A_r.append(float(tokens[i]))
+            i += 1
+            results.fair_share.append(float(tokens[i]))
+            i += 1
+            results.controller_state.append(int(tokens[i]))
+            i += 1
+            results.controller_signal.append(int(tokens[i]))
+            i += 1
+            results.controller_gradient_estimate.append(float(tokens[i]))
+            i += 1
+            results.controller_treshold.append(float(tokens[i]))
+            i += 1
+            results.controller_gradient_measured.append(float(tokens[i]))
 
-        tokens = file.readline().strip().split(', ')
-    
-    return results
+            tokens = file.readline().strip().split(', ')
+        return results
+
+    if len(app_info_tokens) >= 7 and "VCA" == app_info_tokens[1]:
+        app_type = app_info_tokens[2]
+        file.readline()
+        results = AppResults(host, app_id, app_type)
+        tokens = file.readline().strip().split(',')
+
+        # strip all tokens
+        tokens = [token.strip() for token in tokens]
+
+        while len(tokens) > 6 and not "End of app" in tokens[0]:
+            i = 0
+            if "ComputeScore" in tokens[i]:
+                i += 3
+
+            timestamp = float(tokens[i].split("(")[0])
+            if args.milliseconds:
+                relative_timestamp = timestamp
+            else:
+                relative_timestamp = timestamp / 1000 / 60  # convert to minutes
+
+            results.time.append(relative_timestamp - args.startTime)
+            i += 1
+            results.latency.append(float(tokens[i]))
+            i += 1
+            results.loss.append(float(tokens[i])*100)
+            i += 1
+            results.bytes.append(float(tokens[i]))
+            i += 1
+            results.path.append(int(tokens[i]))
+            i += 1
+            results.quality.append(float(tokens[i]))
+            i += 1
+            results.score.append(float(tokens[i]))
+
+            tokens = file.readline().strip().split(', ')
+        return results
+
+
 
 def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
 
@@ -113,7 +172,11 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
     plot_number = 411
     if args.plotLinks:
         plot_number += 200
-    ax1 = plt.subplot(plot_number)
+
+    plt.figure(figsize=(8, 1)) 
+    plot_number = 0
+    gs = gridspec.GridSpec(6, 1, height_ratios=[1, 1, 1, 1, 2, 2]) 
+    ax1 = plt.subplot(gs[plot_number])
     plot_number += 1
     for res in results:
         plt.plot (res.time, res.loss, label = res.get_name())
@@ -125,7 +188,7 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
         plt.xlabel("Time (min)")"""
     plt.ylabel("Loss (%)")
 
-    plt.subplot(plot_number, sharex=ax1)
+    plt.subplot(gs[plot_number], sharex=ax1)
     plot_number += 1
     for res in results:
         plt.plot (res.time, res.latency, label = res.get_name())
@@ -137,20 +200,49 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
         plt.xlabel("Time (min)")"""
     plt.ylabel("Latency (ms)")
 
-    plt.subplot(plot_number, sharex=ax1)
+    plt.subplot(gs[plot_number], sharex=ax1)
     plot_number += 1
-    for res in results:
-        plt.plot (res.time, res.bytes, label = res.get_name())
+    if len(results) == 1: # If there is only one application, plot all the rates
+         for res in results:
+            plt.plot (res.time, res.send_rate, label = "Send rate")
+            plt.plot (res.time, res.A_r, label = "A_r")
+            plt.plot (res.time, res.A_s, label = "A_s")
+            plt.plot (res.time, res.fair_share, label = "fair share")
+    else: # Plot just the sending rate for all applications
+        for res in results:
+            plt.plot (res.time, res.bytes, label = res.get_name())
+       
     if not args.nolegend:
         plt.legend()
     """if args.milliseconds:
         plt.xlabel("Time (ms)")
     else:
         plt.xlabel("Time (min)")"""
-    plt.ylabel("Bitrate [MB/s]")
+    plt.ylabel("Send rate [MB/s]")
+
+    # plt.subplot(gs[plot_number], sharex=ax1)
+    # plot_number += 1
+    # # create a new list that contains the sums of all the bytes at each time
+    # time_rate_map = {}
+    # for res in results:
+    #     for i in range(len(res.time)):
+    #         if res.time[i] not in time_rate_map:
+    #             time_rate_map[res.time[i]] = res.bytes[i]
+    #         else:
+    #             time_rate_map[res.time[i]] += res.bytes[i]
+    # total_times = sorted(time_rate_map.keys())
+    # total_bytes = [time_rate_map[time] for time in sorted(time_rate_map.keys())]
+    # plt.plot(total_times, total_bytes, label = "Total")
+    # if not args.nolegend:
+    #     plt.legend()
+    # """if args.milliseconds:
+    #     plt.xlabel("Time (ms)")
+    # else:
+    #     plt.xlabel("Time (min)")"""
+    # plt.ylabel("Total Send Rate [MB/s]")
 
     if not args.pathnumber:
-        plt.subplot(plot_number, sharex=ax1)
+        plt.subplot(gs[plot_number], sharex=ax1)
         plot_number += 1
         for res in results:
             # pathInfo = [x for x in pathInfos if x.host == res.host and x.app_id == res.app_id][0]
@@ -166,7 +258,7 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
             plt.xlabel("Time (min)")
         plt.ylabel("Paths")
     else:
-        plt.subplot(plot_number, sharex=ax1)
+        plt.subplot(gs[plot_number], sharex=ax1)
         plot_number += 1
         print((len(pathInfos[0].paths), len(results[0].path)))
         paths_amount = np.zeros((len(pathInfos[0].paths), len(results[0].path)))
@@ -187,6 +279,38 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
         else:
             plt.xlabel("Time (min)")
         plt.ylabel("Num selected")
+
+    plt.subplot(gs[plot_number], sharex=ax1)
+    plot_number += 1
+    for res in results:
+        plt.plot (res.time, res.controller_state, label = "State", drawstyle='steps-post')
+        plt.plot (res.time, res.controller_signal, label = "Signal", drawstyle='steps-post')
+    if not args.nolegend:
+        plt.legend()
+    """if args.milliseconds:
+        plt.xlabel("Time (ms)")
+    else:
+        plt.xlabel("Time (min)")"""
+    plt.ylabel("Controller")
+
+    # Plot the gradient and treshold
+    plt.subplot(gs[plot_number], sharex=ax1)
+    plot_number += 1
+    for res in results:
+        # treshold are both black and dotted
+        plt.plot (res.time, res.controller_gradient_estimate, label = "Gradient estimate m", color='green', linestyle='--', linewidth=1)
+        plt.plot (res.time, [-x for x in res.controller_gradient_measured], label = "Gradient measured d_m", color='red', linestyle='-.', linewidth=1)
+        plt.plot (res.time, res.controller_treshold, label = "Treshold γ", color='black', linestyle=':', linewidth=0.5)
+        plt.plot (res.time, [-x for x in res.controller_treshold], label = "Treshold -γ", color='black', linestyle=':', linewidth=0.5)
+    if not args.nolegend:
+        plt.legend()
+    """if args.milliseconds:
+        plt.xlabel("Time (ms)")
+    else:
+        plt.xlabel("Time (min)")"""
+    plt.ylabel("Gradient and treshold")
+
+    plt.tight_layout()
 
 def host_eval(file):
     results : List[AppResults] = []
@@ -469,8 +593,6 @@ def main():
             outf.write("\n")
  
         if args.details:
-            global fig
-            fig = plt.figure()
             plotAppResults(appRes, pathInfos)
             if args.plotLinks:
                 selectedLinks = selectLinks(appRes, pathInfos)
