@@ -64,6 +64,14 @@ protected:
   const Time T = Seconds (1); // Time window for measuring the received bitrate
   const double beta = 0.85; // Decrease rate factor
 
+  const double INCREASE_FACTOR_MULT =
+      1.08; // Factor to increase rate per second during multiplicative increase
+  const double DECREASE_FACTOR_MULT =
+      0.85; // Factor to decrease rate per second during multiplicative decrease
+
+  // Time window accross which to measure incoming traffic rate
+  const Time receive_rate_window = MilliSeconds (500);
+
   // State variables
   DetectorSignal signal = DetectorSignal::NORMAL;
   ControllerState state = ControllerState::INCREASE;
@@ -89,10 +97,11 @@ protected:
 
   // This map is used to measure the receiver rate
   std::map<Time, u_int16_t> received_bytes;
-  Time receive_rate_window = MilliSeconds (500);
   double receive_rate; // Rate of traffic arriving in the last receive_rate_window, in Bytes/s
 
   double A_r = 0; // Rate estimate computed by the controller, in Bytes/s
+
+  Time last_rate_update = Seconds (0);
 
   /**
    * Returns the measured one way delay gradient in ms
@@ -242,7 +251,7 @@ protected:
    * Run the FSM
   */
   void
-  UpdateStateMachine()
+  UpdateStateMachine ()
   {
     switch (state)
       {
@@ -299,10 +308,15 @@ protected:
   void
   UpdateRate ()
   {
+    Time time_since_last_rate_update = Simulator::Now () - last_rate_update;
+    double eta;
     switch (state)
       {
       case ControllerState::DECREASE:
-        A_r = 0.85 * receive_rate;
+        // Decrease rate by at most 15% per second
+        eta = std::pow (DECREASE_FACTOR_MULT,
+                        std::min (time_since_last_rate_update.GetSeconds (), 1.0));
+        A_r = eta * receive_rate;
         break;
       case ControllerState::HOLD:
         // If A_r does not have any previous value, start with the current receive_rate
@@ -312,7 +326,12 @@ protected:
           }
         break;
       case ControllerState::INCREASE:
-        A_r = 1.05 * A_r;
+
+        // Increase rate by at most 8% per second
+        eta = std::pow (INCREASE_FACTOR_MULT,
+                        std::min (time_since_last_rate_update.GetSeconds (), 1.0));
+        A_r = eta * A_r;
+
         // Cap at 1.5x the receive_rate
         if (A_r > 1.5 * receive_rate)
           {
@@ -320,6 +339,7 @@ protected:
           }
         break;
       }
+    last_rate_update = Simulator::Now ();
   }
 
 public:
@@ -435,9 +455,9 @@ public:
         frame_current = other.frame_current;
         frame_previous = other.frame_previous;
         received_bytes = other.received_bytes;
-        receive_rate_window = other.receive_rate_window;
         receive_rate = other.receive_rate;
         A_r = other.A_r;
+        last_rate_update = other.last_rate_update;
       }
     return *this;
   }
