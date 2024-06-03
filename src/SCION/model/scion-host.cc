@@ -604,7 +604,7 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
 
   // Feed data to the delay based controller
   bool rate_updated =
-      info.controller.RecordPacket (data, packet->size, MilliSeconds (data.timestamp), local_time);
+      info.controller.RecordPacket (data, packet->size, MicroSeconds (data.timestamp), local_time);
 
   // If the controller computed a new rate, inform the sender
   if (rate_updated)
