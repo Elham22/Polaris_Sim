@@ -34,11 +34,11 @@ struct PathStatistics
   app_packet_id_t seq_no = 1; // Next seq no to send
   app_packet_id_t seq_no_ack = 0; // Highest acked package
   double score = 0;
-  double latency; // observed latency
+  double latency = 0; // observed latency
   double bandwidth; // estimated bandwidth in Gbps
-  double fair_share; // estimated fair share in Gbps
-  double bottleneck_no_flows; // number of flows at the bottleneck link
-  double loss; // estimated loss ratio
+  double fair_share = 0; // estimated fair share in Gbps
+  double bottleneck_no_flows = 0; // number of flows at the bottleneck link
+  double loss = 0; // estimated loss ratio
 
   Time probed_last = Seconds (0); // time the last probing was initiated
   app_packet_id_t probe_seq_no = 0; // probe packet seq_no
@@ -67,6 +67,7 @@ class RTCApp : public App
 protected:
   const double LOSS_TRESHOLD_LOW = 0.02;
   const double LOSS_TRESHOLD_HIGH = 0.10;
+  const double LOSS_SMOOTHING_FACTOR = 0.95;
   const double PATH_SWITCH_TRESHOLD = 1.5;
   const Time TRACKING_INTERVAL = Seconds (0.1);
   uint32_t num_paths;
@@ -380,19 +381,9 @@ public:
         app_resp.loss = 0;
       }
 
-    path_infos[path_id].loss = app_resp.loss;
-
-    // Update loss with moving average
-    // path_infos[path_id].loss *= (1 - moving_average_weight);
-    // path_infos[path_id].loss += (moving_average_weight * app_resp.loss);
-
-    // Very basic bandwidth estimation, this is basically just a lower bound
-    // ...and apparently sometimes even negative (TODO)
-    path_infos[path_id].bandwidth =
-        app_resp.bytes_received /
-        Seconds (resp_time - path_infos[path_id].last_report).GetSeconds ();
-
-    UpdateScore (path_id);
+    // Exponential moving average
+    path_infos[path_id].loss *= (1 - LOSS_SMOOTHING_FACTOR);
+    path_infos[path_id].loss += (LOSS_SMOOTHING_FACTOR * app_resp.loss);
 
     if (enable_logging)
       {
