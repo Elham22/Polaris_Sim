@@ -387,10 +387,25 @@ public:
   bool
   RecordPacket (AppData app_data, uint16_t size, Time time_tx, Time time_rx)
   {
+    bool updated = false;
     received_bytes[time_rx] = size;
     // Check if this packet belongs to a new frame
     if (frames.find (app_data.frame_no) == frames.end ())
       {
+        // We're receiving a new frame, so assume that the previous one is complete
+        // This means we can trigger an update if we have received at least two frames.
+        if (frame_previous != nullptr)
+          {
+            UpdateGradientEstimate ();
+            UpdateReceiveRate ();
+            UpdateSignal ();
+            UpdateStateMachine ();
+            UpdateRate ();
+            ClearOldFrames ();
+            updated = true;
+          }
+
+        // Add the new frame
         frames[app_data.frame_no] = VideoFrameInfo{
             .frame_no = app_data.frame_no,
             .first_pkt_seq_no = app_data.seq_no,
@@ -401,34 +416,23 @@ public:
             .last_pkt_rcv_time = time_rx,
         };
 
+        // Update frame pointers
         frame_previous = frame_current;
         frame_current = &frames[app_data.frame_no];
-
-        if (frame_previous != nullptr)
-          {
-            UpdateGradientEstimate ();
-            UpdateReceiveRate ();
-            UpdateSignal ();
-            UpdateStateMachine ();
-            UpdateRate ();
-            ClearOldFrames ();
-            return true;
-          }
       }
     else
       {
         VideoFrameInfo &frame = frames[app_data.frame_no];
 
-        // ignore out-of-order packets (should never be the case in the simulation)
-        if (app_data.seq_no <= frame.last_pkt_seq_no)
+        // ignore out-of-order packets
+        if (app_data.seq_no > frame.last_pkt_seq_no)
           {
-            return false;
+            frame.last_pkt_seq_no = app_data.seq_no;
+            frame.last_pkt_send_time = time_tx;
+            frame.last_pkt_rcv_time = time_rx;
           }
-        frame.last_pkt_seq_no = app_data.seq_no;
-        frame.last_pkt_send_time = time_tx;
-        frame.last_pkt_rcv_time = time_rx;
       }
-    return false;
+    return updated;
   }
 
   /**
