@@ -568,7 +568,8 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
 {
   std::cout << GetLogPrefix () << "Receiving app data packet from "
             << packet->payload.app_data.app_id << " via path " << packet->payload.app_data.path_id
-            << std::endl;
+            << ", frame_no: " << packet->payload.app_data.frame_no
+            << ", seq_no: " << packet->payload.app_data.seq_no << std::endl;
 
   AppData data = packet->payload.app_data;
   app_connection_key_t key =

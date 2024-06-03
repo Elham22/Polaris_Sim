@@ -90,7 +90,7 @@ protected:
   double measurement_noise_variance = 0; // Variance of the one way delay gradient
 
   // Records send and arrival times resp. for first and last packet for each frame
-  std::map<uint32_t, VideoFrameInfo> frames;
+  std::map<uint32_t, VideoFrameInfo> *frames = nullptr;
   // Maintain pointers to the current and previous frames
   VideoFrameInfo *frame_current = nullptr;
   VideoFrameInfo *frame_previous = nullptr;
@@ -116,8 +116,29 @@ protected:
     auto delay_grad = (frame_current->last_pkt_rcv_time - frame_previous->last_pkt_rcv_time) -
                       (frame_current->first_pkt_send_time - frame_previous->first_pkt_send_time);
 
+    double delay_grad_ms = delay_grad.GetSeconds () * 1000.0;
+    if (std::abs (delay_grad_ms) > 16)
+      {
+        std::cout << "High MeasuredOneWayDelayGradient detected:" << std::endl;
+        std::cout << "  frame_previous: " << frame_previous->frame_no << std::endl;
+        std::cout << "  frame_prev_send_time: " << frame_previous->first_pkt_send_time << std::endl;
+        std::cout << "  frame_prev_rcv_time: " << frame_previous->last_pkt_rcv_time << std::endl;
+        std::cout << "  frame_current: " << frame_current->frame_no << std::endl;
+        std::cout << "  frame_curr_send_time: " << frame_current->first_pkt_send_time << std::endl;
+        std::cout << "  frame_curr_rcv_time: " << frame_current->last_pkt_rcv_time << std::endl;
+        std::cout << "  t_i - t_i-1: "
+                  << (frame_current->last_pkt_rcv_time - frame_previous->last_pkt_rcv_time)
+                         .GetMilliSeconds ()
+                  << std::endl;
+        std::cout << "  T_i - T_i-1: "
+                  << (frame_current->first_pkt_send_time - frame_previous->first_pkt_send_time)
+                         .GetMilliSeconds ()
+                  << std::endl;
+        std::cout << "  delay_grad_ms: " << delay_grad_ms << std::endl;
+      }
+
     // return in ms as double
-    return delay_grad.GetMilliSeconds ();
+    return delay_grad_ms;
   }
 
   /**
@@ -126,11 +147,12 @@ protected:
   void
   ClearOldFrames ()
   {
-    for (auto it = frames.begin (); it != frames.end ();)
+    Time now = Simulator::Now ();
+    for (auto it = frames->begin (); it != frames->end ();)
       {
-        if (Simulator::Now () - it->second.last_pkt_rcv_time > T)
+        if (now - it->second.last_pkt_rcv_time > T)
           {
-            it = frames.erase (it);
+            it = frames->erase (it);
           }
         else
           {
@@ -389,13 +411,22 @@ public:
   {
     bool updated = false;
     received_bytes[time_rx] = size;
-    // Check if this packet belongs to a new frame
-    if (frames.find (app_data.frame_no) == frames.end ())
+    if (frames == nullptr)
       {
+        frames = new std::map<uint32_t, VideoFrameInfo> ();
+      }
+
+    // Check if this packet belongs to a new frame
+    if (frames->find (app_data.frame_no) == frames->end ())
+      {
+        std::cout << "Recording new frame: " << app_data.frame_no << std::endl;
+
         // We're receiving a new frame, so assume that the previous one is complete
         // This means we can trigger an update if we have received at least two frames.
         if (frame_previous != nullptr)
           {
+            std::cout << "Updating gradient based on frames " << frame_previous->frame_no << " and "
+                      << frame_current->frame_no << std::endl;
             UpdateGradientEstimate ();
             UpdateReceiveRate ();
             UpdateSignal ();
@@ -405,24 +436,24 @@ public:
             updated = true;
           }
 
-        // Add the new frame
-        frames[app_data.frame_no] = VideoFrameInfo{
-            .frame_no = app_data.frame_no,
-            .first_pkt_seq_no = app_data.seq_no,
-            .first_pkt_send_time = time_tx,
-            .first_pkt_rcv_time = time_rx,
-            .last_pkt_seq_no = app_data.seq_no,
-            .last_pkt_send_time = time_tx,
-            .last_pkt_rcv_time = time_rx,
-        };
+        // Add new frame
+        frames->emplace (app_data.frame_no, VideoFrameInfo{
+                                                .frame_no = app_data.frame_no,
+                                                .first_pkt_seq_no = app_data.seq_no,
+                                                .first_pkt_send_time = time_tx,
+                                                .first_pkt_rcv_time = time_rx,
+                                                .last_pkt_seq_no = app_data.seq_no,
+                                                .last_pkt_send_time = time_tx,
+                                                .last_pkt_rcv_time = time_rx,
+                                            });
 
         // Update frame pointers
         frame_previous = frame_current;
-        frame_current = &frames[app_data.frame_no];
+        frame_current = &frames->at (app_data.frame_no);
       }
     else
       {
-        VideoFrameInfo &frame = frames[app_data.frame_no];
+        VideoFrameInfo &frame = frames->at (app_data.frame_no);
 
         // ignore out-of-order packets
         if (app_data.seq_no > frame.last_pkt_seq_no)
