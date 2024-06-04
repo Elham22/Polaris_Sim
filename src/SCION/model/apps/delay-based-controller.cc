@@ -57,8 +57,8 @@ protected:
   const double Q = 1e-3; // State noise covariance matrix
   const double e_0 = 0.1; // Initial value of the  system error covariance
   const double chi = 0.05; // Coefficient used  for the measured noise variance
-  const double del_var_th_0 = 12.5; // Initial value for the adaptive threshold, in ms
-  const double overuse_time_th = 10; // Time required to trigger an overuse signal, in ms
+  const double del_var_th_0 = 0.5; // Initial value for the adaptive threshold, in ms
+  const double overuse_time_th = 100; // Time required to trigger an overuse signal, in ms
   const double K_u = 0.01; // Coefficient for the adaptive threshold
   const double K_d = 0.00018; // Coefficient for the adaptive threshold
   const Time T = Seconds (1); // Time window for measuring the received bitrate
@@ -255,7 +255,7 @@ protected:
         // Only signal overuse if we have been above the threshold for a certain time
         if (overuse_detected)
           {
-            if (Simulator::Now () - overuse_detected_since > Seconds (overuse_time_th))
+            if (Simulator::Now () - overuse_detected_since > MilliSeconds (overuse_time_th))
               {
                 signal = DetectorSignal::OVERUSE;
               }
@@ -344,6 +344,11 @@ protected:
   void
   UpdateRate ()
   {
+    // If A_r does not have any previous value, start with the current receive_rate
+    if (A_r == 0)
+      {
+        A_r = receive_rate;
+      }
     Time time_since_last_rate_update = Simulator::Now () - last_rate_update;
     double eta;
     switch (state)
@@ -355,11 +360,6 @@ protected:
         A_r = eta * receive_rate;
         break;
       case ControllerState::HOLD:
-        // If A_r does not have any previous value, start with the current receive_rate
-        if (A_r == 0)
-          {
-            A_r = receive_rate;
-          }
         break;
       case ControllerState::INCREASE:
 
@@ -386,6 +386,15 @@ public:
   GetCurrentRate ()
   {
     return A_r;
+  }
+
+  /**
+   * @return True if congestion is detected
+  */
+  bool
+  CongestionDetected ()
+  {
+    return state == ControllerState::DECREASE;
   }
 
   /**
