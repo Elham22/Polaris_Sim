@@ -101,6 +101,7 @@ protected:
   double steering_treshold_l = 0;
 
   Time last_path_change = Time (0);
+  Time last_remb_change = Time (0);
 
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
@@ -134,9 +135,11 @@ public:
   void
   StartAppTraffic ()
   {
-    SendVideoFrame ();
     SendProbes ();
     TrackState ();
+
+    // Start sending video frames after a random delay, to avoid synchronization
+    Simulator::Schedule (MilliSeconds (1000) + RandomDelay (500), &RTCApp::SendVideoFrame, this);
   }
 
   void
@@ -339,6 +342,11 @@ public:
       }
     A_r = app_resp.A_r;
     controller_state = app_resp.state_snapshot;
+    if (Simulator::Now () > last_remb_change + Seconds (1) || app_resp.A_r < 0.97 * A_r)
+      {
+        A_r = app_resp.A_r;
+        last_remb_change = Simulator::Now ();
+      }
   }
 
   /***
