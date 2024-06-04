@@ -62,7 +62,7 @@ protected:
   const double K_u = 0.01; // Coefficient for the adaptive threshold
   const double K_d = 0.00018; // Coefficient for the adaptive threshold
   const Time T = Seconds (1); // Time window for measuring the received bitrate
-  const double beta = 0.85; // Decrease rate factor
+  const double beta = 0.95; // Smoothing factor for the measurement noise variance
 
   const double INCREASE_FACTOR_MULT =
       1.08; // Factor to increase rate per second during multiplicative increase
@@ -78,20 +78,18 @@ protected:
   Time overuse_detected_since = Seconds (0);
   bool overuse_detected = false;
 
+  // Initial values
   double adaptive_treshold = del_var_th_0;
-  double e = e_0;
-
+  double e = e_0; // System error covariance
   double d_m = 0; // Measured one way delay gradient
   double m = 0; // Estimate of the one way delay gradient
-  double m_prev = 0;
   double z = 0; // Residual
-
   double kalman_gain = 0; // Kalman gain
+  double treshold_gain = 0; // Treshold gain
   double measurement_noise_variance = 0; // Variance of the one way delay gradient
 
-  // Records send and arrival times resp. for first and last packet for each frame
+  // Record information about frames to compute inter arrival times
   std::map<uint32_t, VideoFrameInfo> *frames = nullptr;
-  // Maintain pointers to the current and previous frames
   VideoFrameInfo *frame_current = nullptr;
   VideoFrameInfo *frame_previous = nullptr;
 
@@ -167,41 +165,61 @@ protected:
   void
   UpdateGradientEstimate ()
   {
-    m_prev = m;
+    auto m_prev = m;
+    auto e_prev = e;
+
     // Compute measured one way delay gradient
     d_m = MeasuredOneWayDelayGradient ();
 
     // Compute the residual z(t_i) = d_m (t_i) − m (t_i−1)
     z = d_m - m_prev;
 
-    // Update the variance σ̂ 2n (ti ) = β · σ̂ 2v(t_i−1 ) + (1 − β) · z(t_i)^2
-    double beta = 0.95;
+    // Paper (16)
+    // Estimate the variance as exp moving average of the squared residuals
+    // σ̂^2 (t_i) = β · σ̂^2(t_i−1 ) + (1 − β) · z(t_i)^2
     measurement_noise_variance = beta * measurement_noise_variance + (1 - beta) * z * z;
-    // TODO: ^ not really used right now, where does this come into play?
 
-    // Compute the Kalman gain
+    // In the draft, they additionally make it at least 1.0
+    // var_v_hat(i) = max(alpha * var_v_hat(i-1) + (1-alpha) * z(i)^2, 1)
+    // alpha = (1-chi)^(30/(1000 * f_max))
+    // We're also just using a fixed factor beta right now, instead of the dynamic alpha
+    measurement_noise_variance = std::max (measurement_noise_variance, 1.0);
+
+    // Update the Kalman gain
+    //                    e(i-1) + q(i)
+    //  k(i) = ----------------------------------------
+    //              var_v_hat(i) + (e(i-1) + q(i))
+    kalman_gain = (e_prev + Q) / (measurement_noise_variance + e_prev + Q);
+
+    // Update the system error covariance
+    // e(i) = (1 - k(i)) * (e(i-1) + q(i))
+    e = (1 - kalman_gain) * (e_prev + Q);
+
+    // Update the gradient estimate
+    // m(t_i) = (1 − K(t_i)) · m(t_i−1) + K(t_i) · (d_m (t_i))
+    // kalman_gain *= 8; // TODO: remove this line (for testing only)
+    // kalman_gain = std::min (0.90, kalman_gain); // TODO: remove this line (for testing only)
+    m = (1 - kalman_gain) * m_prev + kalman_gain * d_m;
+
+    // Update the treshold gain
     // kγ (t_i ) = k_d if |m(t_i )| < γ(t_i−1 )
     // kγ (t_i ) = k_u otherwise
     if (std::abs (m) < adaptive_treshold)
       {
-        kalman_gain = K_d;
+        treshold_gain = K_d;
       }
     else
       {
-        kalman_gain = K_u;
+        treshold_gain = K_u;
       }
-
-    // Use the Kalman gain K(t_i) which provides the correction to the estimation:
-    // m(ti ) = (1 − K(ti )) · m(ti−1 ) + K(ti ) · (dm (ti ))
-    m = (1 - kalman_gain) * m_prev + kalman_gain * d_m;
 
     // From the draft:
     // del_var_th(i) SHOULD NOT be updated if this condition holds:
     //  |m(i)| - del_var_th(i) > 15
-    if (std::abs (m) - adaptive_treshold > 15)
-      {
-        return;
-      }
+    // if (std::abs (m) - adaptive_treshold > 15)
+    //   {
+    //     return;
+    //   }
 
     // Update the adaptive treshold
     // γ(t_i ) = γ(t_i−1 ) + ∆T · kγ (t_i )(|m(t_i )| − γ(t_i−1 ))
@@ -209,13 +227,13 @@ protected:
     double delta_t =
         (frame_current->last_pkt_rcv_time - frame_previous->last_pkt_rcv_time).GetMilliSeconds ();
     adaptive_treshold =
-        adaptive_treshold + delta_t * kalman_gain * (std::abs (m) - adaptive_treshold);
+        adaptive_treshold + delta_t * treshold_gain * (std::abs (m) - adaptive_treshold);
 
     // From the draft:
     // It is also RECOMMENDED to clamp del_var_th(i) to the range [6, 600],
     // since a too small del_var_th(i) can cause the detector to become overly
     // sensitive.
-    adaptive_treshold = std::max (6.0, std::min (adaptive_treshold, 600.0));
+    // adaptive_treshold = std::max (6.0, std::min (adaptive_treshold, 600.0));
   }
 
   /**
@@ -505,9 +523,9 @@ public:
         e = other.e;
         d_m = other.d_m;
         m = other.m;
-        m_prev = other.m_prev;
         z = other.z;
         kalman_gain = other.kalman_gain;
+        treshold_gain = other.treshold_gain;
         measurement_noise_variance = other.measurement_noise_variance;
         frames = other.frames;
         frame_current = other.frame_current;
