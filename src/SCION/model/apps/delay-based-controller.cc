@@ -195,6 +195,14 @@ protected:
     // m(ti ) = (1 − K(ti )) · m(ti−1 ) + K(ti ) · (dm (ti ))
     m = (1 - kalman_gain) * m_prev + kalman_gain * d_m;
 
+    // From the draft:
+    // del_var_th(i) SHOULD NOT be updated if this condition holds:
+    //  |m(i)| - del_var_th(i) > 15
+    if (std::abs (m) - adaptive_treshold > 15)
+      {
+        return;
+      }
+
     // Update the adaptive treshold
     // γ(t_i ) = γ(t_i−1 ) + ∆T · kγ (t_i )(|m(t_i )| − γ(t_i−1 ))
     // ∆T = t_i − t_i−1
@@ -202,6 +210,12 @@ protected:
         (frame_current->last_pkt_rcv_time - frame_previous->last_pkt_rcv_time).GetMilliSeconds ();
     adaptive_treshold =
         adaptive_treshold + delta_t * kalman_gain * (std::abs (m) - adaptive_treshold);
+
+    // From the draft:
+    // It is also RECOMMENDED to clamp del_var_th(i) to the range [6, 600],
+    // since a too small del_var_th(i) can cause the detector to become overly
+    // sensitive.
+    adaptive_treshold = std::max (6.0, std::min (adaptive_treshold, 600.0));
   }
 
   /**
