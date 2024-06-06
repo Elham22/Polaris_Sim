@@ -102,6 +102,7 @@ protected:
 
   Time last_path_change = Time (0);
   Time last_remb_change = Time (0);
+  Time last_loss_based_rate_update = Time (0);
 
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
@@ -124,6 +125,10 @@ public:
         PathStatistics path_info;
         path_infos.push_back (path_info);
       }
+
+    // Use default values for initial state (only relevant for plot)
+    controller_state.signal = DetectorSignal::NORMAL;
+    controller_state.state = ControllerState::INCREASE;
 
     // choose a random path to start with
     active_path = rand () % num_paths;
@@ -340,7 +345,12 @@ public:
         std::cout << log_prefix () << "Receiving REMB report on active path " << app_resp.path_id
                   << std::endl;
       }
-    A_r = app_resp.A_r;
+
+    // HACK: In reality, we would only get a REMB once a second, or when the
+    // receiver detects congestion. For visualization of the controller state,
+    // we do want to receive a REMB on every update, but we only update A_r once
+    // a second or when congested to keep the simulation realistic.
+
     controller_state = app_resp.state_snapshot;
     if (Simulator::Now () > last_remb_change + Seconds (1) || app_resp.A_r < 0.97 * A_r)
       {
@@ -403,35 +413,38 @@ public:
     // With feedback on our active path, we can perform congestion control
     if (path_id == active_path)
       {
-        UpdateLossController ();
+        UpdateBWE ();
+      }
+  }
 
-        sendrate = A_s;
+  void
+  UpdateBWE ()
+  {
+    UpdateLossController ();
+    sendrate = A_s;
 
-        // If we got an estimate from the receiver, use it
-        if (A_r > 0)
+    // If we got an estimate from the receiver, use it
+    if (A_r > 0)
+      {
+        if (A_r < A_s)
           {
-            if (A_r < A_s)
-              {
-                std::cout << log_prefix ()
-                          << "Receiver estimate lower than sender estimate: " << A_r << " < " << A_s
-                          << ". Using receiver estimate." << std::endl;
-                sendrate = A_r;
-              }
-            else
-              {
-                std::cout << log_prefix ()
-                          << "Receiver estimate higher than sender estimate: " << A_r << " > "
-                          << A_s << ". Using sender estimate." << std::endl;
-              }
+            std::cout << log_prefix () << "Receiver estimate lower than sender estimate: " << A_r
+                      << " < " << A_s << ". Using receiver estimate." << std::endl;
+            sendrate = A_r;
           }
         else
           {
-            std::cout << log_prefix () << "No receiver estimate available. Using sender estimate."
-                      << std::endl;
+            std::cout << log_prefix () << "Receiver estimate higher than sender estimate: " << A_r
+                      << " > " << A_s << ". Using sender estimate." << std::endl;
           }
-        CheckPathSwitch ();
-        TrackState ();
       }
+    else
+      {
+        std::cout << log_prefix () << "No receiver estimate available. Using sender estimate."
+                  << std::endl;
+      }
+    CheckPathSwitch ();
+    TrackState ();
   }
 
   void
@@ -513,18 +526,24 @@ public:
     // Simple, loss based congestion control based on
     // https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02
 
+    double time_since_last_update = (Simulator::Now () - last_loss_based_rate_update).GetSeconds ();
+    double eta;
     if (path_infos[active_path].loss < LOSS_TRESHOLD_LOW)
       {
-        A_s = 1.05 * sendrate + 1e5;
+        eta = std::pow (1.05, std::min (time_since_last_update, 1.0));
+        A_s = eta * sendrate + 1e5;
       }
     else if (path_infos[active_path].loss > LOSS_TRESHOLD_HIGH)
       {
-        A_s = (1 - 0.5 * path_infos[active_path].loss) * sendrate;
+        eta = std::pow ((1 - 0.5 * path_infos[active_path].loss),
+                        std::min (time_since_last_update, 1.0));
+        A_s = eta * sendrate;
       }
     else
       {
         // do nothing
       }
+    last_loss_based_rate_update = Simulator::Now ();
   }
 
   void
