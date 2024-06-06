@@ -431,6 +431,7 @@ public:
         .d_m = d_m,
         .z = z,
         .measurement_noise_variance = measurement_noise_variance,
+        .e = e,
     };
   }
 

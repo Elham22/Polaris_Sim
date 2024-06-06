@@ -47,6 +47,7 @@ struct ControllerStateSnapshot
   double d_m;
   double z;
   double measurement_noise_variance;
+  double e;
 };
 
 #endif // SCION_SIMULATOR_CONTROLLER_STATE_H

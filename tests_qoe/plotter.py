@@ -30,6 +30,9 @@ class AppResults:
         self.controller_gradient_estimate = []
         self.controller_gradient_measured = []
         self.controller_treshold = []
+        self.kalman_gain = []
+        self.variance = []
+        self.e = []
 
     def get_name(self):
         return f"{self.host}:{self.app_id}, {self.app_type}"
@@ -84,10 +87,9 @@ def parse_app_results(host, app_id, file):
         results = AppResults(host, app_id, app_type)
         tokens = file.readline().strip().split(',')
 
-        # strip all tokens
-        tokens = [token.strip() for token in tokens]
-
         while len(tokens) > 6 and not "End of app" in tokens[0]:
+            # strip all tokens
+            tokens = [token.strip() for token in tokens]
             i = 0
             timestamp = float(tokens[i].split("(")[0])
             if args.milliseconds:
@@ -120,11 +122,17 @@ def parse_app_results(host, app_id, file):
             results.controller_treshold.append(float(tokens[i]))
             i += 1
             results.controller_gradient_measured.append(float(tokens[i]))
+            i += 1
+            results.kalman_gain.append(float(tokens[i]))
+            i += 1
+            results.variance.append(float(tokens[i]))
+            i += 1
+            results.e.append(float(tokens[i]))
 
-            tokens = file.readline().strip().split(', ')
+            tokens = file.readline().strip().split(',')
         return results
 
-    if len(app_info_tokens) >= 7 and "VCA" == app_info_tokens[1]:
+    elif len(app_info_tokens) >= 7 and "VCA" == app_info_tokens[1]:
         app_type = app_info_tokens[2]
         file.readline()
         results = AppResults(host, app_id, app_type)
@@ -160,6 +168,8 @@ def parse_app_results(host, app_id, file):
 
             tokens = file.readline().strip().split(', ')
         return results
+    else:
+        print("Unknown app type ", app_info_tokens)
 
 
 
@@ -173,9 +183,9 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
     if args.plotLinks:
         plot_number += 200
 
-    plt.figure(figsize=(8, 1)) 
+    plt.figure(figsize=(9, 1)) 
     plot_number = 0
-    gs = gridspec.GridSpec(6, 1, height_ratios=[1, 1, 1, 1, 2, 2]) 
+    gs = gridspec.GridSpec(7, 1, height_ratios=[1, 1, 1, 1, 1, 3, 1]) 
     ax1 = plt.subplot(gs[plot_number])
     plot_number += 1
     for res in results:
@@ -203,14 +213,14 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
     plt.subplot(gs[plot_number], sharex=ax1)
     plot_number += 1
     if len(results) == 1: # If there is only one application, plot all the rates
-         for res in results:
-            plt.plot (res.time, res.send_rate, label = "Send rate")
+         for res in results[:1]:
+            plt.plot (res.time, res.send_rate, label = "Send rate", linewidth=0.5)
             plt.plot (res.time, res.A_r, label = "A_r")
             plt.plot (res.time, res.A_s, label = "A_s")
-            plt.plot (res.time, res.fair_share, label = "fair share")
+            plt.plot (res.time, res.fair_share, label = "fair share", linewidth=0.5)
     else: # Plot just the sending rate for all applications
         for res in results:
-            plt.plot (res.time, res.bytes, label = res.get_name())
+            plt.plot (res.time, res.send_rate, label = res.get_name())
        
     if not args.nolegend:
         plt.legend()
@@ -282,9 +292,10 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
 
     plt.subplot(gs[plot_number], sharex=ax1)
     plot_number += 1
-    for res in results:
-        plt.plot (res.time, res.controller_state, label = "State", drawstyle='steps-post')
-        plt.plot (res.time, res.controller_signal, label = "Signal", drawstyle='steps-post')
+    for res in results[:1]:
+        plt.plot (res.time, res.controller_state, label = "State", drawstyle='steps-post', linestyle='--', linewidth=1)
+        plt.plot (res.time, res.controller_signal, label = "Signal", drawstyle='steps-post', linestyle='-.', linewidth=1)
+    plt.ylim(-0.25, 2.25)
     if not args.nolegend:
         plt.legend()
     """if args.milliseconds:
@@ -296,10 +307,10 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
     # Plot the gradient and treshold
     plt.subplot(gs[plot_number], sharex=ax1)
     plot_number += 1
-    for res in results:
+    for res in results[:1]:
         # treshold are both black and dotted
-        plt.plot (res.time, res.controller_gradient_estimate, label = "Gradient estimate m", color='green', linestyle='--', linewidth=1)
-        plt.plot (res.time, [-x for x in res.controller_gradient_measured], label = "Gradient measured d_m", color='red', linestyle='-.', linewidth=1)
+        plt.plot (res.time, res.controller_gradient_estimate, label = "Gradient estimate m", color='red', linestyle='-', linewidth=1)
+        plt.plot (res.time, [x / 5 for x in res.controller_gradient_measured], label = "Gradient measured d_m", color='green', linestyle='--', linewidth=0.5)
         plt.plot (res.time, res.controller_treshold, label = "Treshold γ", color='black', linestyle=':', linewidth=0.5)
         plt.plot (res.time, [-x for x in res.controller_treshold], label = "Treshold -γ", color='black', linestyle=':', linewidth=0.5)
     if not args.nolegend:
@@ -308,7 +319,22 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
         plt.xlabel("Time (ms)")
     else:
         plt.xlabel("Time (min)")"""
-    plt.ylabel("Gradient and treshold")
+    plt.ylabel("Gradient and treshold [ms]")
+
+    # Plot the kalman gain, variance and e
+    plt.subplot(gs[plot_number], sharex=ax1)
+    plot_number += 1
+    for res in results[:1]:
+        plt.plot (res.time, res.kalman_gain, label = "Kalman gain", color='red', linestyle='-', linewidth=1)
+        plt.plot (res.time, res.variance, label = "Variance", color='green', linestyle='--', linewidth=1)
+        plt.plot (res.time, res.e, label = "e", color='black', linestyle=':', linewidth=1)
+    if not args.nolegend:
+        plt.legend()
+    if args.milliseconds:
+        plt.xlabel("Time (ms)")
+    else:
+        plt.xlabel("Time (min)")
+    plt.ylabel("State parameters")
 
     plt.tight_layout()
 
@@ -324,6 +350,8 @@ def host_eval(file):
             res = parse_app_results(host, i, file)
             if (res != None):
                 results.append(res)
+            else:
+                print(f"Failed to parse app {i} results")
     
     if args.details:
         for res in results:
@@ -392,6 +420,9 @@ def plotMulti(names, tuples):
             plt.savefig(f"figures/{title.split('(')[0]}.png", format="png")
         else:
             plt.show()
+            # maximize the plot window
+            figManager = plt.get_current_fig_manager()
+            figManager.window.showMaximized()
 
 def selectLinks(appResults: List[AppResults], pathInfos: List[PathInfo]):
     selected = []

@@ -758,7 +758,7 @@ public:
   std::string
   InfoString ()
   {
-    return "rtc fair_share_probing";
+    return "rtc";
   }
 
   void
@@ -773,20 +773,27 @@ public:
     // print all the app statistics
     for (AppState state : statistics)
       {
-        std::cout << std::setw (8) << state.timestamp.ToInteger (Time::Unit::MS) << std::setw (16)
-                  << "(" << state.timestamp.ToDouble (Time::Unit::MIN) << " min), ";
-        std::cout << std::setw (16) << state.latency / 1000.0 << ", ";
-        std::cout << std::setw (16) << state.loss << ", ";
-        std::cout << std::setw (4) << state.active_path << ", ";
-        std::cout << std::setw (16) << state.bitrate << ", ";
-        std::cout << std::setw (16) << state.A_s << ", ";
-        std::cout << std::setw (16) << state.A_r << ", ";
-        std::cout << std::setw (16) << state.fair_share << ", ";
-        std::cout << std::setw (16) << static_cast<int> (state.controller_state.state) << ", ";
-        std::cout << std::setw (16) << static_cast<int> (state.controller_state.signal) << ", ";
-        std::cout << std::setw (16) << state.controller_state.m << ", ";
-        std::cout << std::setw (16) << state.controller_state.adaptive_treshold << ", ";
-        std::cout << std::setw (16) << state.controller_state.d_m << std::endl;
+        std::cout << state.timestamp.ToInteger (Time::Unit::MS) << "(" << std::setw (16)
+                  << state.timestamp.ToDouble (Time::Unit::MIN) << std::setw (0) << " min), ";
+        std::cout << std::setw (12) << state.latency / 1000.0 << std::setw (0) << ", ";
+        std::cout << std::setw (12) << state.loss << std::setw (0) << ", ";
+        std::cout << std::setw (4) << state.active_path << std::setw (0) << ", ";
+        std::cout << std::setw (12) << state.bitrate << std::setw (0) << ", ";
+        std::cout << std::setw (12) << state.A_s << std::setw (0) << ", ";
+        std::cout << std::setw (12) << state.A_r << std::setw (0) << ", ";
+        std::cout << std::setw (12) << state.fair_share << std::setw (0) << ", ";
+        std::cout << std::setw (3) << static_cast<int> (state.controller_state.state)
+                  << std::setw (0) << ", ";
+        std::cout << std::setw (3) << static_cast<int> (state.controller_state.signal) << ", ";
+        std::cout << std::setw (16) << state.controller_state.m << std::setw (0) << ", ";
+        std::cout << std::setw (16) << state.controller_state.adaptive_treshold << std::setw (0)
+                  << ", ";
+        std::cout << std::setw (16) << state.controller_state.d_m << std::setw (0) << ", ";
+        std::cout << std::setw (16) << state.controller_state.kalman_gain << ", " << std::setw (0);
+        std::cout << std::setw (16) << state.controller_state.measurement_noise_variance << ", "
+                  << std::setw (0);
+        std::cout << std::setw (16) << state.controller_state.e << std::setw (0);
+        std::cout << std::endl;
       }
     std::cout << "----- End of app " << app_id << " results ------" << std::endl;
   }
