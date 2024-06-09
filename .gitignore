@@ -8,4 +8,4 @@
 .waf*/
 __pycache__/
 /out/
-*.out.txt
+*out.txt
