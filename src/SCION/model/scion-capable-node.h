@@ -67,6 +67,8 @@ public:
   Time GetLocalTime (void) const;
 
   std::string GetAddressAsString ();
+  std::string GetTypeAsString ();
+  std::string GetInfoAsString ();
   std::string GetLogPrefix ();
   void PrintLinkInfo (uint16_t local_if);
 

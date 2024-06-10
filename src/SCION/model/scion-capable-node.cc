@@ -275,6 +275,8 @@ ScionCapableNode::InitializeTransmissionQueues ()
   estimation_times.resize (n_devices);
   app_id_last_seen.resize (n_devices);
 
+  std::cout << GetInfoAsString () << "Initializing transmission queues" << std::endl;
+
   // set the max_queue sizes to the bwd-delay product
   for (uint32_t i = 0; i < n_devices; ++i)
     {
@@ -293,9 +295,27 @@ ScionCapableNode::InitializeTransmissionQueues ()
       // max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay;
       // factor of 20 for testing
       max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay * 2; // TODO
-      std::cout << GetLogPrefix ()
-                << ", transmission_delay: " << transmission_delay.ToInteger (Time::Unit::PS)
-                << "bwd_Gbit: " << bwd_Gbit << ", queue len: " << max_transmission_queues_lengths[i]
+
+      // Print target as and node info
+      if (remote_nodes_info.size () > i)
+        {
+          auto remote_node = std::get<0> (remote_nodes_info.at (i));
+          auto remote_if = std::get<1> (remote_nodes_info.at (i));
+          std::cout << "  Link " << i << " to " << remote_node->GetInfoAsString () << " on iface "
+                    << remote_if;
+        }
+      else
+        {
+          std::cout << "  Link " << i << " to unknown (remote_node info not found)";
+        }
+
+      // Print link info
+      std::cout << "  Transm. delay[ps]: " << std::setw (8)
+                << transmission_delay.ToInteger (Time::Unit::PS) << std::setw (0)
+                << ", prop delay[ms]: " << std::setw (8)
+                << propagation_delays.at (i).ToInteger (Time::Unit::MS) << std::setw (0)
+                << ", bwd[Gbit]: " << std::setw (6) << bwd_Gbit << std::setw (0)
+                << ", queue[B]: " << std::setw (12) << max_transmission_queues_lengths[i]
                 << std::endl;
     }
 }
@@ -566,11 +586,40 @@ ScionCapableNode::GetAddressAsString ()
 }
 
 std::string
+ScionCapableNode::GetTypeAsString ()
+{
+  if (typeid (*this) == typeid (ScionHost))
+    {
+      return "Host";
+    }
+  else if (typeid (*this) == typeid (PathServer))
+    {
+      return "PathServer";
+    }
+  else if (typeid (*this) == typeid (BorderRouter))
+    {
+      return "BorderRouter";
+    }
+  else
+    {
+      return "Node";
+    }
+}
+
+std::string
+ScionCapableNode::GetInfoAsString ()
+{
+  std::string s = GetAddressAsString () + " (" + GetTypeAsString () + ")";
+  s.resize (22, ' '); // pad to align
+  return s;
+}
+
+std::string
 ScionCapableNode::GetLogPrefix ()
 {
-  // print current time in ms
+
   std::string log_prefix = "[" + std::to_string (Simulator::Now ().ToDouble (Time::Unit::MIN)) +
-                           "][host-" + ScionCapableNode::GetAddressAsString () + "] ";
+                           "][" + GetInfoAsString () + "] ";
   return log_prefix;
 }
 
