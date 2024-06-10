@@ -269,6 +269,7 @@ ScionAs::ConnectInternalNodes (bool only_propagation_delay)
               1e6 * CalculateGreatCircleLatency ((ld) br->GetLatitude (), (ld) br->GetLogitude (),
                                                  (ld) host->GetLatitude (),
                                                  (ld) host->GetLogitude ())));
+          propagation_delay = MilliSeconds(10); // TODO: fixed because we don't set realistic host coordinates yet
 
           br->AddToPropagationDelays (propagation_delay);
           host->AddToPropagationDelays (propagation_delay);

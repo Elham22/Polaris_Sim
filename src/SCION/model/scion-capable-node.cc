@@ -26,6 +26,7 @@
 
 #include "scion-as.h"
 #include "scion-capable-node.h"
+#include <iomanip>
 
 namespace ns3 {
 NS_LOG_COMPONENT_DEFINE ("ScionCapableNode");
@@ -34,6 +35,12 @@ void
 ScionCapableNode::ScheduleReceive (uint16_t local_if, ScionPacket *packet, Time propagation_delay)
 {
   AdvanceLocalTime ();
+  if (propagation_delay > Seconds (0.01))
+    {
+      std::cout << GetLogPrefix () << "Receiving packet of type " << packet->payload_type
+                << " size " << packet->size << " on interface " << local_if << " with delay "
+                << propagation_delay.ToDouble (Time::Unit::MS) << "ms" << std::endl;
+    }
   Simulator::Schedule (propagation_delay, &ScionCapableNode::Receive, this, local_if, packet);
 }
 
@@ -43,6 +50,12 @@ ScionCapableNode::Receive (uint16_t local_if, ScionPacket *packet)
   AdvanceLocalTime ();
   processing_queue_length++;
   Time delay = processing_throughput_delay * processing_queue_length + processing_delay;
+  if (delay > Seconds (0.01))
+    {
+      std::cout << GetLogPrefix () << "Processing packet of type " << packet->payload_type
+                << " size " << packet->size << " on interface " << local_if << " with delay "
+                << delay.ToDouble (Time::Unit::MS) << "ms" << std::endl;
+    }
   Simulator::Schedule (delay, &ScionCapableNode::ProcessReceivedPacket, this, local_if, packet,
                        local_time);
   // TODO: Should probaby implement dropping here as well, as currently it's only done when send buffer is full
@@ -173,6 +186,12 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
 
   transmission_queues_lengths.at (local_if) = new_size;
   Time delay = transmission_delays.at (local_if) * transmission_queues_lengths.at (local_if);
+  if (delay > Seconds (0.01))
+    {
+      std::cout << GetLogPrefix () << "Scheduling packet of type " << packet->payload_type
+                << " size " << packet->size << " on interface " << local_if << " with delay "
+                << delay.ToDouble (Time::Unit::MS) << "ms" << std::endl;
+    }
   Simulator::Schedule (delay, &ScionCapableNode::Send, this, local_if, packet);
 }
 
