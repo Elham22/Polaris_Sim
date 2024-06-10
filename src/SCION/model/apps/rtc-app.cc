@@ -90,12 +90,13 @@ protected:
   std::vector<double> bitrates{10 * 0.7e6, 10 * 1.5e6, 10 * 5e6};
   uint32_t selected_bitrate = 0;
   const uint16_t fps = 30;
+  const Time frame_interval = Seconds (1.0 / fps); // how much time between frames
   uint32_t frame_no = 0; // number of the video frame
 
   ControllerStateSnapshot controller_state; // state of the delay based controller
   double A_r = 0; // send rate estimate by the receiver side loss based controller
   double A_s = 0; // send rate estimate by the sender side loss based controller
-  double sendrate = 0.2e6; // in Bytes per second
+  double sendrate = 0.2e7; // in Bytes per second
 
   double steering_treshold_u = 20;
   double steering_treshold_l = 0;
@@ -141,7 +142,7 @@ public:
   StartAppTraffic ()
   {
     SendProbes ();
-    TrackState ();
+    // TrackState ();
 
     // Start sending video frames after a random delay, to avoid synchronization
     Simulator::Schedule (MilliSeconds (1000) + RandomDelay (500), &RTCApp::SendVideoFrame, this);
@@ -318,23 +319,29 @@ public:
     std::cout << log_prefix () << "Sending frame " << frame_no << " with " << frame_bytes
               << " bytes on path " << active_path << std::endl;
 
+    double packets_to_send = std::ceil ((double) frame_bytes / m_pktSize);
+    Time packet_interval = frame_interval / packets_to_send;
+    Time packet_schedule_delay = Seconds (0);
+
     // split up into multiple packets if larger than max pkt size
     while (frame_bytes > m_pktSize)
       {
-        SendPacket (m_pktSize, all_paths[active_path]);
+        Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, m_pktSize,
+                             all_paths[active_path]);
+        packet_schedule_delay += packet_interval;
         frame_bytes -= m_pktSize;
       }
     if (frame_bytes > 0)
       {
-        SendPacket (frame_bytes, all_paths[active_path]);
+        Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, m_pktSize,
+                             all_paths[active_path]);
       }
 
     frame_no++;
 
     // Schedule next packet
-    Time next = Seconds (1.0 / fps);
-    Simulator::Schedule (next + RandomDelay ((next / 4).ToInteger (Time::Unit::MS)),
-                         &RTCApp::SendVideoFrame, this);
+    auto delay = RandomDelay ((frame_interval / 10).ToInteger (Time::Unit::PS));
+    Simulator::Schedule (frame_interval + delay, &RTCApp::SendVideoFrame, this);
   }
 
   void
@@ -531,7 +538,7 @@ public:
     if (path_infos[active_path].loss < LOSS_TRESHOLD_LOW)
       {
         eta = std::pow (1.05, std::min (time_since_last_update, 1.0));
-        A_s = eta * sendrate + 1e5;
+        A_s = eta * sendrate + 1e4;
       }
     else if (path_infos[active_path].loss > LOSS_TRESHOLD_HIGH)
       {
@@ -777,7 +784,7 @@ public:
   std::string
   InfoString ()
   {
-    return "rtc";
+    return "rtc fair_share";
   }
 
   void
@@ -826,11 +833,11 @@ public:
     NS_FATAL_ERROR ("[rtc-app] should not have received probe response");
   }
 
-  // Returns a random time between -Nms and Nms where N is an integer parameter in ms
+  // Returns a random time between -N and N where N is an integer parameter in ps
   Time
   RandomDelay (int N)
   {
-    return MilliSeconds (rand () % (2 * N) - N);
+    return PicoSeconds (rand () % (2 * N) - N);
   }
 };
 
