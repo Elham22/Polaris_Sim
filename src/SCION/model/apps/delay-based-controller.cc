@@ -65,7 +65,7 @@ protected:
   const double beta = 0.95; // Smoothing factor for the measurement noise variance
 
   const double INCREASE_FACTOR_MULT =
-      1.08; // Factor to increase rate per second during multiplicative increase
+      1.05; // Factor to increase rate per second during multiplicative increase
   const double DECREASE_FACTOR_MULT =
       0.85; // Factor to decrease rate per second during multiplicative decrease
 
@@ -183,7 +183,7 @@ protected:
     // var_v_hat(i) = max(alpha * var_v_hat(i-1) + (1-alpha) * z(i)^2, 1)
     // alpha = (1-chi)^(30/(1000 * f_max))
     // We're also just using a fixed factor beta right now, instead of the dynamic alpha
-    measurement_noise_variance = std::max (measurement_noise_variance, 1.0);
+    // measurement_noise_variance = std::max (measurement_noise_variance, 1.0);
 
     // Update the Kalman gain
     //                    e(i-1) + q(i)
@@ -197,7 +197,7 @@ protected:
 
     // Update the gradient estimate
     // m(t_i) = (1 − K(t_i)) · m(t_i−1) + K(t_i) · (d_m (t_i))
-    // kalman_gain *= 8; // TODO: remove this line (for testing only)
+    // kalman_gain = 0.6; // TODO: remove this line (for testing only)
     // kalman_gain = std::min (0.90, kalman_gain); // TODO: remove this line (for testing only)
     m = (1 - kalman_gain) * m_prev + kalman_gain * d_m;
 
@@ -229,6 +229,7 @@ protected:
     adaptive_treshold =
         adaptive_treshold + delta_t * treshold_gain * (std::abs (m) - adaptive_treshold);
 
+    adaptive_treshold = 0.2; // TODO: still deteriorates if treshold is dynamic
     // From the draft:
     // It is also RECOMMENDED to clamp del_var_th(i) to the range [6, 600],
     // since a too small del_var_th(i) can cause the detector to become overly
@@ -375,7 +376,10 @@ protected:
         // Decrease rate by at most 15% per second
         eta = std::pow (DECREASE_FACTOR_MULT,
                         std::min (time_since_last_rate_update.GetSeconds (), 1.0));
-        A_r = eta * receive_rate;
+
+        // If the received rate is very high it can actually be that the new
+        // rate is higher than the the previous one
+        A_r = std::min (A_r, eta * receive_rate);
         break;
       case ControllerState::HOLD:
         break;
@@ -384,7 +388,7 @@ protected:
         // Increase rate by at most 8% per second
         eta = std::pow (INCREASE_FACTOR_MULT,
                         std::min (time_since_last_rate_update.GetSeconds (), 1.0));
-        A_r = eta * A_r;
+        A_r = eta * A_r + 1e4;
 
         // Cap at 1.5x the receive_rate
         if (A_r > 1.5 * receive_rate)
