@@ -85,7 +85,7 @@ public:
   virtual void HandleSCMP (ScmpReqOrResp scmp);
 
 protected:
-  uint32_t m_pktSize = 1470 * 15; // Size of packets
+  uint32_t m_pktSize = 1470 * 5; // Size of packets
   ScionHost *host;
   uint32_t app_id;
   app_packet_id_t packet_id = 0;
