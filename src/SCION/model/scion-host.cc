@@ -575,141 +575,151 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   app_connection_key_t key =
       std::make_tuple (packet->src_ia, packet->src_host, data.app_id, data.path_id);
 
-  // Create new AppInfo for new connection
-  if (app_infos.find (key) == app_infos.end ())
+  // New connection
+  if (connection_infos.find (key) == connection_infos.end ())
     {
       std::cout << GetLogPrefix () << "Connection opened: New packets arrived for app_id "
                 << std::get<2> (key) << " on path " << std::get<3> (key) << std::endl;
-      AppInfo info;
-      info.seq_no_start = data.seq_no;
-      info.path = packet->path;
-      app_infos[key] = info;
-      Simulator::Schedule (app_info_period, &ScionHost::SendAppResp, this, key);
+      ConnectionInfo connection;
+      connection.seq_no_start = data.seq_no;
+      connection.frame_no = data.frame_no;
+      connection.path = packet->path;
+      connection.report = new PacketsReport ();
+      connection.last_update = local_time;
+      connection_infos[key] = connection;
+      Simulator::Schedule (connection_timeout, &ScionHost::CheckConnectionTimeout, this, key);
     }
 
   // Add received packet to statistics for current interval
-  auto info = app_infos.at (key);
-  info.num_packets++;
-  info.bytes_received += packet->size;
+  ConnectionInfo *connection = &connection_infos.at (key);
 
-  if (info.seq_no_last < data.seq_no)
+  if (data.frame_no < connection->frame_no)
     {
-      info.seq_no_last = data.seq_no;
+      std::cout << GetLogPrefix () << "Received packet from old frame " << data.frame_no
+                << " instead of " << connection->frame_no << std::endl;
+      return;
+    }
+
+  connection->num_packets++;
+  connection->bytes_received += packet->size;
+
+  if (connection->seq_no_last < data.seq_no)
+    {
+      connection->seq_no_last = data.seq_no;
     }
   auto latency = local_time.ToInteger (Time::Unit::US) - data.timestamp;
-  info.aggregated_latencies += latency;
+  connection->aggregated_latencies += latency;
 
-  // Keep updating the ecn status. The ecn tag of the last packet in the
-  // response interval will dictate what the sender will see.
-  info.ecn = packet->ecn;
+  // Keep updating ecn. Last packet to go into the report will determine what
+  // sender will see.
+  connection->ecn = packet->ecn;
 
-  // Feed data to the delay based controller
-  bool rate_updated =
-      info.controller.RecordPacket (data, packet->size, MicroSeconds (data.timestamp), local_time);
+  auto *report = connection->report;
 
-  // If the controller computed a new rate, inform the sender
-  if (rate_updated)
+  report->AddPacket (PacketRecord{
+      .time_sent = MicroSeconds (data.timestamp),
+      .time_received = local_time,
+      .seq_no = data.seq_no,
+      .frame_no = data.frame_no,
+      .size = packet->size,
+  });
+
+  if (report->IsFrameComplete () || report->Age () > max_report_interval)
     {
-      SendREMB (key);
+      SendAppResp (key);
+    }
+}
+
+void
+ScionHost::CheckConnectionTimeout (app_connection_key_t key)
+{
+  if (connection_infos.find (key) == connection_infos.end ())
+    {
+      return;
     }
 
-  app_infos[key] = info;
+  ConnectionInfo *connection = &connection_infos.at (key);
+
+  Time time_since_last_update = local_time - connection->last_update;
+  if (time_since_last_update > connection_timeout)
+    {
+      delete connection->report;
+      connection_infos.erase (key);
+      std::cout << GetLogPrefix () << "Connection closed: No update in "
+                << connection_timeout.GetSeconds () << " seconds from app " << std::get<2> (key)
+                << " on path " << std::get<3> (key) << std::endl;
+      return;
+    }
+
+  Simulator::Schedule (connection_timeout - time_since_last_update,
+                       &ScionHost::CheckConnectionTimeout, this, key);
 }
 
 void
 ScionHost::SendAppResp (app_connection_key_t key)
 {
-  if (app_infos.find (key) == app_infos.end ())
+  if (connection_infos.find (key) == connection_infos.end ())
     {
       return;
     }
 
-  // If no packets arrived in this interval, assume connection is dead
-  if (app_infos[key].num_packets == 0)
-    {
-      std::cout << GetLogPrefix () << "Connection closed: No new packets arrived for app_id "
-                << std::get<2> (key) << " on path " << std::get<3> (key) << std::endl;
-      app_infos.erase (key);
-      return;
-    }
+  ConnectionInfo *connection = &connection_infos.at (key);
 
-  auto info = app_infos.at (key);
   PayloadType payload_type = PayloadType::APPLICATION_RESP;
   Payload payload;
-  auto num_packets_expected = info.seq_no_last - info.seq_no_start +
+  auto num_packets_expected = connection->seq_no_last - connection->seq_no_start +
                               1; // +1 because id_start is id of first packet in period
   // std::cout << "app resp 1 from " << std::get<2> (key) << std::endl;
   payload.app_resp.app_id = std::get<2> (key);
   payload.app_resp.loss =
-      ((double) num_packets_expected - info.num_packets) / num_packets_expected / 2;
-  payload.app_resp.avg_latency = ((double) info.aggregated_latencies) / info.num_packets;
+      ((double) num_packets_expected - connection->num_packets) / num_packets_expected / 2;
+  payload.app_resp.avg_latency =
+      ((double) connection->aggregated_latencies) / connection->num_packets;
 
   // Warn if avg_latency is larger than 5 seconds
   if (payload.app_resp.avg_latency > 5000000)
     {
       std::cout << "[host] Very high latency detected " << payload.app_resp.app_id
                 << ", exp_num_packets " << num_packets_expected << ", packets arrived "
-                << info.num_packets << ", loss " << payload.app_resp.loss << ", latency "
+                << connection->num_packets << ", loss " << payload.app_resp.loss << ", latency "
                 << payload.app_resp.avg_latency << std::endl;
     }
 
-  payload.app_resp.bytes_received = info.bytes_received;
-  payload.app_resp.ecn = info.ecn; // Notify sender of latest ecn status
+  payload.app_resp.bytes_received = connection->bytes_received;
+  payload.app_resp.ecn = connection->ecn; // Notify sender of latest ecn status
   payload.app_resp.timestamp = local_time.ToInteger (Time::Unit::US);
   payload.app_resp.path_id = std::get<3> (key);
-  payload.app_resp.is_REMB = false;
+  payload.app_resp.packets_report = connection->report;
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, std::get<0> (key),
-                                           std::get<1> (key), sizeof (AppResp), info.path);
+                                           std::get<1> (key), sizeof (AppResp), connection->path);
   packet->path_reversed = true;
   packet->curr_inf = packet->path.size () - 1;
   packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
-  std::cout << GetLogPrefix () << "Sending app feedback to " << payload.app_resp.app_id
+  std::cout << GetLogPrefix () << "Sending app report to app " << payload.app_resp.app_id
             << " via path " << payload.app_resp.path_id << std::endl;
+
+  // print all fields of connection
+  std::cout << "Connection info: " << std::endl;
+  std::cout << "seq_no_start: " << connection->seq_no_start << std::endl;
+  std::cout << "seq_no_last: " << connection->seq_no_last << std::endl;
+  std::cout << "num_packets: " << connection->num_packets << std::endl;
+  std::cout << "bytes_received: " << connection->bytes_received << std::endl;
+  std::cout << "aggregated_latencies: " << connection->aggregated_latencies << std::endl;
+  std::cout << "ecn: " << connection->ecn << std::endl;
+  std::cout << "last_update: " << connection->last_update << std::endl;
+
   SendScionPacket (packet);
 
   // Reset values again for next window
-  info.aggregated_latencies = 0;
-  info.num_packets = 0;
-  info.bytes_received = 0;
-  info.seq_no_start = info.seq_no_last + 1;
-  app_infos[key] = info;
+  connection->aggregated_latencies = 0;
+  connection->num_packets = 0;
+  connection->bytes_received = 0;
+  connection->seq_no_start = connection->seq_no_last + 1;
 
-  Simulator::Schedule (app_info_period, &ScionHost::SendAppResp, this, key);
-}
-
-/**
- * Send a REMB message to the sender
- 
-*/
-void
-ScionHost::SendREMB (app_connection_key_t key)
-{
-  if (app_infos.find (key) == app_infos.end ())
-    {
-      return;
-    }
-  auto info = app_infos.at (key);
-  AppResp app_resp;
-  app_resp.app_id = std::get<2> (key);
-  app_resp.is_REMB = true;
-  app_resp.A_r = info.controller.GetCurrentRate ();
-  app_resp.state_snapshot = info.controller.GetStateSnapshot ();
-  app_resp.path_id = std::get<3> (key);
-
-  PayloadType payload_type = PayloadType::APPLICATION_RESP;
-  Payload payload;
-  payload.app_resp = app_resp;
-
-  ScionPacket *packet =
-      CreateScionPacket (payload, payload_type, std::get<0> (key), std::get<1> (key),
-                         sizeof (AppResp), app_infos[key].path);
-  packet->path_reversed = true;
-  packet->curr_inf = packet->path.size () - 1;
-  packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
-  std::cout << GetLogPrefix () << "Sending REMB to " << payload.app_resp.app_id << " via path "
-            << payload.app_resp.path_id << ", rate: " << payload.app_resp.A_r << std::endl;
-  SendScionPacket (packet);
+  // NOTE: Old report will be taken care of by sender. We don't drop app
+  // response packets, so it should never be lost.
+  connection->report = new PacketsReport ();
 }
 
 void

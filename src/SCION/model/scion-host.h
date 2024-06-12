@@ -28,7 +28,7 @@
 #include "path-segment.h"
 #include "scion-capable-node.h"
 #include "scion-packet.h"
-#include "apps/delay-based-controller.cc"
+#include "webrtc-cc/delay-based-estimator.cc"
 
 namespace ns3 {
 
@@ -37,17 +37,18 @@ typedef std::tuple<ia_t, host_addr_t, app_id_t, app_path_id_t> app_connection_ke
 
 class App;
 
-struct AppInfo
+struct ConnectionInfo
 {
   std::vector<const ns3::PathSegment *> path; // path over which to send response
-  DelayBasedController controller;
   app_packet_id_t seq_no_start = 0;
   app_packet_id_t seq_no_last = 0;
+  uint32_t frame_no = 0;
   uint32_t num_packets = 0;
   uint64_t bytes_received = 0;
   int64_t aggregated_latencies = 0;
-  int8_t ecn = 0;
-  Time last_report_time = Seconds(0);
+  uint16_t ecn = 0;
+  Time last_update = Seconds(0);
+  PacketsReport *report = nullptr;
 };
 
 class ScionHost : public ScionCapableNode
@@ -76,8 +77,9 @@ protected:
   cached_path_segs_dataset_t cached_core_path_segments;
   cached_path_segs_dataset_t cached_down_path_segments;
 
-  Time app_info_period = MilliSeconds(100); // how long between app responses
-  std::map<std::tuple<ia_t, host_addr_t, int, app_id_t>, AppInfo> app_infos;
+  Time max_report_interval = MilliSeconds(50); // max time between reports
+  Time connection_timeout = MilliSeconds(1000); // time after which a connection is considered dead
+  std::map<std::tuple<ia_t, host_addr_t, int, app_id_t>, ConnectionInfo> connection_infos;
 
   virtual void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet,
                                       Time receive_time) override;
@@ -106,6 +108,7 @@ protected:
   void ReceiveAppResp (AppResp app_resp);
   void SendAppResp (app_connection_key_t key);
   void SendREMB (app_connection_key_t key);
+  void CheckConnectionTimeout(app_connection_key_t key);
   void ReturnAppProbe (ia_t src_ia, host_addr_t src_addr,
                           std::vector<const ns3::PathSegment *> path, AppProbe app_probe);
 };

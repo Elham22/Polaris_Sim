@@ -18,10 +18,11 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#ifndef SCION_SIMULATOR_DELAY_BASED_CONTROLLER_H
-#define SCION_SIMULATOR_DELAY_BASED_CONTROLLER_H
+#ifndef WEBRTC_CC_DELAY_BASED_ESTIMATOR_H
+#define WEBRTC_CC_DELAY_BASED_ESTIMATOR_H
 
 #include "src/core/model/simulator.h"
+#include "src/SCION/model/webrtc-cc/types.h"
 #include "src/SCION/model/scion-packet.h"
 #include "src/SCION/model/apps/controller-state.h"
 #include "src/SCION/model/externs.h"
@@ -29,15 +30,16 @@
 namespace ns3 {
 
 /**
- * A delay-based congestion controller based on the GCC algorithm
+ * A delay-based bandwidth estimator based on GCC
  * Sources:
  * https://c3lab.poliba.it/images/6/65/Gcc-analysis.pdf
  * https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02
+ * https://webrtc.googlesource.com/src
 */
 class DelayBasedController
 {
 
-  struct VideoFrameInfo
+  struct FrameRecord
   {
     uint32_t frame_no;
 
@@ -89,9 +91,9 @@ protected:
   double measurement_noise_variance = 0; // Variance of the one way delay gradient
 
   // Record information about frames to compute inter arrival times
-  std::map<uint32_t, VideoFrameInfo> *frames = nullptr;
-  VideoFrameInfo *frame_current = nullptr;
-  VideoFrameInfo *frame_previous = nullptr;
+  std::map<uint32_t, FrameRecord> frames = std::map<uint32_t, FrameRecord> ();
+  FrameRecord *frame_current = nullptr;
+  FrameRecord *frame_previous = nullptr;
 
   // This map is used to measure the receiver rate
   std::map<Time, u_int16_t> received_bytes;
@@ -146,11 +148,11 @@ protected:
   ClearOldFrames ()
   {
     Time now = Simulator::Now ();
-    for (auto it = frames->begin (); it != frames->end ();)
+    for (auto it = frames.begin (); it != frames.end ();)
       {
         if (now - it->second.last_pkt_rcv_time > T)
           {
-            it = frames->erase (it);
+            it = frames.erase (it);
           }
         else
           {
@@ -405,7 +407,7 @@ public:
    * @return Current recommended send rate computed by the controller
   */
   double
-  GetCurrentRate ()
+  GetRate ()
   {
     return A_r;
   }
@@ -440,7 +442,7 @@ public:
   }
 
   /**
-   * Feed a packet into the controller
+   * Feed a PacketRecord into the controller
    *
    * The rate is updated whenever a new frame is received and we already have at
    * least two frames.
@@ -453,19 +455,15 @@ public:
    * @param time_rx the time the packet arrived at the receiver
   */
   bool
-  RecordPacket (AppData app_data, uint16_t size, Time time_tx, Time time_rx)
+  FeedPacket (PacketRecord *packet)
   {
     bool updated = false;
-    received_bytes[time_rx] = size;
-    if (frames == nullptr)
-      {
-        frames = new std::map<uint32_t, VideoFrameInfo> ();
-      }
+    received_bytes[packet->time_received] = packet->size;
 
     // Check if this packet belongs to a new frame
-    if (frames->find (app_data.frame_no) == frames->end ())
+    if (frames.find (packet->frame_no) == frames.end ())
       {
-        std::cout << "Recording new frame: " << app_data.frame_no << std::endl;
+        std::cout << "Recording new frame: " << packet->frame_no << std::endl;
 
         // We're receiving a new frame, so assume that the previous one is complete
         // This means we can trigger an update if we have received at least two frames.
@@ -483,67 +481,36 @@ public:
           }
 
         // Add new frame
-        frames->emplace (app_data.frame_no, VideoFrameInfo{
-                                                .frame_no = app_data.frame_no,
-                                                .first_pkt_seq_no = app_data.seq_no,
-                                                .first_pkt_send_time = time_tx,
-                                                .first_pkt_rcv_time = time_rx,
-                                                .last_pkt_seq_no = app_data.seq_no,
-                                                .last_pkt_send_time = time_tx,
-                                                .last_pkt_rcv_time = time_rx,
-                                            });
+        frames.emplace (packet->frame_no, FrameRecord{
+                                              .frame_no = packet->frame_no,
+                                              .first_pkt_seq_no = packet->seq_no,
+                                              .first_pkt_send_time = packet->time_sent,
+                                              .first_pkt_rcv_time = packet->time_received,
+                                              .last_pkt_seq_no = packet->seq_no,
+                                              .last_pkt_send_time = packet->time_sent,
+                                              .last_pkt_rcv_time = packet->time_received,
+                                          });
 
         // Update frame pointers
         frame_previous = frame_current;
-        frame_current = &frames->at (app_data.frame_no);
+        frame_current = &frames[packet->frame_no];
       }
     else
       {
-        VideoFrameInfo &frame = frames->at (app_data.frame_no);
+        FrameRecord &frame = frames[packet->frame_no];
 
         // ignore out-of-order packets
-        if (app_data.seq_no > frame.last_pkt_seq_no)
+        if (packet->seq_no > frame.last_pkt_seq_no)
           {
-            frame.last_pkt_seq_no = app_data.seq_no;
-            frame.last_pkt_send_time = time_tx;
-            frame.last_pkt_rcv_time = time_rx;
+            frame.last_pkt_seq_no = packet->seq_no;
+            frame.last_pkt_send_time = packet->time_sent;
+            frame.last_pkt_rcv_time = packet->time_received;
           }
       }
     return updated;
-  }
-
-  /**
-   * Copy constructor
-  */
-  DelayBasedController &
-  operator= (const DelayBasedController &other)
-  {
-    if (this != &other)
-      {
-        signal = other.signal;
-        state = other.state;
-        overuse_detected_since = other.overuse_detected_since;
-        overuse_detected = other.overuse_detected;
-        adaptive_treshold = other.adaptive_treshold;
-        e = other.e;
-        d_m = other.d_m;
-        m = other.m;
-        z = other.z;
-        kalman_gain = other.kalman_gain;
-        treshold_gain = other.treshold_gain;
-        measurement_noise_variance = other.measurement_noise_variance;
-        frames = other.frames;
-        frame_current = other.frame_current;
-        frame_previous = other.frame_previous;
-        received_bytes = other.received_bytes;
-        receive_rate = other.receive_rate;
-        A_r = other.A_r;
-        last_rate_update = other.last_rate_update;
-      }
-    return *this;
   }
 };
 
 } // namespace ns3
 
-#endif // SCION_SIMULATOR_DELAY_BASED_CONTROLLER_H
+#endif // WEBRTC_CC_DELAY_BASED_ESTIMATOR_H

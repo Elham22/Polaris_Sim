@@ -28,7 +28,7 @@
 #include "ns3/object.h"
 
 #include "path-segment.h"
-#include "apps/controller-state.h"
+#include "webrtc-cc/types.h"
 
 namespace ns3 {
 typedef uint16_t host_addr_t;
@@ -161,9 +161,10 @@ struct AppResp
   double loss;
   uint8_t ecn; // explicit congestion notification
   uint64_t bytes_received;
-  bool is_REMB; // contains Receiver Estimated Max Bitrate
-  double A_r; // rate estimate by the delay based controller
-  ControllerStateSnapshot state_snapshot; // snapshot of delay based controller state
+
+  // Simplify by sending back report via pointer. Real implementation would use
+  // some form of run-length encoding to minimize feedback overhead
+  PacketsReport *packets_report;
 };
 
 struct ScmpReqOrResp

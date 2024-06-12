@@ -214,7 +214,7 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
     plot_number += 1
     if len(results) == 1: # If there is only one application, plot all the rates
          for res in results[:1]:
-            plt.plot (res.time, res.send_rate, label = "Send rate", linewidth=0.5)
+            plt.plot (res.time, res.send_rate, label = "Send rate", linewidth=1.5)
             plt.plot (res.time, res.A_r, label = "A_r")
             plt.plot (res.time, res.A_s, label = "A_s")
             plt.plot (res.time, res.fair_share, label = "fair share", linewidth=0.5)

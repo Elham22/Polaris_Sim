@@ -20,7 +20,9 @@
 #include "src/SCION/model/externs.h"
 #include "src/SCION/model/scion-core-as.h"
 #include "src/SCION/model/apps/app.h"
-#include "src/SCION/model/apps/delay-based-controller.cc"
+#include "src/SCION/model/webrtc-cc/types.h"
+#include "src/SCION/model/webrtc-cc/delay-based-estimator.cc"
+#include "src/SCION/model/webrtc-cc/loss-based-estimator.cc"
 #include <iomanip>
 
 namespace ns3 {
@@ -65,9 +67,6 @@ struct AppState
 class RTCApp : public App
 {
 protected:
-  const double LOSS_TRESHOLD_LOW = 0.02;
-  const double LOSS_TRESHOLD_HIGH = 0.10;
-  const double LOSS_SMOOTHING_FACTOR = 0.95;
   const double PATH_SWITCH_TRESHOLD = 1.5;
   const Time TRACKING_INTERVAL = Seconds (0.1);
   uint32_t num_paths;
@@ -93,7 +92,9 @@ protected:
   const Time frame_interval = Seconds (1.0 / fps); // how much time between frames
   uint32_t frame_no = 0; // number of the video frame
 
-  ControllerStateSnapshot controller_state; // state of the delay based controller
+  DelayBasedController delay_based_estimator;
+  LossBasedEstimator loss_based_estimator = LossBasedEstimator (0.2e7);
+
   double A_r = 0; // send rate estimate by the receiver side loss based controller
   double A_s = 0; // send rate estimate by the sender side loss based controller
   double sendrate = 0.2e7; // in Bytes per second
@@ -101,9 +102,10 @@ protected:
   double steering_treshold_u = 20;
   double steering_treshold_l = 0;
 
-  Time last_path_change = Time (0);
-  Time last_remb_change = Time (0);
-  Time last_loss_based_rate_update = Time (0);
+  Time last_path_change = Seconds (0);
+  Time last_A_r_update = Seconds (0);
+  Time last_report = Seconds (0);
+  Time last_rtt = Seconds (0);
 
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
@@ -126,10 +128,6 @@ public:
         PathStatistics path_info;
         path_infos.push_back (path_info);
       }
-
-    // Use default values for initial state (only relevant for plot)
-    controller_state.signal = DetectorSignal::NORMAL;
-    controller_state.state = ControllerState::INCREASE;
 
     // choose a random path to start with
     active_path = rand () % num_paths;
@@ -165,8 +163,8 @@ public:
     // state.path_stats = path_infos;
     state.bitrate = sendrate;
     state.latency = path_info.latency;
-    state.loss = path_info.loss;
-    state.controller_state = controller_state;
+    state.loss = loss_based_estimator.GetLoss ();
+    state.controller_state = delay_based_estimator.GetStateSnapshot ();
     state.A_s = A_s;
     state.A_r = A_r;
     state.fair_share = path_info.fair_share;
@@ -316,6 +314,12 @@ public:
 
     auto frame_bytes = sendrate / fps;
 
+    // Check if frame_bytes is finite
+    if (!std::isfinite (frame_bytes))
+      {
+        NS_FATAL_ERROR ("Frame size is not finite");
+      }
+
     std::cout << log_prefix () << "Sending frame " << frame_no << " with " << frame_bytes
               << " bytes on path " << active_path << std::endl;
 
@@ -344,28 +348,6 @@ public:
     Simulator::Schedule (frame_interval + delay, &RTCApp::SendVideoFrame, this);
   }
 
-  void
-  ReceiveREMB (AppResp app_resp)
-  {
-    if (enable_logging)
-      {
-        std::cout << log_prefix () << "Receiving REMB report on active path " << app_resp.path_id
-                  << std::endl;
-      }
-
-    // HACK: In reality, we would only get a REMB once a second, or when the
-    // receiver detects congestion. For visualization of the controller state,
-    // we do want to receive a REMB on every update, but we only update A_r once
-    // a second or when congested to keep the simulation realistic.
-
-    controller_state = app_resp.state_snapshot;
-    if (Simulator::Now () > last_remb_change + Seconds (1) || app_resp.A_r < 0.97 * A_r)
-      {
-        A_r = app_resp.A_r;
-        last_remb_change = Simulator::Now ();
-      }
-  }
-
   /***
    * Handle response
   */
@@ -383,12 +365,6 @@ public:
           }
       }
 
-    if (app_resp.is_REMB)
-      {
-        ReceiveREMB (app_resp);
-        return;
-      }
-
     if (enable_logging)
       {
         std::cout << log_prefix () << "Processing report on active path " << path_id << std::endl;
@@ -400,15 +376,41 @@ public:
     path_infos[path_id].ecn = app_resp.ecn;
     path_infos[path_id].latency = app_resp.avg_latency;
 
+    PacketsReport *report = app_resp.packets_report;
+
+    if (report->IsFrameComplete ())
+      {
+        Time send_delay = report->packets.back ().time_received - report->packets.back ().time_sent;
+        Time receive_delay = Simulator::Now () - MicroSeconds (app_resp.timestamp);
+        last_rtt = send_delay + receive_delay;
+      }
+
     if (app_resp.loss < 0)
       {
         std::cout << log_prefix () << "Loss <0 detected" << std::endl;
         app_resp.loss = 0;
       }
+    path_infos[path_id].loss = app_resp.loss;
 
-    // Exponential moving average
-    path_infos[path_id].loss *= (1 - LOSS_SMOOTHING_FACTOR);
-    path_infos[path_id].loss += (LOSS_SMOOTHING_FACTOR * app_resp.loss);
+    // With feedback on our active path, we can perform congestion control
+    if (path_id == active_path)
+      {
+        for (auto packet : report->packets)
+          {
+            if (delay_based_estimator.FeedPacket (&packet))
+              {
+                std::cout << log_prefix () << "Delay based estimator updated" << std::endl;
+                // A_r = delay_based_estimator.GetRate ();
+              }
+          }
+
+        loss_based_estimator.FeedReport (report);
+
+        path_infos[path_id].loss = loss_based_estimator.GetLoss ();
+
+        // Update the send rate
+        UpdateBWE ();
+      }
 
     if (enable_logging)
       {
@@ -417,17 +419,25 @@ public:
                   << "    Current sending rate: " << sendrate << std::endl;
       }
 
-    // With feedback on our active path, we can perform congestion control
-    if (path_id == active_path)
-      {
-        UpdateBWE ();
-      }
+    delete report;
   }
 
   void
   UpdateBWE ()
   {
-    UpdateLossController ();
+    A_s = loss_based_estimator.GetRate ();
+    std::cout << log_prefix () << "Sender estimate: " << A_s << std::endl;
+
+    // To simulate REMB, we only use the new receiver estimate every second or if it's going down
+    if (Simulator::Now () - last_A_r_update > Seconds (1) ||
+        delay_based_estimator.GetRate () < 0.97 * A_r)
+      {
+        std::cout << log_prefix () << "Updating receiver estimate" << std::endl;
+        A_r = delay_based_estimator.GetRate ();
+        last_A_r_update = Simulator::Now ();
+      }
+    std::cout << log_prefix () << "Receiver estimate: " << A_r << std::endl;
+
     sendrate = A_s;
 
     // If we got an estimate from the receiver, use it
@@ -438,6 +448,7 @@ public:
             std::cout << log_prefix () << "Receiver estimate lower than sender estimate: " << A_r
                       << " < " << A_s << ". Using receiver estimate." << std::endl;
             sendrate = A_r;
+            loss_based_estimator.LimitRate (sendrate);
           }
         else
           {
@@ -528,37 +539,11 @@ public:
   }
 
   void
-  UpdateLossController ()
-  {
-    // Simple, loss based congestion control based on
-    // https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02
-
-    double time_since_last_update = (Simulator::Now () - last_loss_based_rate_update).GetSeconds ();
-    double eta;
-    if (path_infos[active_path].loss < LOSS_TRESHOLD_LOW)
-      {
-        eta = std::pow (1.05, std::min (time_since_last_update, 1.0));
-        A_s = eta * sendrate + 1e4;
-      }
-    else if (path_infos[active_path].loss > LOSS_TRESHOLD_HIGH)
-      {
-        eta = std::pow ((1 - 0.5 * path_infos[active_path].loss),
-                        std::min (time_since_last_update, 1.0));
-        A_s = eta * sendrate;
-      }
-    else
-      {
-        // do nothing
-      }
-    last_loss_based_rate_update = Simulator::Now ();
-  }
-
-  void
   CheckPathSwitch ()
   {
     return;
     // If the loss is very low, don't bother switching paths as we're still upping the send rate
-    if (path_infos[active_path].loss < LOSS_TRESHOLD_LOW)
+    if (path_infos[active_path].loss < 0.2)
       {
         return;
       }
@@ -761,10 +746,6 @@ public:
   void
   SendPacket (double packetSize, std::vector<const PathSegment *> path)
   {
-    if (enable_logging)
-      {
-        // std::cout << log_prefix () << "Sending data packet via path " << active_path << std::endl;
-      }
     Payload payload;
     payload.app_data.app_id = app_id;
     payload.app_data.path_id = active_path;
@@ -773,6 +754,12 @@ public:
     payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
     PayloadType payload_type = PayloadType::APPLICATION_DATA;
     host->SendAppPacket (this, payload, payload_type, packetSize * scale + sizeof (AppData), path);
+    if (enable_logging)
+      {
+        std::cout << log_prefix () << "Sending data packet via path " << active_path
+                  << " with frame_no " << frame_no << " and seq_no " << payload.app_data.seq_no
+                  << std::endl;
+      }
   }
 
   void
