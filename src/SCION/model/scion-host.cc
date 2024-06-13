@@ -585,7 +585,6 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
       connection.frame_no = data.frame_no;
       connection.path = packet->path;
       connection.report = new PacketsReport ();
-      connection.last_update = local_time;
       connection_infos[key] = connection;
       Simulator::Schedule (connection_timeout, &ScionHost::CheckConnectionTimeout, this, key);
     }
@@ -600,6 +599,7 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
       return;
     }
 
+  connection->last_update = local_time;
   connection->num_packets++;
   connection->bytes_received += packet->size;
 
@@ -697,17 +697,12 @@ ScionHost::SendAppResp (app_connection_key_t key)
   packet->curr_inf = packet->path.size () - 1;
   packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
   std::cout << GetLogPrefix () << "Sending app report to app " << payload.app_resp.app_id
-            << " via path " << payload.app_resp.path_id << std::endl;
-
-  // print all fields of connection
-  std::cout << "Connection info: " << std::endl;
-  std::cout << "seq_no_start: " << connection->seq_no_start << std::endl;
-  std::cout << "seq_no_last: " << connection->seq_no_last << std::endl;
-  std::cout << "num_packets: " << connection->num_packets << std::endl;
-  std::cout << "bytes_received: " << connection->bytes_received << std::endl;
-  std::cout << "aggregated_latencies: " << connection->aggregated_latencies << std::endl;
-  std::cout << "ecn: " << connection->ecn << std::endl;
-  std::cout << "last_update: " << connection->last_update << std::endl;
+            << " via path " << payload.app_resp.path_id << ", sequence numbers "
+            << connection->seq_no_start << " to " << connection->seq_no_last
+            << ", num_packets: " << connection->num_packets << ", loss: " << payload.app_resp.loss
+            << ", avg_latency: " << payload.app_resp.avg_latency
+            << ", bytes_received: " << connection->bytes_received
+            << ", ecn: " << payload.app_resp.ecn << std::endl;
 
   SendScionPacket (packet);
 
