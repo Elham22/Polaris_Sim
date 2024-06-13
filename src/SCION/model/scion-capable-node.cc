@@ -35,11 +35,16 @@ void
 ScionCapableNode::ScheduleReceive (uint16_t local_if, ScionPacket *packet, Time propagation_delay)
 {
   AdvanceLocalTime ();
-  if (propagation_delay > Seconds (0.01))
+  if (propagation_delay > PROP_DELAY_LOG_TRESHOLD)
     {
       std::cout << GetLogPrefix () << "Receiving packet of type " << packet->payload_type
-                << " size " << packet->size << " on interface " << local_if << " with delay "
-                << propagation_delay.ToDouble (Time::Unit::MS) << "ms" << std::endl;
+                << " size " << packet->size << " on interface " << local_if
+                << " with propagation delay " << propagation_delay.ToDouble (Time::Unit::MS) << "ms"
+                << ((packet->payload_type == PayloadType::APPLICATION_DATA)
+                        ? " with sequence number: " +
+                              std::to_string (packet->payload.app_data.seq_no)
+                        : "")
+                << std::endl;
     }
   Simulator::Schedule (propagation_delay, &ScionCapableNode::Receive, this, local_if, packet);
 }
@@ -50,11 +55,16 @@ ScionCapableNode::Receive (uint16_t local_if, ScionPacket *packet)
   AdvanceLocalTime ();
   processing_queue_length++;
   Time delay = processing_throughput_delay * processing_queue_length + processing_delay;
-  if (delay > Seconds (0.01))
+  if (delay > PROC_DELAY_LOG_TRESHOLD)
     {
       std::cout << GetLogPrefix () << "Processing packet of type " << packet->payload_type
-                << " size " << packet->size << " on interface " << local_if << " with delay "
-                << delay.ToDouble (Time::Unit::MS) << "ms" << std::endl;
+                << " size " << packet->size << " on interface " << local_if
+                << " with processing delay " << delay.ToDouble (Time::Unit::MS) << "ms"
+                << ((packet->payload_type == PayloadType::APPLICATION_DATA)
+                        ? " with sequence number: " +
+                              std::to_string (packet->payload.app_data.seq_no)
+                        : "")
+                << std::endl;
     }
   Simulator::Schedule (delay, &ScionCapableNode::ProcessReceivedPacket, this, local_if, packet,
                        local_time);
@@ -76,6 +86,14 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
   UpdateInterfaceEstimation (local_if);
   current_throughput_bytes.at (local_if) += packet->size;
   arrived_packets.at (local_if) += 1;
+
+  // Reduce queue size by the amount of bytes that have been transmitted since the last update
+  auto time_since_last_update = local_time - transmission_queues_size_last_updated.at (local_if);
+  auto bytes_transmitted = (time_since_last_update / transmission_delays.at (local_if)).GetHigh ();
+  transmission_queues_lengths.at (local_if) =
+      std::max (0l, transmission_queues_lengths.at (local_if) - bytes_transmitted);
+  transmission_queues_size_last_updated.at (local_if) = local_time;
+
   /*if (as_number == 0 && local_address == 0)
     {
       std::cout << local_time.ToDouble (Time::Unit::S) << ": Schedule packet type " << packet->payload_type << " size " << packet->size
@@ -186,11 +204,16 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
 
   transmission_queues_lengths.at (local_if) = new_size;
   Time delay = transmission_delays.at (local_if) * transmission_queues_lengths.at (local_if);
-  if (delay > Seconds (0.01))
+  if (delay > TRANSM_DELAY_LOG_TRESHOLD)
     {
       std::cout << GetLogPrefix () << "Scheduling packet of type " << packet->payload_type
-                << " size " << packet->size << " on interface " << local_if << " with delay "
-                << delay.ToDouble (Time::Unit::MS) << "ms" << std::endl;
+                << " size " << packet->size << " on interface " << local_if
+                << " with transmission delay " << delay.ToDouble (Time::Unit::MS) << "ms"
+                << ((packet->payload_type == PayloadType::APPLICATION_DATA)
+                        ? " with sequence number: " +
+                              std::to_string (packet->payload.app_data.seq_no)
+                        : "")
+                << std::endl;
     }
   Simulator::Schedule (delay, &ScionCapableNode::Send, this, local_if, packet);
 }
@@ -200,7 +223,6 @@ ScionCapableNode::Send (uint16_t local_if, ScionPacket *packet)
 {
   AdvanceLocalTime ();
   NS_LOG_FUNCTION (packet);
-  transmission_queues_lengths.at (local_if) -= packet->size;
   ScionCapableNode *remote_node = std::get<0> (remote_nodes_info.at (local_if));
   uint16_t remote_if = std::get<1> (remote_nodes_info.at (local_if));
   ModifyPktUponSend (packet);
@@ -280,6 +302,7 @@ ScionCapableNode::InitializeTransmissionQueues ()
   auto n_devices = GetNDevices ();
   NS_ASSERT (transmission_delays.size () == n_devices && propagation_delays.size () == n_devices);
   transmission_queues_lengths.resize (n_devices);
+  transmission_queues_size_last_updated.resize (n_devices);
   max_transmission_queues_lengths.resize (n_devices);
   current_throughput_bytes.resize (n_devices);
   current_loss_bytes.resize (n_devices);

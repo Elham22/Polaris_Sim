@@ -75,6 +75,9 @@ public:
   virtual void AdvanceLocalTime ();
 
 protected:
+  const Time PROP_DELAY_LOG_TRESHOLD = MilliSeconds (10); // log if the propagation delay is larger than this
+  const Time TRANSM_DELAY_LOG_TRESHOLD = MilliSeconds (25); // log if the transmission delay is larger than this
+  const Time PROC_DELAY_LOG_TRESHOLD = MilliSeconds (1); // log if the processing delay is larger than this
   uint16_t isd_number;
   uint16_t as_number;
 
@@ -92,6 +95,7 @@ protected:
   std::vector<Time> transmission_delays; // In picoseconds/byte
   Time processing_delay, processing_throughput_delay;
 
+  std::vector<Time> transmission_queues_size_last_updated; // Time at which we last flushed bytes out of the queue
   std::vector<uint32_t> transmission_queues_lengths; // In bytes
   std::vector<uint32_t> max_transmission_queues_lengths; // In bytes
   uint32_t processing_queue_length; // In packets
