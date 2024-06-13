@@ -21,6 +21,7 @@
 #ifndef WEBRTC_CC_LOSS_BASED_ESTIMATOR_H
 #define WEBRTC_CC_LOSS_BASED_ESTIMATOR_H
 
+#include <algorithm>
 #include "src/core/model/simulator.h"
 #include "src/SCION/model/webrtc-cc/types.h"
 
@@ -40,7 +41,7 @@ protected:
   const double LOSS_TRESHOLD_LOW = 0.02;
   const double LOSS_TRESHOLD_HIGH = 0.10;
 
-  std::list<PacketRecord> packet_history;
+  std::vector<PacketRecord> packet_history;
   Time history_window = MilliSeconds (100);
   uint32_t seq_no_min = 0; // smallest seq_no in recent history
   uint32_t seq_no_max = 0; // largest seq_no in recent history
@@ -67,42 +68,46 @@ protected:
   {
     // Clear old packets from the history
     Time now = Simulator::Now ();
-    while (!packet_history.empty ())
-      {
-        if (packet_history.front ().time_received + history_window < now)
-          {
-            packet_history.erase (packet_history.begin ());
-          }
-        else
-          {
-            break;
-          }
-      }
+    packet_history.erase (std::remove_if (packet_history.begin (), packet_history.end (),
+                                          [now, this] (PacketRecord packet) {
+                                            return now - packet.time_received > history_window;
+                                          }),
+                          packet_history.end ());
+
+    // Sort the packets by seq_no
+    std::sort (packet_history.begin (), packet_history.end (),
+               [] (PacketRecord a, PacketRecord b) { return a.seq_no < b.seq_no; });
 
     if (packet_history.empty ())
       {
         return false;
       }
 
-    // iterate through history to find min and max seq_no
     seq_no_min = packet_history.front ().seq_no;
-    seq_no_max = packet_history.front ().seq_no;
-    for (auto packet : packet_history)
-      {
-        if (packet.seq_no < seq_no_min)
-          {
-            seq_no_min = packet.seq_no;
-          }
-        if (packet.seq_no > seq_no_max)
-          {
-            seq_no_max = packet.seq_no;
-          }
-      }
+    seq_no_max = packet_history.back ().seq_no;
 
     packets_received_in_window = packet_history.size ();
     packets_total_in_window = seq_no_max - seq_no_min + 1;
 
     loss = 1.0 - (double) packets_received_in_window / packets_total_in_window;
+
+    if (loss > 0)
+      {
+        std::cout << GetLogPrefix () << "Loss: " << loss << std::endl;
+        std::cout << GetLogPrefix () << "Should have packets from seq no " << seq_no_min << " to "
+                  << seq_no_max << std::endl;
+        // Log missing packets
+        for (std::size_t i = 1; i < packet_history.size (); i++)
+          {
+            auto delta = packet_history[i].seq_no - packet_history[i - 1].seq_no;
+            if (delta > 1)
+              {
+                std::cout << GetLogPrefix () << "Missing packets between "
+                          << packet_history[i - 1].seq_no << " and " << packet_history[i].seq_no
+                          << std::endl;
+              }
+          }
+      }
 
     if (packets_total_in_window < 1 || packets_total_in_window < packets_received_in_window)
       {
