@@ -143,7 +143,7 @@ public:
     // TrackState ();
 
     // Start sending video frames after a random delay, to avoid synchronization
-    Simulator::Schedule (MilliSeconds (1000) + RandomDelay (500), &RTCApp::SendVideoFrame, this);
+    Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &RTCApp::SendVideoFrame, this);
   }
 
   void
@@ -533,7 +533,6 @@ public:
   void
   CheckPathSwitch ()
   {
-    return;
     // If the loss is very low, don't bother switching paths as we're still upping the send rate
     if (path_infos[active_path].loss < 0.2)
       {

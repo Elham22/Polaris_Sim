@@ -16,86 +16,22 @@
     <property name="AS_level_diversity_coef" type="float">0.17126575166007207</property>
     <property name="link_level_diversity_coef" type="float">0.2832171229633935</property>
   </node>
-  <node id="2" id.type="int">
-    <property name="type" type="string">core</property>
-    <property name="latency_coef" type="float">0.3253560413531743</property>
-    <property name="bandwidth_coef" type="float">0.662455570757591</property>
-    <property name="AS_level_diversity_coef" type="float">0.3218466789745318</property>
-    <property name="link_level_diversity_coef" type="float">0.7032153252330976</property>
-  </node>
-  <node id="3" id.type="int">
-    <property name="type" type="string">core</property>
-    <property name="latency_coef" type="float">0.45517485971898886</property>
-    <property name="bandwidth_coef" type="float">0.7825968151079704</property>
-    <property name="AS_level_diversity_coef" type="float">0.6353221115195472</property>
-    <property name="link_level_diversity_coef" type="float">0.874511585804984</property>
-  </node>
-  <node id="4" id.type="int">
-    <property name="type" type="string">core</property>
-    <property name="latency_coef" type="float">0.45517485971898886</property>
-    <property name="bandwidth_coef" type="float">0.7825968151079704</property>
-    <property name="AS_level_diversity_coef" type="float">0.6353221115195472</property>
-    <property name="link_level_diversity_coef" type="float">0.874511585804984</property>
-  </node>
-  <node id="5" id.type="int">
-    <property name="type" type="string">core</property>
-    <property name="latency_coef" type="float">0.45517485971898886</property>
-    <property name="bandwidth_coef" type="float">0.7825968151079704</property>
-    <property name="AS_level_diversity_coef" type="float">0.6353221115195472</property>
-    <property name="link_level_diversity_coef" type="float">0.874511585804984</property>
-  </node>
   <link>
     <from type="int">0</from>
     <to type="int">1</to>
     <property name="rel" type="string">core</property>
     <property name="latitude" type="float">39.04372</property>
     <property name="longitude" type="float">-77.48749</property>
-    <property name="capacity" type="int">100</property>
+    <property name="capacity" type="float">0.08</property>
     <property name="delay" type="int">5</property>
   </link>
   <link>
-    <from type="int">2</from>
-    <to type="int">3</to>
+    <from type="int">0</from>
+    <to type="int">1</to>
     <property name="rel" type="string">core</property>
     <property name="latitude" type="float">39.04372</property>
-    <property name="longitude" type="float">-87.48749</property>
-    <property name="capacity" type="float">100</property>
-    <property name="delay" type="int">5</property>
-  </link>
-  <link>
-    <from type="int">1</from>
-    <to type="int">4</to>
-    <property name="rel" type="string">core</property>
-    <property name="latitude" type="float">39.04372</property>
-    <property name="longitude" type="float">-87.48749</property>
-    <property name="capacity" type="float">0.08</property>
-    <property name="delay" type="int">5</property>
-  </link>
-  <link>
-    <from type="int">4</from>
-    <to type="int">2</to>
-    <property name="rel" type="string">core</property>
-    <property name="latitude" type="float">49.04372</property>
     <property name="longitude" type="float">-77.48749</property>
     <property name="capacity" type="float">0.08</property>
-    <property name="delay" type="int">5</property>
-  </link>
-  <link>
-    <from type="int">1</from>
-    <to type="int">5</to>
-    <property name="rel" type="string">core</property>
-    <property name="latitude" type="float">49.04372</property>
-    <property name="longitude" type="float">-77.48749</property>
-    <property name="capacity" type="float">0.08</property>
-    <property name="delay" type="int">5</property>
-  </link>
-  <link>
-    <from type="int">5</from>
-    <to type="int">2</to>
-    <property name="rel" type="string">core</property>
-    <property name="latitude" type="float">49.04372</property>
-    <property name="longitude" type="float">-77.48749</property>
-    <property name="capacity" type="int">0.08</property>
     <property name="delay" type="int">5</property>
   </link>
 </topology>

@@ -221,6 +221,9 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
     else: # Plot just the sending rate for all applications
         for res in results:
             plt.plot (res.time, res.send_rate, label = res.get_name())
+        for res in results[:1]: # Plot fair share that application 1 sees
+            plt.plot (res.time, res.fair_share, label = "fair share app 0", linewidth=0.5)
+
        
     if not args.nolegend:
         plt.legend()

@@ -334,9 +334,10 @@ ScionCapableNode::InitializeTransmissionQueues ()
           propagation_delay = 100000; // 0.1ms delay minimum
         }
       // units cancel out, 1Gbit = 10^9bit, 1NS = 10^(-9)s
-      // max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay;
-      // factor of 20 for testing
-      max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay * 2; // TODO
+      max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay;
+
+      // TODO: temp change to make max queuing delay comparable to paper
+      // max_transmission_queues_lengths[i] = bwd_Gbit * propagation_delay * 8;
 
       // Print target as and node info
       if (remote_nodes_info.size () > i)
