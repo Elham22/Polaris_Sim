@@ -76,7 +76,7 @@ public:
 
 protected:
   const Time PROP_DELAY_LOG_TRESHOLD = MilliSeconds (10); // log if the propagation delay is larger than this
-  const Time TRANSM_DELAY_LOG_TRESHOLD = MilliSeconds (25); // log if the transmission delay is larger than this
+  const Time TRANSM_DELAY_LOG_TRESHOLD = MilliSeconds (65); // log if the transmission delay is larger than this
   const Time PROC_DELAY_LOG_TRESHOLD = MilliSeconds (1); // log if the processing delay is larger than this
   uint16_t isd_number;
   uint16_t as_number;

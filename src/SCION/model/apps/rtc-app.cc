@@ -365,9 +365,13 @@ public:
           }
       }
 
+    PacketsReport *report = app_resp.packets_report;
+
     if (enable_logging)
       {
-        std::cout << log_prefix () << "Processing report on active path " << path_id << std::endl;
+        std::cout << log_prefix () << "Processing report on active path " << path_id
+                  << " with sequence numbers " << report->packets.front ().seq_no << " to "
+                  << report->packets.back ().seq_no << std::endl;
       }
 
     Time resp_time = MicroSeconds (app_resp.timestamp);
@@ -376,13 +380,12 @@ public:
     path_infos[path_id].ecn = app_resp.ecn;
     path_infos[path_id].latency = app_resp.avg_latency;
 
-    PacketsReport *report = app_resp.packets_report;
-
     if (report->IsFrameComplete ())
       {
         Time send_delay = report->packets.back ().time_received - report->packets.back ().time_sent;
         Time receive_delay = Simulator::Now () - MicroSeconds (app_resp.timestamp);
         last_rtt = send_delay + receive_delay;
+        delay_based_estimator.SetRTTInterval (last_rtt + MilliSeconds (100));
       }
 
     if (app_resp.loss < 0)
@@ -397,11 +400,7 @@ public:
       {
         for (auto packet : report->packets)
           {
-            if (delay_based_estimator.FeedPacket (&packet))
-              {
-                std::cout << log_prefix () << "Delay based estimator updated" << std::endl;
-                // A_r = delay_based_estimator.GetRate ();
-              }
+            delay_based_estimator.FeedPacketTrendLine (&packet);
           }
 
         loss_based_estimator.FeedReport (report);
@@ -428,14 +427,7 @@ public:
     A_s = loss_based_estimator.GetRate ();
     std::cout << log_prefix () << "Sender estimate: " << A_s << std::endl;
 
-    // To simulate REMB, we only use the new receiver estimate every second or if it's going down
-    if (Simulator::Now () - last_A_r_update > Seconds (1) ||
-        delay_based_estimator.GetRate () < 0.97 * A_r)
-      {
-        std::cout << log_prefix () << "Updating receiver estimate" << std::endl;
         A_r = delay_based_estimator.GetRate ();
-        last_A_r_update = Simulator::Now ();
-      }
     std::cout << log_prefix () << "Receiver estimate: " << A_r << std::endl;
 
     sendrate = A_s;
@@ -448,7 +440,7 @@ public:
             std::cout << log_prefix () << "Receiver estimate lower than sender estimate: " << A_r
                       << " < " << A_s << ". Using receiver estimate." << std::endl;
             sendrate = A_r;
-            loss_based_estimator.LimitRate (sendrate);
+            loss_based_estimator.LimitRate (1.25 * sendrate);
           }
         else
           {

@@ -21,6 +21,7 @@
 #ifndef WEBRTC_CC_DELAY_BASED_ESTIMATOR_H
 #define WEBRTC_CC_DELAY_BASED_ESTIMATOR_H
 
+#include <deque>
 #include "src/core/model/simulator.h"
 #include "src/SCION/model/webrtc-cc/types.h"
 #include "src/SCION/model/scion-packet.h"
@@ -60,9 +61,9 @@ protected:
   const double e_0 = 0.1; // Initial value of the  system error covariance
   const double chi = 0.05; // Coefficient used  for the measured noise variance
   const double del_var_th_0 = 0.5; // Initial value for the adaptive threshold, in ms
-  const double overuse_time_th = 100; // Time required to trigger an overuse signal, in ms
+  const double overuse_time_th = 10; // Time required to trigger an overuse signal, in ms
   const double K_u = 0.01; // Coefficient for the adaptive threshold
-  const double K_d = 0.00018; // Coefficient for the adaptive threshold
+  const double K_d = 0.0018; // Coefficient for the adaptive threshold
   const Time T = Seconds (1); // Time window for measuring the received bitrate
   const double beta = 0.95; // Smoothing factor for the measurement noise variance
 
@@ -82,6 +83,8 @@ protected:
 
   // Initial values
   double adaptive_treshold = del_var_th_0;
+  double overuse_treshold = adaptive_treshold;
+  double underuse_treshold = -adaptive_treshold;
   double e = e_0; // System error covariance
   double d_m = 0; // Measured one way delay gradient
   double m = 0; // Estimate of the one way delay gradient
@@ -94,6 +97,12 @@ protected:
   std::map<uint32_t, FrameRecord> frames = std::map<uint32_t, FrameRecord> ();
   FrameRecord *frame_current = nullptr;
   FrameRecord *frame_previous = nullptr;
+
+  Time rtt_interval = Seconds (0);
+  std::deque<double> trend_history; // Records one way delays of packets
+  std::size_t trend_packets = 60; // How many packets to keep in the history
+  double slope_tresh_high = 0.1;
+  double slope_tresh_low = 0;
 
   // This map is used to measure the receiver rate
   std::map<Time, u_int16_t> received_bytes;
@@ -187,6 +196,11 @@ protected:
     // We're also just using a fixed factor beta right now, instead of the dynamic alpha
     // measurement_noise_variance = std::max (measurement_noise_variance, 1.0);
 
+    // TODO: limiting the variance seems to help, but needs explaining. Initial
+    // idea was just to prevent it from making m almost stuck by decreasing the
+    // kalman gain too drastically.
+    // measurement_noise_variance = std::min (measurement_noise_variance, 1.0);
+
     // Update the Kalman gain
     //                    e(i-1) + q(i)
     //  k(i) = ----------------------------------------
@@ -231,12 +245,15 @@ protected:
     adaptive_treshold =
         adaptive_treshold + delta_t * treshold_gain * (std::abs (m) - adaptive_treshold);
 
-    adaptive_treshold = 0.2; // TODO: still deteriorates if treshold is dynamic
+    // adaptive_treshold = 0.2; // TODO: still deteriorates if treshold is dynamic
     // From the draft:
     // It is also RECOMMENDED to clamp del_var_th(i) to the range [6, 600],
     // since a too small del_var_th(i) can cause the detector to become overly
     // sensitive.
     // adaptive_treshold = std::max (6.0, std::min (adaptive_treshold, 600.0));
+
+    overuse_treshold = adaptive_treshold;
+    underuse_treshold = -adaptive_treshold;
   }
 
   /**
@@ -271,7 +288,7 @@ protected:
   void
   UpdateSignal ()
   {
-    if (m > adaptive_treshold)
+    if (m > overuse_treshold)
       {
         // Only signal overuse if we have been above the threshold for a certain time
         if (overuse_detected)
@@ -292,12 +309,12 @@ protected:
             signal = DetectorSignal::NORMAL;
           }
       }
-    else if (m < -adaptive_treshold)
+    else if (m < underuse_treshold)
       {
         overuse_detected = false;
         signal = DetectorSignal::UNDERUSE;
       }
-    else // -adaptive_treshold <= m <= adaptive_treshold
+    else // underuse_treshold <= m <= overuse_treshold
       {
         overuse_detected = false;
         signal = DetectorSignal::NORMAL;
@@ -402,6 +419,34 @@ protected:
     last_rate_update = Simulator::Now ();
   }
 
+  void
+  ComputeTrendlineSlope ()
+  {
+    double sum_x = 0;
+    double sum_y = 0;
+    for (std::size_t i = 0; i < trend_history.size (); i++)
+      {
+        sum_x += i;
+        sum_y += trend_history[i];
+      }
+    double x_avg = sum_x / trend_history.size ();
+    double y_avg = sum_y / trend_history.size ();
+    double numerator = 0;
+    double denominator = 0;
+    for (std::size_t i = 0; i < trend_history.size (); i++)
+      {
+        numerator += (i - x_avg) * (trend_history[i] - y_avg);
+        denominator += (i - x_avg) * (i - x_avg);
+      }
+    m = numerator / denominator;
+  }
+
+  std::string
+  GetLogPrefix ()
+  {
+    return "[DelayBasedEstimator] ";
+  }
+
 public:
   /**
    * @return Current recommended send rate computed by the controller
@@ -410,6 +455,12 @@ public:
   GetRate ()
   {
     return A_r;
+  }
+
+  void
+  SetRTTInterval (Time interval)
+  {
+    rtt_interval = interval;
   }
 
   /**
@@ -442,20 +493,52 @@ public:
   }
 
   /**
-   * Feed a PacketRecord into the controller
+   * Feed a PacketRecord into the controller and compute trendline slope
+   *
+   * The trendline and slope are computed once enough packet data is recorded.
+   *
+   * @param packet A packet record
+  */
+  void
+  FeedPacketTrendLine (PacketRecord *packet)
+  {
+    received_bytes[packet->time_received] = packet->size;
+    UpdateReceiveRate ();
+
+    auto delta_ms = (packet->time_received - packet->time_sent).GetMilliSeconds ();
+
+    trend_history.push_back (delta_ms);
+
+    if (trend_history.size () > trend_packets)
+      {
+        trend_history.pop_front ();
+      }
+
+    // Static thresholds for now
+    overuse_treshold = 0.01;
+    underuse_treshold = 0.0;
+
+    if (trend_history.size () == trend_packets)
+      {
+        ComputeTrendlineSlope ();
+        UpdateSignal ();
+        UpdateStateMachine ();
+        UpdateRate ();
+      }
+  }
+
+  /**
+   * Feed a PacketRecord into the controller and compute the bwe using a Kalman Filter
    *
    * The rate is updated whenever a new frame is received and we already have at
    * least two frames.
    *
    * @return true if an updated rate is available
    *
-   * @param app_data the application data of the packet
-   * @param size the size of the packet in Bytes
-   * @param time_tx the time the packet departed at the sender
-   * @param time_rx the time the packet arrived at the receiver
+   * @param packet A packet record
   */
   bool
-  FeedPacket (PacketRecord *packet)
+  FeedPacketKalman (PacketRecord *packet)
   {
     bool updated = false;
     received_bytes[packet->time_received] = packet->size;
