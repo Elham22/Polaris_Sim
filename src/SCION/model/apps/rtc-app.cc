@@ -534,7 +534,8 @@ public:
   CheckPathSwitch ()
   {
     // If the loss is very low, don't bother switching paths as we're still upping the send rate
-    if (path_infos[active_path].loss < 0.2)
+    // if (path_infos[active_path].loss < 0.2)
+    if (!delay_based_estimator.CongestionDetected ())
       {
         return;
       }
