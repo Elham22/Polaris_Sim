@@ -177,6 +177,13 @@ public:
     UpdateRate ();
   }
 
+  void
+  Reset ()
+  {
+    packet_history.clear ();
+    loss = 0.0;
+  }
+
   double
   GetRate ()
   {

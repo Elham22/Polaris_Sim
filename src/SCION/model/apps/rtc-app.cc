@@ -363,6 +363,9 @@ public:
             std::cout << log_prefix () << "Receiving response on inactive (old) path: " << path_id
                       << std::endl;
           }
+
+          // Don't process responses on inactive paths
+          return;
       }
 
     PacketsReport *report = app_resp.packets_report;
@@ -380,6 +383,8 @@ public:
     path_infos[path_id].ecn = app_resp.ecn;
     path_infos[path_id].latency = app_resp.avg_latency;
 
+    // If the frame is incomplete, then we likely got it back because of a
+    // timeout and it's not useful for RTT estimation
     if (report->IsFrameComplete ())
       {
         Time send_delay = report->packets.back ().time_received - report->packets.back ().time_sent;
@@ -453,6 +458,7 @@ public:
         std::cout << log_prefix () << "No receiver estimate available. Using sender estimate."
                   << std::endl;
       }
+    TrackState ();
     CheckPathSwitch ();
     TrackState ();
   }
@@ -598,6 +604,7 @@ public:
                   << std::endl;
       }
     active_path = new_path;
+    loss_based_estimator.Reset ();
     last_path_change = Simulator::Now ();
   }
 
