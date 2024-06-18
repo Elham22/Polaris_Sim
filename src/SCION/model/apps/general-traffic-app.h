@@ -46,8 +46,8 @@ class GeneralTrafficApp : public App
 public:
   GeneralTrafficApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
                      host_addr_t app_dst_host_addr,
-                     std::vector<std::vector<const PathSegment *>> all_paths, bool enable_logging)
-      : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, enable_logging)
+                     std::vector<std::vector<const PathSegment *>> all_paths, uint32_t runtime_config)
+      : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, runtime_config)
   {
   }
   void PrintResults () override;

@@ -82,7 +82,7 @@ def parse_app_results(host, app_id, file):
     app_info_tokens = file.readline().strip().split(' ')
 
     if "rtc" == app_info_tokens[1]:
-        app_type = "rtc"
+        app_type = "rtc " + app_info_tokens[2]
         file.readline()
         results = AppResults(host, app_id, app_type)
         tokens = file.readline().strip().split(',')

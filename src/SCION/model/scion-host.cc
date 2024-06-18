@@ -457,7 +457,7 @@ ScionHost::SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host)
 
 void
 ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host,
-                             double backgroundBwdFactor, bool enable_logging)
+                             double backgroundBwdFactor, uint32_t runtime_config)
 {
   std::vector<const PathSegment *> the_path;
   /*ScionHost::active_path = the_path;
@@ -482,36 +482,36 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
       if (app_type == "video conference active")
         {
           app = new VideoConferenceApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
-                                        enable_logging);
+                                        runtime_config);
         }
       else if (app_type == "video conference passive")
         {
           app = new VCAPassive (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
-                                enable_logging);
+                                runtime_config);
         }
       else if (app_type == "video conference naive")
         {
           app = new VCANaive (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
-                              enable_logging);
+                              runtime_config);
         }
       else if (app_type.find ("video conference given:") == 0)
         {
           app = new VCAGiven (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
-                              app_type.substr (23), enable_logging);
+                              app_type.substr (23), runtime_config);
         }
       else if (app_type == "general traffic")
         {
           app = new GeneralTrafficApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
-                                       enable_logging);
+                                       runtime_config);
         }
       else if (app_type == "rtc")
         {
           app =
-              new RTCApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths, enable_logging);
+              new RTCApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths, runtime_config);
         }
       else
         {
-          app = new App (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths, enable_logging);
+          app = new App (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths, runtime_config);
         }
       apps.push_back (app);
       BackgroundTrafficApp::AddBackgroundTraffic (all_paths, backgroundBwdFactor);
@@ -523,7 +523,7 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
       // no paths registered, request paths
       RequestForPathSegments (dst_ia);
       Simulator::Schedule (MilliSeconds (300), &ScionHost::StartApplication, this, app_type, dst_ia,
-                           dst_host, backgroundBwdFactor, enable_logging);
+                           dst_host, backgroundBwdFactor, runtime_config);
     }
 }
 
