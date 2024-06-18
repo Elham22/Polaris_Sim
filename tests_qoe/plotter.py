@@ -66,9 +66,11 @@ def parse_args():
     parser = argparse.ArgumentParser(prog="SCION simulator host QOE plotter", description="Plotting of host QOE simulation results from SCION simulator")
     parser.add_argument("filepath", help="Input file (result file of simulation) to parse")
     parser.add_argument("-ms", "--milliseconds", help="Plot timestamps in milliseconds", action="store_true")
+    parser.add_argument("-s", "--seconds", help="Plot timestamps in seconds", action="store_true", default=True)
+    parser.add_argument("-min", "--minutes", help="Plot timestamps in minutes", action="store_true")
     parser.add_argument("--details", help="Print and plot details for each run", action="store_true")
     parser.add_argument("--plotLinks", help="Plot link statistics as well.", action="store_true")
-    parser.add_argument("--startTime", help="Start time of the experiments", type=float, default=0.0)
+    parser.add_argument("--startTime", help="Start time of the experiments", type=float, default=1800.0)
     parser.add_argument("--nolegend", help="Do not add legends to the plot", action="store_true")
     parser.add_argument("--multihost", help="Combine results of multiple multihost runs", action="store_true")
     parser.add_argument("--pathnumber", help="Show the number of path selections instead of which app which paht", action="store_true")
@@ -94,8 +96,10 @@ def parse_app_results(host, app_id, file):
             timestamp = float(tokens[i].split("(")[0])
             if args.milliseconds:
                 relative_timestamp = timestamp
-            else:
+            elif args.minutes:
                 relative_timestamp = timestamp / 1000 / 60  # convert to minutes
+            else:
+                relative_timestamp = timestamp / 1000  # convert to seconds
 
             results.time.append(relative_timestamp - args.startTime)
             i += 1
@@ -172,87 +176,101 @@ def parse_app_results(host, app_id, file):
         print("Unknown app type ", app_info_tokens)
 
 
-
 def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
-
     default_cycler = (cycler(color=['r', 'g', 'b', 'y']) +
-                  cycler(linestyle=['-', '--', ':', '-.']))
+                      cycler(linestyle=['-', '--', ':', '-.']))
     plt.rc('axes', prop_cycle=default_cycler)
+    # plt.style.use('dark_background')
 
-    plot_number = 411
-    if args.plotLinks:
-        plot_number += 200
+    plot_total_send_rate = False
+    plot_gradient = False
+    plot_delay_bwe_state = False
+    plot_delay_bwe_parameters = False
 
-    plt.figure(figsize=(9, 1)) 
+    # For which app to plot the delay and bwe state, because showing more than one is too much
+    delay_bwe_plot_app = 1
+
+    no_plots = 4
+    size_y = 6
+    ratios = [1, 1, 1, 1]
+
+    if plot_total_send_rate:
+        no_plots += 1
+        size_y += 1
+        ratios.append(1)
+
+    if plot_gradient:
+        no_plots += 1
+        size_y += 1
+        ratios.append(1)
+
+    if plot_delay_bwe_state:
+        no_plots += 1
+        size_y += 1
+        ratios.append(1)
+
+    if plot_delay_bwe_parameters:
+        no_plots += 1
+        size_y += 1
+        ratios.append(1)
+
+    plt.figure(figsize=(size_y, 1))
     plot_number = 0
-    gs = gridspec.GridSpec(7, 1, height_ratios=[1, 1, 1, 1, 1, 3, 1]) 
+    gs = gridspec.GridSpec(no_plots, 1, height_ratios=ratios)
     ax1 = plt.subplot(gs[plot_number])
     plot_number += 1
     for res in results:
-        plt.plot (res.time, res.loss, label = res.get_name())
+        plt.plot(res.time, res.loss, label=res.get_name())
     if not args.nolegend:
         plt.legend()
-    """if args.milliseconds:
-        plt.xlabel("Time (ms)")
-    else:
-        plt.xlabel("Time (min)")"""
     plt.ylabel("Loss (%)")
 
     plt.subplot(gs[plot_number], sharex=ax1)
     plot_number += 1
     for res in results:
-        plt.plot (res.time, res.latency, label = res.get_name())
+        plt.plot(res.time, res.latency, label=res.get_name())
     if not args.nolegend:
         plt.legend()
-    """if args.milliseconds:
-        plt.xlabel("Time (ms)")
-    else:
-        plt.xlabel("Time (min)")"""
     plt.ylabel("Latency (ms)")
 
     plt.subplot(gs[plot_number], sharex=ax1)
     plot_number += 1
-    if len(results) == 1: # If there is only one application, plot all the rates
-         for res in results[:1]:
-            plt.plot (res.time, res.send_rate, label = "Send rate", linewidth=1.5)
-            plt.plot (res.time, res.A_r, label = "A_r")
-            plt.plot (res.time, res.A_s, label = "A_s")
-            plt.plot (res.time, res.fair_share, label = "fair share", linewidth=0.5)
-    else: # Plot just the sending rate for all applications
+    if len(results) == 1:  # If there is only one application, plot all the rates
+        for res in results[:1]:
+            plt.plot(res.time, res.send_rate, label="Send rate", linewidth=1.5)
+            plt.plot(res.time, res.A_r, label="A_r")
+            plt.plot(res.time, res.A_s, label="A_s")
+            plt.plot(res.time, res.fair_share, label="fair share",
+                     linewidth=0.5, color='black')
+    else:  # Plot just the sending rate for all applications
         for res in results:
-            plt.plot (res.time, res.send_rate, label = res.get_name())
-        for res in results[:1]: # Plot fair share that application 1 sees
-            plt.plot (res.time, res.fair_share, label = "fair share app 0", linewidth=0.5)
+            plt.plot(res.time, res.send_rate, label=res.get_name())
+        for res in results[:1]:  # Plot fair share that application 1 sees
+            plt.plot(res.time, res.fair_share,
+                     label="fair share app 0", linewidth=0.5, color='black')
 
-       
     if not args.nolegend:
         plt.legend()
-    """if args.milliseconds:
-        plt.xlabel("Time (ms)")
-    else:
-        plt.xlabel("Time (min)")"""
     plt.ylabel("Send rate [MB/s]")
 
-    # plt.subplot(gs[plot_number], sharex=ax1)
-    # plot_number += 1
-    # # create a new list that contains the sums of all the bytes at each time
-    # time_rate_map = {}
-    # for res in results:
-    #     for i in range(len(res.time)):
-    #         if res.time[i] not in time_rate_map:
-    #             time_rate_map[res.time[i]] = res.bytes[i]
-    #         else:
-    #             time_rate_map[res.time[i]] += res.bytes[i]
-    # total_times = sorted(time_rate_map.keys())
-    # total_bytes = [time_rate_map[time] for time in sorted(time_rate_map.keys())]
-    # plt.plot(total_times, total_bytes, label = "Total")
-    # if not args.nolegend:
-    #     plt.legend()
-    # """if args.milliseconds:
-    #     plt.xlabel("Time (ms)")
-    # else:
-    #     plt.xlabel("Time (min)")"""
-    # plt.ylabel("Total Send Rate [MB/s]")
+    if plot_total_send_rate:
+        plt.subplot(gs[plot_number], sharex=ax1)
+        plot_number += 1
+
+        time = results[0].time.copy()
+        total_rate = results[0].send_rate.copy()
+
+        # Try to match the closest sendrates of all applications to sum them up
+        for res in results[1:]:
+            for i, t in enumerate(time):
+                closest = np.argmin(np.abs(res.time) - t)
+                if abs(res.time[closest] - t) < 0.5:
+                    total_rate[i] += res.send_rate[closest]
+
+        plt.plot(time, total_rate, label="Total")
+        if not args.nolegend:
+            plt.legend()
+        plt.ylabel("Total Send Rate [MB/s]")
 
     if not args.pathnumber:
         plt.subplot(gs[plot_number], sharex=ax1)
@@ -262,22 +280,20 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
             # #paths = list(map(lambda path_id: pathInfo.paths[path_id], res.path))
             # paths = list(map(lambda path_id: f"id {int(path_id % (len(pathInfo.paths)/3))}", res.path))
             # plt.plot (res.time, paths, label = res.get_name())
-            plt.plot (res.time, res.path, label = res.get_name())
+            plt.plot(res.time, res.path, label=res.get_name())
         if not args.nolegend:
             plt.legend()
-        if args.milliseconds:
-            plt.xlabel("Time (ms)")
-        else:
-            plt.xlabel("Time (min)")
         plt.ylabel("Paths")
     else:
         plt.subplot(gs[plot_number], sharex=ax1)
         plot_number += 1
         print((len(pathInfos[0].paths), len(results[0].path)))
-        paths_amount = np.zeros((len(pathInfos[0].paths), len(results[0].path)))
+        paths_amount = np.zeros(
+            (len(pathInfos[0].paths), len(results[0].path)))
         for res in results:
-            pathInfo = [x for x in pathInfos if x.host == res.host and x.app_id == res.app_id][0]
-            #paths = list(map(lambda path_id: pathInfo.paths[path_id], res.path))
+            pathInfo = [x for x in pathInfos if x.host ==
+                        res.host and x.app_id == res.app_id][0]
+            # paths = list(map(lambda path_id: pathInfo.paths[path_id], res.path))
             for i, path in enumerate(res.path):
                 path_id = int(path % (len(pathInfo.paths)/3))
                 paths_amount[path_id, i] += 1
@@ -285,60 +301,60 @@ def plotAppResults(results: List[AppResults], pathInfos: List[PathInfo]):
         for i in range(len(pathInfos[0].paths)):
             path = paths_amount[i]
             if path.sum() > 0:
-                plt.plot (results[0].time, path, label = f"path_id {i}")
+                plt.plot(results[0].time, path, label=f"path_id {i}")
         plt.legend()
-        if args.milliseconds:
-            plt.xlabel("Time (ms)")
-        else:
-            plt.xlabel("Time (min)")
         plt.ylabel("Num selected")
 
-    plt.subplot(gs[plot_number], sharex=ax1)
-    plot_number += 1
-    for res in results[:1]:
-        plt.plot (res.time, res.controller_state, label = "State", drawstyle='steps-post', linestyle='--', linewidth=1)
-        plt.plot (res.time, res.controller_signal, label = "Signal", drawstyle='steps-post', linestyle='-.', linewidth=1)
-    plt.ylim(-0.25, 2.25)
-    if not args.nolegend:
-        plt.legend()
-    """if args.milliseconds:
-        plt.xlabel("Time (ms)")
-    else:
-        plt.xlabel("Time (min)")"""
-    plt.ylabel("Controller")
+    if plot_delay_bwe_state:
+        plt.subplot(gs[plot_number], sharex=ax1)
+        plot_number += 1
+        res = results[delay_bwe_plot_app]
+        plt.plot(res.time, res.controller_state, label="State",
+                 drawstyle='steps-post', linestyle='--', linewidth=1)
+        plt.plot(res.time, res.controller_signal, label="Signal",
+                 drawstyle='steps-post', linestyle='-.', linewidth=1)
+        plt.ylim(-0.25, 2.25)
+        if not args.nolegend:
+            plt.legend()
+        plt.ylabel("Controller")
 
-    # Plot the gradient and treshold
-    plt.subplot(gs[plot_number], sharex=ax1)
-    plot_number += 1
-    for res in results[:1]:
-        # treshold are both black and dotted
-        plt.plot (res.time, res.controller_gradient_estimate, label = "Gradient estimate m", color='red', linestyle='-', linewidth=1)
-        plt.plot (res.time, [x / 5 for x in res.controller_gradient_measured], label = "Gradient measured d_m", color='green', linestyle='--', linewidth=0.5)
-        plt.plot (res.time, res.controller_treshold, label = "Treshold γ", color='black', linestyle=':', linewidth=0.5)
-        plt.plot (res.time, [-x for x in res.controller_treshold], label = "Treshold -γ", color='black', linestyle=':', linewidth=0.5)
-    if not args.nolegend:
-        plt.legend()
-    """if args.milliseconds:
-        plt.xlabel("Time (ms)")
-    else:
-        plt.xlabel("Time (min)")"""
-    plt.ylabel("Gradient and treshold [ms]")
+    if plot_gradient:
+        # Plot the gradient and treshold
+        plt.subplot(gs[plot_number], sharex=ax1)
+        plot_number += 1
+        res = results[delay_bwe_plot_app]
+        plt.plot(res.time, res.controller_gradient_estimate,
+                 label="Gradient estimate m", color='red', linestyle='-', linewidth=1)
+        # plt.plot (res.time, [x / 5 for x in res.controller_gradient_measured], label = "Gradient measured d_m", color='green', linestyle='--', linewidth=0.5)
+        plt.plot(res.time, res.controller_treshold, label="Treshold γ",
+                 color='black', linestyle=':', linewidth=0.5)
+        plt.plot(res.time, [0 for x in res.controller_treshold],
+                 label="Treshold -γ", color='black', linestyle=':', linewidth=0.5)
+        if not args.nolegend:
+            plt.legend()
+        plt.ylabel("Gradient and treshold [ms]")
 
-    # Plot the kalman gain, variance and e
-    plt.subplot(gs[plot_number], sharex=ax1)
-    plot_number += 1
-    for res in results[:1]:
-        plt.plot (res.time, res.kalman_gain, label = "Kalman gain", color='red', linestyle='-', linewidth=1)
-        plt.plot (res.time, res.variance, label = "Variance", color='green', linestyle='--', linewidth=1)
-        plt.plot (res.time, res.e, label = "e", color='black', linestyle=':', linewidth=1)
-    if not args.nolegend:
-        plt.legend()
+    if plot_delay_bwe_parameters:
+        # Plot the kalman gain, variance and e
+        plt.subplot(gs[plot_number], sharex=ax1)
+        plot_number += 1
+        res = results[delay_bwe_plot_app]
+        plt.plot(res.time, res.kalman_gain, label="Kalman gain",
+                 color='red', linestyle='-', linewidth=1)
+        plt.plot(res.time, res.variance, label="Variance",
+                 color='green', linestyle='--', linewidth=1)
+        plt.plot(res.time, res.e, label="e",
+                 color='black', linestyle=':', linewidth=1)
+        if not args.nolegend:
+            plt.legend()
+        plt.ylabel("State parameters")
+
+    xlabel = "Time (s)"
     if args.milliseconds:
-        plt.xlabel("Time (ms)")
-    else:
-        plt.xlabel("Time (min)")
-    plt.ylabel("State parameters")
-
+        xlabel = "Time (ms)"
+    elif args.minutes:
+        xlabel = "Time (min)"
+    plt.xlabel(xlabel)
     plt.tight_layout()
 
 def host_eval(file):
@@ -364,6 +380,11 @@ def host_eval(file):
 
 def plotLinkResults(allresults: List[LinkResults], links: List[List]):
     results = list(filter(lambda res: filterLink(res, links), allresults))
+    xlabel = "Time (s)"
+    if args.milliseconds:
+        xlabel = "Time (ms)"
+    elif args.minutes:
+        xlabel = "Time (min)"
     ax1 = fig.get_axes()[0]
     plot_number = 615
     plt.subplot(plot_number, sharex=ax1)
@@ -372,10 +393,7 @@ def plotLinkResults(allresults: List[LinkResults], links: List[List]):
         plt.plot(res.time, res.throughput, label = res.info)
     if not args.nolegend:
         plt.legend()
-    if args.milliseconds:
-        plt.xlabel("Time (ms)")
-    else:
-        plt.xlabel("Time (min)")
+    plt.xlabel(xlabel)
     plt.ylabel("Throughput (MB/s)")
 
     plt.subplot(plot_number, sharex=ax1)
@@ -384,10 +402,7 @@ def plotLinkResults(allresults: List[LinkResults], links: List[List]):
         plt.plot(res.time, res.loss, label = res.info)
     if not args.nolegend:
         plt.legend()
-    if args.milliseconds:
-        plt.xlabel("Time (ms)")
-    else:
-        plt.xlabel("Time (min)")
+    plt.xlabel(xlabel)
     plt.ylabel("Loss (%)")
 
 def plotMulti(names, tuples):
@@ -484,8 +499,10 @@ def link_eval(file):
                     raise RuntimeError("Invalid link statistics")
                 if args.milliseconds:
                     timestamp = float(tokens[0])
-                else:
+                elif args.minutes:
                     timestamp = float(tokens[0]) / 1000 / 60 # convert to minutes
+                else:
+                    timestamp = float(tokens[0]) / 1000
                 results.time.append(timestamp)
                 results.throughput.append(int(tokens[1])/1e6)
                 results.loss.append(float(tokens[2])*100)
@@ -583,9 +600,12 @@ def main():
                 qualitySum = 0
                 throughputSum = 0
                 startIndex = 0
-                startTime = args.startTime
-                if not args.milliseconds:
-                    startTime *= 60 * 1000
+                if args.milliseconds:
+                    startTime = args.startTime
+                elif args.minutes:
+                    startTime = args.startTime * 1000 * 60
+                else: # seconds
+                    startTime = args.startTime * 1000
                 
                 for res in appRes:
                     if args.excludeStartup:
