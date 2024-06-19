@@ -78,15 +78,6 @@ protected:
   uint32_t num_paths;
   app_path_id_t active_path;
 
-  std::string
-  log_prefix ()
-  {
-    // print current time in ms
-    std::string log_prefix = "[" + std::to_string (Simulator::Now ().ToDouble (Time::Unit::MIN)) +
-                             "][rtc-" + std::to_string (app_id) + "] ";
-    return log_prefix;
-  }
-
   // vector to store information each path
   std::vector<PathStatistics> path_infos;
 
@@ -120,6 +111,23 @@ protected:
   // Store app state at different time points for evaluation
   std::vector<AppState> statistics;
 
+  void
+  Log (std::string msg, bool with_prefix = true)
+  {
+    if (!cfgLogging)
+      {
+        return;
+      }
+
+    std::string prefix;
+    if (with_prefix)
+      {
+        prefix += "[" + std::to_string (Simulator::Now ().ToDouble (Time::Unit::MIN)) + "][rtc-" +
+                  std::to_string (app_id) + "] ";
+      }
+    std::cout << prefix << msg << std::endl;
+  }
+
 public:
   RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
           host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
@@ -144,13 +152,13 @@ public:
     active_path = rand () % num_paths;
     active_path = 0; // TODO: For testing
 
-    std::cout << log_prefix () << "Initiated." << std::endl;
-    std::cout << "  Runtime config: " << runtime_config << std::endl;
-    std::cout << "  Active path: " << active_path << std::endl;
-    std::cout << "  Logging enabled: " << cfgLogging << std::endl;
-    std::cout << "  Loss controller enabled: " << cfgLossBwe << std::endl;
-    std::cout << "  Delay controller enabled: " << cfgDelayBwe << std::endl;
-    std::cout << "  Path switching enabled: " << cfgPathSwitching << std::endl;
+    Log ("Initialized RTCApp " + app_id);
+    Log ("  Runtime config: " + runtime_config, false);
+    Log ("  Active path: " + active_path, false);
+    Log ("  Logging enabled: " + cfgLogging, false);
+    Log ("  Loss controller enabled: " + cfgLossBwe, false);
+    Log ("  Delay controller enabled: " + cfgDelayBwe, false);
+    Log ("  Path switching enabled: " + cfgPathSwitching, false);
   }
 
   void
@@ -187,18 +195,16 @@ public:
     state.fair_share = path_info.fair_share;
     statistics.push_back (state);
 
-    if (runtime_config)
+    Log ("Current state:");
+    for (uint32_t i = 0; i < num_paths; i++)
       {
-        std::cout << log_prefix () << "Current state:" << std::endl;
-        for (uint32_t i = 0; i < num_paths; i++)
-          {
-            std::string prefix = (i == active_path) ? "    -> " : "       ";
-            std::cout << prefix << "Path " << i
-                      << ", latency [ms]: " << path_infos[i].latency / 1000.0
-                      << ", loss: " << path_infos[i].loss
-                      << ", fair_share: " << path_infos[i].fair_share
-                      << ", score: " << path_infos[i].score << std::endl;
-          }
+        std::string prefix = (i == active_path) ? "    -> " : "       ";
+        Log ("    Path " + std::to_string (i) +
+                 ", latency [ms]: " + std::to_string (path_infos[i].latency / 1000.0) +
+                 ", loss: " + std::to_string (path_infos[i].loss) +
+                 ", fair_share: " + std::to_string (path_infos[i].fair_share) +
+                 ", score: " + std::to_string (path_infos[i].score),
+             false);
       }
   }
 
@@ -236,21 +242,19 @@ public:
     // Return only the first probe_simultaneous candidates
     candidates.resize (std::min (probe_simultaneous, (uint16_t) candidates.size ()));
 
-    if (cfgLogging)
+    if (candidates.empty ())
       {
-        if (candidates.empty ())
+        Log ("No candidates for probing.");
+      }
+    else
+      {
+        std::string candidates_str = "[";
+        for (auto candidate : candidates)
           {
-            std::cout << log_prefix () << "No candidates for probing." << std::endl;
+            candidates_str += std::to_string (candidate) + ", ";
           }
-        else
-          {
-            std::cout << log_prefix () << "Selected candidates for probing: [";
-            for (auto candidate : candidates)
-              {
-                std::cout << candidate << " ";
-              }
-            std::cout << "]" << std::endl;
-          }
+        candidates_str += "]";
+        Log ("Selected candidates: " + candidates_str);
       }
     return candidates;
   }
@@ -336,8 +340,8 @@ public:
         NS_FATAL_ERROR ("Frame size is not finite");
       }
 
-    std::cout << log_prefix () << "Sending frame " << frame_no << " with " << frame_bytes
-              << " bytes on path " << active_path << std::endl;
+    Log ("Sending frame " + std::to_string (frame_no) + " with " + std::to_string (frame_bytes) +
+         " bytes on path " + std::to_string (active_path));
 
     double packets_to_send = std::ceil ((double) frame_bytes / m_pktSize);
     Time packet_interval = frame_interval / packets_to_send;
@@ -374,11 +378,7 @@ public:
 
     if (path_id != active_path)
       {
-        if (cfgLogging)
-          {
-            std::cout << log_prefix () << "Receiving response on inactive (old) path: " << path_id
-                      << std::endl;
-          }
+        Log ("Receiving response on inactive (old) path: " + path_id);
 
         // Don't process responses on inactive paths
         return;
@@ -386,12 +386,9 @@ public:
 
     PacketsReport *report = app_resp.packets_report;
 
-    if (cfgLogging)
-      {
-        std::cout << log_prefix () << "Processing report on active path " << path_id
-                  << " with sequence numbers " << report->packets.front ().seq_no << " to "
-                  << report->packets.back ().seq_no << std::endl;
-      }
+    Log ("Processing report on active path " + std::to_string (path_id) +
+         " with sequence numbers " + std::to_string (report->packets.front ().seq_no) + " to " +
+         std::to_string (report->packets.back ().seq_no));
 
     Time resp_time = MicroSeconds (app_resp.timestamp);
     path_infos[path_id].last_report = resp_time;
@@ -411,7 +408,7 @@ public:
 
     if (app_resp.loss < 0)
       {
-        std::cout << log_prefix () << "Loss <0 detected" << std::endl;
+        Log ("WARN: Loss <0 detected");
         app_resp.loss = 0;
       }
     path_infos[path_id].loss = app_resp.loss;
@@ -446,10 +443,10 @@ public:
   UpdateBWE ()
   {
     A_s = loss_based_estimator.GetRate ();
-    std::cout << log_prefix () << "Sender estimate: " << A_s << std::endl;
+    Log ("Sender estimate: " + std::to_string (A_s));
 
     A_r = delay_based_estimator.GetRate ();
-    std::cout << log_prefix () << "Receiver estimate: " << A_r << std::endl;
+    Log ("Receiver estimate: " + std::to_string (A_r));
 
     sendrate = A_s;
 
@@ -458,21 +455,20 @@ public:
       {
         if (A_r < A_s)
           {
-            std::cout << log_prefix () << "Receiver estimate lower than sender estimate: " << A_r
-                      << " < " << A_s << ". Using receiver estimate." << std::endl;
+            Log ("Receiver estimate lower than sender estimate: " + std::to_string (A_r) + " < " +
+                 std::to_string (A_s) + ". Using receiver estimate.");
             sendrate = A_r;
             loss_based_estimator.LimitRate (sendrate);
           }
         else
           {
-            std::cout << log_prefix () << "Receiver estimate higher than sender estimate: " << A_r
-                      << " > " << A_s << ". Using sender estimate." << std::endl;
+            Log ("Receiver estimate higher than sender estimate: " + std::to_string (A_r) + " > " +
+                 std::to_string (A_s) + ". Using sender estimate.");
           }
       }
     else
       {
-        std::cout << log_prefix () << "No receiver estimate available. Using sender estimate."
-                  << std::endl;
+        Log ("No receiver estimate available. Using sender estimate.");
       }
     TrackState ();
 
@@ -493,11 +489,7 @@ public:
     auto it = in_flight_probes.find (probe_id);
     if (it == in_flight_probes.end ())
       {
-        if (cfgLogging)
-          {
-            std::cout << log_prefix () << "Received probe response for unknown probe id "
-                      << probe_id << std::endl;
-          }
+        Log ("Received probe response for unknown probe id " + std::to_string (probe_id));
         return;
       }
 
@@ -505,14 +497,12 @@ public:
     auto latency = probe_resp.time_rx - probe_resp.time_tx;
     auto hop = probe_resp.min_fair_share_hop;
 
-    if (cfgLogging)
-      {
-        std::cout << log_prefix () << "Received probe response on path " << path_id << std::endl
-                  << "    Latency [ms]: " << latency / 1000.0 << std::endl
-                  << "    min fair share: " << probe_resp.min_fair_share * 1e6 / 8 << std::endl
-                  << "    min fair share seen at AS " << GET_HOP_AS (hop) << " and hop "
-                  << GET_HOP_EG_IF (hop) << std::endl;
-      }
+    Log ("Received probe response on path " + std::to_string (path_id));
+    Log ("    Latency [ms]: " + std::to_string (latency / 1000.0), false);
+    Log ("    min fair share: " + std::to_string (probe_resp.min_fair_share * 1e6 / 8), false);
+    Log ("    min fair share seen at AS " + std::to_string (GET_HOP_AS (hop)) + " and hop " +
+             std::to_string (GET_HOP_EG_IF (hop)),
+         false);
 
     // Update path info
     path_infos[path_id].latency = latency;
@@ -588,16 +578,16 @@ public:
           }
         else if (path_infos[i].fair_share > sendrate * PATH_SWITCH_TRESHOLD)
           {
-            std::cout << log_prefix () << "Selecting path switch candidate: " << active_path
-                      << " to " << i << ". Estimated fair share is higher than current bitrate "
-                      << path_infos[i].fair_share << " > " << sendrate << std::endl;
+            Log ("Selecting path switch candidate: " + std::to_string (active_path) + " to " +
+                 std::to_string (i) + ". Estimated fair share is higher than current bitrate " +
+                 std::to_string (path_infos[i].fair_share) + " > " + std::to_string (sendrate));
             switch_candidates.push_back (i);
           }
         else
           {
-            std::cout << log_prefix () << "Excluding path switch candidate: " << active_path
-                      << " to " << i << ". Estimated fair share is not high enough "
-                      << path_infos[i].fair_share << " / " << sendrate << std::endl;
+            Log ("Excluding path switch candidate: " + std::to_string (active_path) + " to " +
+                 std::to_string (i) + ". Estimated fair share is not high enough " +
+                 std::to_string (path_infos[i].fair_share) + " / " + std::to_string (sendrate));
           }
       }
 
@@ -614,17 +604,11 @@ public:
   {
     if (new_path == active_path)
       {
-        if (cfgLogging)
-          {
-            std::cout << log_prefix () << "Staying on current path " << active_path << std::endl;
-          }
+        Log ("Staying on current path " + std::to_string (active_path));
         return;
       }
-    if (cfgLogging)
-      {
-        std::cout << log_prefix () << "Switching from path " << active_path << " to " << new_path
-                  << std::endl;
-      }
+    Log ("Switching from path " + std::to_string (active_path) + " to " +
+         std::to_string (new_path));
     active_path = new_path;
     loss_based_estimator.Reset ();
     last_path_change = Simulator::Now ();
@@ -639,23 +623,6 @@ public:
 
     // With probability (1 - alpha), try to switch paths
     bool try_switch = !(rand () % 100 < 100 * alpha);
-
-    if (enable_logging)
-      {
-        std::cout << log_prefix () << "Steering decision:" << std::endl;
-        std::cout << "    alpha " << alpha << std::endl;
-        std::cout << "    try_switch " << try_switch << std::endl;
-
-        // print scores of all other paths for debugging
-        for (uint32_t i = 0; i < num_paths; i++)
-          {
-            if (i == active_path)
-              {
-                continue;
-              }
-            std::cout << "    path " << i << " score " << path_infos[i].score << std::endl;
-          }
-      }
 
     // score lower than treshold_l
     if (path_infos[active_path].score < steering_treshold_l)
@@ -682,19 +649,13 @@ public:
               {
                 uint32_t new_path = candidate_paths.at (rand () % candidate_paths.size ());
 
-                if (cfgLogging)
-                  {
-                    std::cout << log_prefix () << "Switching from path " << active_path << " to "
-                              << new_path << std::endl;
-                  }
+                Log ("Switching from path " + std::to_string (active_path) + " to " +
+                     std::to_string (new_path));
                 active_path = new_path;
               }
             else
               {
-                if (cfgLogging)
-                  {
-                    std::cout << log_prefix () << "No better path > treshold_l found" << std::endl;
-                  }
+                Log ("No better path > treshold_l found");
               }
           }
 
@@ -705,11 +666,7 @@ public:
             if (selected_bitrate > 0)
               {
                 selected_bitrate--;
-                if (cfgLogging)
-                  {
-                    std::cout << log_prefix () << "Lowering bitrate to "
-                              << bitrates[selected_bitrate] << std::endl;
-                  }
+                Log ("Lowering bitrate to " + std::to_string (bitrates[selected_bitrate]));
               }
           }
       }
@@ -722,11 +679,7 @@ public:
             if (selected_bitrate < bitrates.size () - 1)
               {
                 selected_bitrate++;
-                if (cfgLogging)
-                  {
-                    std::cout << log_prefix () << "Increasing bitrate to "
-                              << bitrates[selected_bitrate] << std::endl;
-                  }
+                Log ("Increasing bitrate to " + std::to_string (bitrates[selected_bitrate]));
               }
           }
       }
@@ -747,18 +700,12 @@ public:
               {
                 uint32_t new_path = rand () % candidate_paths.size ();
                 active_path = new_path;
-                if (cfgLogging)
-                  {
-                    std::cout << log_prefix () << "Steering to a different path " << active_path
-                              << std::endl;
-                  }
+                Log ("Switching from path " + std::to_string (active_path) + " to " +
+                     std::to_string (new_path));
               }
             else
               {
-                if (cfgLogging)
-                  {
-                    std::cout << log_prefix () << "No better path > treshold_u found" << std::endl;
-                  }
+                Log ("No better path > treshold_u found");
               }
           }
       }
@@ -775,12 +722,8 @@ public:
     payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
     PayloadType payload_type = PayloadType::APPLICATION_DATA;
     host->SendAppPacket (this, payload, payload_type, packetSize * scale + sizeof (AppData), path);
-    if (cfgLogging)
-      {
-        std::cout << log_prefix () << "Sending data packet via path " << active_path
-                  << " with frame_no " << frame_no << " and seq_no " << payload.app_data.seq_no
-                  << std::endl;
-      }
+    Log ("Sending packet with frame_no " + std::to_string (frame_no) + " and seq_no " +
+         std::to_string (payload.app_data.seq_no) + " on path " + std::to_string (active_path));
   }
 
   void
