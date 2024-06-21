@@ -57,6 +57,7 @@ struct AppState
   double fair_share = 0;
   double latency = 0;
   double loss = 0;
+  CongestionControlPhase phase;
   app_path_id_t active_path;
   std::vector<PathStatistics> path_stats;
 };
@@ -89,8 +90,10 @@ protected:
   const Time frame_interval = Seconds (1.0 / fps); // how much time between frames
   uint32_t frame_no = 0; // number of the video frame
 
+  Time round_trip_time = Seconds (0);
+  CongestionControlPhase phase;
   DelayBasedController delay_based_estimator;
-  LossBasedEstimator loss_based_estimator = LossBasedEstimator (0.2e7);
+  LossBasedEstimator loss_based_estimator;
 
   double A_r = 0; // send rate estimate by the receiver side loss based controller
   double A_s = 0; // send rate estimate by the sender side loss based controller
@@ -102,7 +105,6 @@ protected:
   Time last_path_change = Seconds (0);
   Time last_A_r_update = Seconds (0);
   Time last_report = Seconds (0);
-  Time last_rtt = Seconds (0);
 
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
@@ -148,6 +150,10 @@ public:
         path_infos.push_back (path_info);
       }
 
+    // During startup, we just use the loss based estimate
+    phase = CongestionControlPhase::STARTUP;
+    loss_based_estimator.SetRate (CC_INITIAL_SEND_RATE);
+
     // Choose a random path to start with
     active_path = rand () % num_paths;
     active_path = 0; // TODO: For testing
@@ -164,11 +170,9 @@ public:
   void
   StartAppTraffic ()
   {
-    SendProbes ();
-    // TrackState ();
-
-    // Start sending video frames after a random delay, to avoid synchronization
+    // Start sending probes and video frames after a random delay, to avoid synchronization
     Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &RTCApp::SendVideoFrame, this);
+    Simulator::Schedule (MilliSeconds (2000) + RandomDelay (1500), &RTCApp::SendProbes, this);
   }
 
   void
@@ -375,16 +379,16 @@ public:
   ReceiveAppResponse (AppResp app_resp)
   {
     auto path_id = app_resp.path_id;
+    PacketsReport *report = app_resp.packets_report;
 
     if (path_id != active_path)
       {
         Log ("Receiving response on inactive (old) path: " + path_id);
 
         // Don't process responses on inactive paths
+        delete report;
         return;
       }
-
-    PacketsReport *report = app_resp.packets_report;
 
     Log ("Processing report on active path " + std::to_string (path_id) +
          " with sequence numbers " + std::to_string (report->packets.front ().seq_no) + " to " +
@@ -396,15 +400,12 @@ public:
     path_infos[path_id].ecn = app_resp.ecn;
     path_infos[path_id].latency = app_resp.avg_latency;
 
-    // If the frame is incomplete, then we likely got it back because of a
-    // timeout and it's not useful for RTT estimation
-    if (report->IsFrameComplete ())
-      {
-        Time send_delay = report->packets.back ().time_received - report->packets.back ().time_sent;
-        Time receive_delay = Simulator::Now () - MicroSeconds (app_resp.timestamp);
-        last_rtt = send_delay + receive_delay;
-        delay_based_estimator.SetRTTInterval (last_rtt + MilliSeconds (100));
-      }
+    // RTT update
+    Time send_delay = report->packets.back ().time_received - report->packets.back ().time_sent;
+    Time receive_delay = Simulator::Now () - MicroSeconds (app_resp.timestamp);
+    round_trip_time = send_delay + receive_delay;
+    delay_based_estimator.SetRoundTripTime (round_trip_time);
+    loss_based_estimator.SetRoundTripTime (round_trip_time);
 
     if (app_resp.loss < 0)
       {
@@ -413,28 +414,17 @@ public:
       }
     path_infos[path_id].loss = app_resp.loss;
 
-    // With feedback on our active path, we can perform congestion control
-    if (path_id == active_path)
+    for (auto packet : report->packets)
       {
-        for (auto packet : report->packets)
-          {
-            delay_based_estimator.FeedPacketTrendLine (&packet);
-          }
-
-        loss_based_estimator.FeedReport (report);
-
-        path_infos[path_id].loss = loss_based_estimator.GetLoss ();
-
-        // Update the send rate
-        UpdateBWE ();
+        delay_based_estimator.FeedPacketTrendLine (&packet);
       }
 
-    if (cfgLogging)
-      {
-        std::cout << "    Loss: " << app_resp.loss << std::endl
-                  << "    Latency: " << app_resp.avg_latency << std::endl
-                  << "    Current sending rate: " << sendrate << std::endl;
-      }
+    loss_based_estimator.FeedReport (report);
+
+    path_infos[path_id].loss = loss_based_estimator.GetLoss ();
+
+    UpdateBWE ();
+    TrackState ();
 
     delete report;
   }
@@ -445,36 +435,54 @@ public:
     A_s = loss_based_estimator.GetRate ();
     Log ("Sender estimate: " + std::to_string (A_s));
 
-    A_r = delay_based_estimator.GetRate ();
-    Log ("Receiver estimate: " + std::to_string (A_r));
-
-    sendrate = A_s;
-
-    // If we got an estimate from the receiver, use it
-    if (cfgDelayBwe && A_r > 0)
+    if (phase == CongestionControlPhase::STARTUP)
       {
-        if (A_r < A_s)
+        if (delay_based_estimator.CongestionDetected () || loss_based_estimator.GetLoss () > 0)
           {
-            Log ("Receiver estimate lower than sender estimate: " + std::to_string (A_r) + " < " +
-                 std::to_string (A_s) + ". Using receiver estimate.");
-            sendrate = A_r;
-            loss_based_estimator.LimitRate (sendrate);
+            Log ("Congestion detected in startup phase. Switching to congestion avoidance phase.");
+            phase = CongestionControlPhase::CONGESTION_AVOIDANCE;
+            loss_based_estimator.SetPhase (phase);
+            delay_based_estimator.SetPhase (phase);
+          }
+        else // stay in startup phase
+          {
+            // During startup, we just use the loss based estimate
+            sendrate = A_s;
+          }
+      }
+    else if (phase == CongestionControlPhase::CONGESTION_AVOIDANCE)
+      {
+        // Now we incorporate the delay based estimate too
+        A_r = delay_based_estimator.GetRate ();
+        Log ("Receiver estimate: " + std::to_string (A_r));
+
+        sendrate = A_s;
+
+        // If we got an estimate from the receiver, use it
+        if (cfgDelayBwe && A_r > 0)
+          {
+            if (A_r < A_s)
+              {
+                Log ("Receiver estimate lower than sender estimate: " + std::to_string (A_r) +
+                     " < " + std::to_string (A_s) + ". Using receiver estimate.");
+                sendrate = A_r;
+                loss_based_estimator.LimitRate (1 * sendrate);
+              }
+            else
+              {
+                Log ("Receiver estimate higher than sender estimate: " + std::to_string (A_r) +
+                     " > " + std::to_string (A_s) + ". Using sender estimate.");
+              }
           }
         else
           {
-            Log ("Receiver estimate higher than sender estimate: " + std::to_string (A_r) + " > " +
-                 std::to_string (A_s) + ". Using sender estimate.");
+            Log ("No receiver estimate available. Using sender estimate.");
           }
-      }
-    else
-      {
-        Log ("No receiver estimate available. Using sender estimate.");
-      }
-    TrackState ();
 
-    if (cfgPathSwitching)
-      {
-        CheckPathSwitch ();
+        if (cfgPathSwitching)
+          {
+            CheckPathSwitch ();
+          }
       }
   }
 
@@ -611,6 +619,7 @@ public:
          std::to_string (new_path));
     active_path = new_path;
     loss_based_estimator.Reset ();
+    delay_based_estimator.SetPhase (CongestionControlPhase::STARTUP);
     last_path_change = Simulator::Now ();
   }
 
@@ -797,7 +806,9 @@ public:
     NS_FATAL_ERROR ("[rtc-app] should not have received probe response");
   }
 
-  // Returns a random time between -N and N where N is an integer parameter in ps
+  /**
+   * @return a random time between -N and N where N is an integer parameter in ps
+   */
   Time
   RandomDelay (int N)
   {

@@ -27,6 +27,14 @@
 namespace ns3 {
 
 /**
+ * Congestion control related constants
+ */
+const Time CC_INITIAL_RTT = Time ("100ms");
+const double CC_INITIAL_SEND_RATE = 1e5; // 0.1 Mbps
+const double CC_ADDITIVE_TERM = 1e4; // KB, per frame or at least every 50ms
+const double CC_MULTI_INCREASE = 1.05; // factor, per RTT
+
+/**
  * Record of a packet with all information relevant for congestion control
  */
 struct PacketRecord
@@ -80,6 +88,39 @@ struct PacketsReport
     uint32_t received = packets.size ();
     return 1.0 - (double) received / expected;
   }
+
+  double
+  AverageOneWayDelay ()
+  {
+    if (packets.size () < 1)
+      {
+        return 0;
+      }
+    Time sum = Time (0);
+    for (size_t i = 0; i < packets.size (); i++)
+      {
+        auto delay = packets[i].time_received - packets[i].time_sent;
+        if (delay < Time (0))
+          {
+            NS_FATAL_ERROR ("Negative one way delay detected: "
+                            << delay << " for packet " << i << " with seq_no " << packets[i].seq_no
+                            << " and frame_no " << packets[i].frame_no << " sent at "
+                            << packets[i].time_sent << " and received at "
+                            << packets[i].time_received << " with size " << packets[i].size
+                            << " bytes.");
+          }
+        sum += delay;
+      }
+    return sum.GetSeconds () / (packets.size ());
+  }
+};
+
+/**
+ * Enum for the congestion control phase
+ */
+enum class CongestionControlPhase : uint8_t {
+  STARTUP,
+  CONGESTION_AVOIDANCE,
 };
 
 } // namespace ns3

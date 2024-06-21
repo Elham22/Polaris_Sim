@@ -98,7 +98,6 @@ protected:
   FrameRecord *frame_current = nullptr;
   FrameRecord *frame_previous = nullptr;
 
-  Time rtt_interval = Seconds (0);
   std::deque<double> trend_history; // Records one way delays of packets
   std::size_t trend_packets = 60; // How many packets to keep in the history
   double slope_tresh_high = 0.1;
@@ -111,6 +110,10 @@ protected:
   double A_r = 0; // Rate estimate computed by the controller, in Bytes/s
 
   Time last_rate_update = Seconds (0);
+  int64_t last_treshold_update_ms = -1;
+
+  CongestionControlPhase phase = CongestionControlPhase::STARTUP;
+  Time round_trip_time = CC_INITIAL_RTT;
 
   /**
    * Returns the measured one way delay gradient in ms
@@ -296,6 +299,7 @@ protected:
             if (Simulator::Now () - overuse_detected_since > MilliSeconds (overuse_time_th))
               {
                 signal = DetectorSignal::OVERUSE;
+                phase = CongestionControlPhase::CONGESTION_AVOIDANCE;
               }
             else
               {
@@ -382,19 +386,13 @@ protected:
   void
   UpdateRate ()
   {
-    // If A_r does not have any previous value, start with the current receive_rate
-    if (A_r == 0)
-      {
-        A_r = receive_rate;
-      }
-    Time time_since_last_rate_update = Simulator::Now () - last_rate_update;
+    double time_since_last_update = (Simulator::Now () - last_rate_update).GetSeconds ();
     double eta;
     switch (state)
       {
       case ControllerState::DECREASE:
         // Decrease rate by at most 15% per second
-        eta = std::pow (DECREASE_FACTOR_MULT,
-                        std::min (time_since_last_rate_update.GetSeconds (), 1.0));
+        eta = std::pow (DECREASE_FACTOR_MULT, std::min (time_since_last_update, 1.0));
 
         // If the received rate is very high it can actually be that the new
         // rate is higher than the the previous one
@@ -404,16 +402,29 @@ protected:
         break;
       case ControllerState::INCREASE:
 
-        // Increase rate by at most 8% per second
-        eta = std::pow (INCREASE_FACTOR_MULT,
-                        std::min (time_since_last_rate_update.GetSeconds (), 1.0));
-        A_r = eta * A_r + 1e4;
+        // // Increase rate by at most 8% per second
+        // eta = std::pow (INCREASE_FACTOR_MULT,
+        //                 std::min (double, 1.0));
+        // A_r = eta * A_r + 1e4;
 
-        // Cap at 1.5x the receive_rate
-        if (A_r > 1.5 * receive_rate)
+        // In startup phase, increase rate by up to CC_MULTI_INCREASE per round trip time
+        if (phase == CongestionControlPhase::STARTUP)
           {
-            A_r = 1.5 * receive_rate;
+            eta = std::pow (CC_MULTI_INCREASE,
+                            std::min (time_since_last_update / round_trip_time.GetSeconds (), 1.0));
+            A_r = eta * A_r + CC_ADDITIVE_TERM;
           }
+        else // Otherwise, do additive increase
+          {
+            A_r = A_r + CC_ADDITIVE_TERM;
+          }
+
+        // Cap at 1.5x the receive_rate, to prevent increasing too quickly
+        A_r = std::min (A_r, 1.5 * receive_rate);
+
+        // If the receive rate is somehow still higher than our estimate, use
+        // this as our new estimate. This can happen during startup phase.
+        A_r = std::max (A_r, receive_rate);
         break;
       }
     last_rate_update = Simulator::Now ();
@@ -458,9 +469,15 @@ public:
   }
 
   void
-  SetRTTInterval (Time interval)
+  SetRoundTripTime (Time rtt)
   {
-    rtt_interval = interval;
+    round_trip_time = rtt;
+  }
+
+  void
+  SetPhase (CongestionControlPhase phase)
+  {
+    this->phase = phase;
   }
 
   /**
@@ -483,7 +500,7 @@ public:
         .state = state,
         .A_r = A_r,
         .kalman_gain = kalman_gain,
-        .adaptive_treshold = adaptive_treshold,
+        .adaptive_treshold = overuse_treshold,
         .m = m,
         .d_m = d_m,
         .z = z,
@@ -505,18 +522,21 @@ public:
     received_bytes[packet->time_received] = packet->size;
     UpdateReceiveRate ();
 
-    auto delta_ms = (packet->time_received - packet->time_sent).GetMilliSeconds ();
+    // HACK: Set initial tresholds, we need a constructor...
+    if (trend_history.empty ())
+      {
+        overuse_treshold = 0.02;
+        underuse_treshold = 0.0;
+      }
 
-    trend_history.push_back (delta_ms);
+    auto latency_ms = (packet->time_received - packet->time_sent).GetMilliSeconds ();
+
+    trend_history.push_back (latency_ms);
 
     if (trend_history.size () > trend_packets)
       {
         trend_history.pop_front ();
       }
-
-    // Static thresholds for now
-    overuse_treshold = 0.01;
-    underuse_treshold = 0.0;
 
     if (trend_history.size () == trend_packets)
       {

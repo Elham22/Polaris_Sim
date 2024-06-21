@@ -52,6 +52,9 @@ protected:
   Time time_last_rate_update = Seconds (0);
   double rate_estimate = 0.0;
 
+  CongestionControlPhase phase = CongestionControlPhase::STARTUP;
+  Time round_trip_time = CC_INITIAL_RTT;
+
   std::string
   GetLogPrefix ()
   {
@@ -128,16 +131,23 @@ protected:
     double new_estimate = rate_estimate;
     if (loss < LOSS_TRESHOLD_LOW)
       {
-        eta = std::pow (1.05, std::min (time_since_last_update, 1.0));
-        new_estimate = eta * rate_estimate;
-
-        // Add a constant term that has no effect at higher rates but prevents getting stuck at low rates
-        new_estimate += 1e4;
+        // In startup phase, increase rate by up to CC_MULTI_INCREASE per round trip time
+        if (phase == CongestionControlPhase::STARTUP)
+          {
+            eta = std::pow (CC_MULTI_INCREASE,
+                            std::min (time_since_last_update / round_trip_time.GetSeconds (), 1.0));
+            new_estimate = eta * rate_estimate;
+            new_estimate = eta * rate_estimate + CC_ADDITIVE_TERM;
+          }
+        else // Otherwise, do additive increase
+          {
+            new_estimate = rate_estimate + CC_ADDITIVE_TERM;
+          }
       }
     else if (loss > LOSS_TRESHOLD_HIGH)
       {
-        eta = std::pow ((1 - 1 * loss), std::min (time_since_last_update, 1.0));
-        new_estimate = eta * rate_estimate;
+        // eta = std::pow ((1 - 1 * loss), std::min (time_since_last_update, 1.0));
+        new_estimate = (1 - 0.5 * loss) * rate_estimate;
       }
     else
       {
@@ -148,16 +158,17 @@ protected:
   }
 
 public:
-  LossBasedEstimator (double initial_rate_estimate)
-  {
-    rate_estimate = initial_rate_estimate;
-  }
-
   void
   SetWindow (Time window)
   {
     history_window = window + MilliSeconds (100);
     std::cout << GetLogPrefix () << "Set window to " << history_window.GetSeconds () << std::endl;
+  }
+
+  void
+  SetRate (double rate)
+  {
+    rate_estimate = rate;
   }
 
   void
@@ -169,12 +180,25 @@ public:
   void
   FeedReport (PacketsReport *report)
   {
+    packet_history.clear (); // TODO: hack to react quicker
     for (auto packet : report->packets)
       {
         packet_history.push_back (packet);
       }
     UpdateStatistics ();
     UpdateRate ();
+  }
+
+  void
+  SetRoundTripTime (Time rtt)
+  {
+    round_trip_time = rtt;
+  }
+
+  void
+  SetPhase (CongestionControlPhase phase)
+  {
+    this->phase = phase;
   }
 
   void
