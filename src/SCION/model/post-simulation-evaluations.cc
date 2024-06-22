@@ -1407,9 +1407,9 @@ PostSimulationEvaluations::PrintAppPathInfo ()
           ScionHost *host = dynamic_cast<ScionHost *> (node->GetHost (j + 2));
           if (host != NULL)
             {
-              for (uint32_t k = 0; k < host->apps.size (); ++k)
+              for (const auto &[app_id, app] : host->apps)
                 {
-                  host->apps.at (k)->PrintPathInfo ();
+                  app->PrintPathInfo ();
                 }
             }
         }

@@ -62,7 +62,7 @@ public:
 
   static void PrintPath (std::vector<const PathSegment *> the_path);
   void SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host);
-  void StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host,
+  void StartApplication (std::string app_type, uint32_t app_id, ia_t dst_ia, host_addr_t dst_host,
                          double backgroundBwdFactor, uint32_t runtime_config);
   void SendProbes (uint32_t expected_bandwidth);
   void SendAppPacket (App *app, Payload payload, PayloadType payload_type, uint32_t size,
@@ -70,7 +70,8 @@ public:
   void PrintAppsEval ();
   void PrintAddress ();
 
-  std::vector<App *> apps;
+  // Map from app_id to app
+  std::map<uint32_t, App *> apps;
 
 protected:
   cached_path_segs_dataset_t cached_up_path_segments;

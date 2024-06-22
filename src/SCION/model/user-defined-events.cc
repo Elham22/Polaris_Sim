@@ -166,19 +166,21 @@ UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as
                              std::string src_local_address, std::string dst_isd_number,
                              std::string real_dst_as_no, std::string dst_local_address,
                              std::string app_type, std::string backgroundBwdFactor,
-                             std::string runtime_config)
+                             std::string app_id_str, std::string runtime_config)
 {
   if (std::stoi (src_isd_number) != 0)
     {
       std::cout << "Error: Setting link traffic isd != 0 not implemented" << std::endl;
       return;
     }
+
+  uint32_t app_id = std::stoi (app_id_str);
   uint16_t alias_as_no = real_to_alias_as_no.at (std::stoi (real_src_as_no));
   ScionAs *src_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_as_no)));
   ScionHost *src_host = dynamic_cast<ScionHost *> (src_as->GetHost (std::stoi (src_local_address)));
   ia_t dst_ia =
       MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
-  src_host->StartApplication (app_type, dst_ia, std::stoi (dst_local_address),
+  src_host->StartApplication (app_type, app_id, dst_ia, std::stoi (dst_local_address),
                               std::stod (backgroundBwdFactor), std::stoi (runtime_config));
 }
 

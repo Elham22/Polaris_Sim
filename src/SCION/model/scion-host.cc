@@ -326,7 +326,7 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
     {
       auto app_id = packet->payload.app_probe.app_id;
 
-      if (app_id < apps.size ())
+      if (apps.find (app_id) != apps.end ())
         {
           RTCApp *rtc_app = dynamic_cast<RTCApp *> (apps.at (app_id));
           if (rtc_app != nullptr)
@@ -350,13 +350,13 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
     }
   if (packet->payload_type == PayloadType::SCMP)
     {
-      // NOTE: SCMP packet is just addressed to our host, we don't know which
+      // TODO: SCMP packet is just addressed to our host, we don't know which
       // application. If we want to run many applications on one host we need a
       // better concept here.
-      for (auto app : apps)
-        {
-          app->HandleSCMP (packet->payload.scmp_req_or_resp);
-        }
+      // for (auto app : apps)
+      //   {
+      //     app.second->HandleSCMP (packet->payload.scmp_req_or_resp);
+      //   }
     }
   packet->packet_originator->DestroyScionPacket (packet);
   /*
@@ -417,7 +417,7 @@ ScionHost::PrintAppsEval ()
             << apps.size () << " applications." << std::endl;
   for (auto app : apps)
     {
-      app->PrintResults ();
+      app.second->PrintResults ();
     }
 }
 
@@ -456,8 +456,9 @@ ScionHost::SendArbitraryPacket (ia_t dst_ia, host_addr_t dst_host)
 }
 
 void
-ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_host,
-                             double backgroundBwdFactor, uint32_t runtime_config)
+ScionHost::StartApplication (std::string app_type, uint32_t app_id, ia_t dst_ia,
+                             host_addr_t dst_host, double backgroundBwdFactor,
+                             uint32_t runtime_config)
 {
   std::vector<const PathSegment *> the_path;
   /*ScionHost::active_path = the_path;
@@ -481,39 +482,42 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
       App *app;
       if (app_type == "video conference active")
         {
-          app = new VideoConferenceApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
+          app = new VideoConferenceApp (this, app_id, ia_addr, dst_ia, dst_host, all_paths,
                                         runtime_config);
         }
       else if (app_type == "video conference passive")
         {
-          app = new VCAPassive (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
-                                runtime_config);
+          app = new VCAPassive (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
         }
       else if (app_type == "video conference naive")
         {
-          app = new VCANaive (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
-                              runtime_config);
+          app = new VCANaive (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
         }
       else if (app_type.find ("video conference given:") == 0)
         {
-          app = new VCAGiven (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
+          app = new VCAGiven (this, app_id, ia_addr, dst_ia, dst_host, all_paths,
                               app_type.substr (23), runtime_config);
         }
       else if (app_type == "general traffic")
         {
-          app = new GeneralTrafficApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths,
+          app = new GeneralTrafficApp (this, app_id, ia_addr, dst_ia, dst_host, all_paths,
                                        runtime_config);
         }
       else if (app_type == "rtc")
         {
-          app =
-              new RTCApp (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths, runtime_config);
+          app = new RTCApp (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
         }
       else
         {
-          app = new App (this, apps.size (), ia_addr, dst_ia, dst_host, all_paths, runtime_config);
+          app = new App (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
         }
-      apps.push_back (app);
+
+      if (apps.find (app_id) != apps.end ())
+        {
+          NS_FATAL_ERROR ("App with id " << app_id << " already exists");
+        }
+      apps[app_id] = app;
+
       BackgroundTrafficApp::AddBackgroundTraffic (all_paths, backgroundBwdFactor);
       app->StartAppTrafficDelayed (
           Seconds (15)); // 15s delay to allow background traffic to reach steady state
@@ -522,8 +526,8 @@ ScionHost::StartApplication (std::string app_type, ia_t dst_ia, host_addr_t dst_
     {
       // no paths registered, request paths
       RequestForPathSegments (dst_ia);
-      Simulator::Schedule (MilliSeconds (300), &ScionHost::StartApplication, this, app_type, dst_ia,
-                           dst_host, backgroundBwdFactor, runtime_config);
+      Simulator::Schedule (MilliSeconds (300), &ScionHost::StartApplication, this, app_type, app_id,
+                           dst_ia, dst_host, backgroundBwdFactor, runtime_config);
     }
 }
 
