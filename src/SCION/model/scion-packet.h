@@ -22,13 +22,12 @@
 #define SCION_SIMULATOR_SCION_PACKET_H
 
 #include "ns3/node.h"
-#include <unordered_set>
-
 #include "ns3/nstime.h"
 #include "ns3/object.h"
-
 #include "path-segment.h"
 #include "webrtc-cc/types.h"
+#include <unordered_set>
+#include <variant>
 
 namespace ns3 {
 typedef uint16_t host_addr_t;
@@ -174,18 +173,9 @@ struct ScmpReqOrResp
   // Fields not implemented: Checksum, InfoBlock, DataBlock
 };
 
-union Payload {
-  PathReqFromHost path_req_from_host;
-  RegPathsFromLocalPs registered_paths_from_local_ps;
-  ListOfAllASes list_of_all_ases;
-  NtpReqOrResp ntp_req_or_resp;
-  ScmpReqOrResp scmp_req_or_resp;
-  ProbeReq probe_req;
-  ProbeResp probe_resp;
-  AppData app_data;
-  AppResp app_resp;
-  AppProbe app_probe;
-};
+typedef std::variant<PathReqFromHost, RegPathsFromLocalPs, ListOfAllASes, NtpReqOrResp,
+                     ScmpReqOrResp, ProbeReq, ProbeResp, AppData, AppResp, AppProbe>
+    Payload;
 
 struct ScionPacket
 {

@@ -42,7 +42,7 @@ ScionCapableNode::ScheduleReceive (uint16_t local_if, ScionPacket *packet, Time 
                 << " with propagation delay " << propagation_delay.ToDouble (Time::Unit::MS) << "ms"
                 << ((packet->payload_type == PayloadType::APPLICATION_DATA)
                         ? " with sequence number: " +
-                              std::to_string (packet->payload.app_data.seq_no)
+                              std::to_string (std::get<AppData> (packet->payload).seq_no)
                         : "")
                 << std::endl;
     }
@@ -62,7 +62,7 @@ ScionCapableNode::Receive (uint16_t local_if, ScionPacket *packet)
                 << " with processing delay " << delay.ToDouble (Time::Unit::MS) << "ms"
                 << ((packet->payload_type == PayloadType::APPLICATION_DATA)
                         ? " with sequence number: " +
-                              std::to_string (packet->payload.app_data.seq_no)
+                              std::to_string (std::get<AppData> (packet->payload).seq_no)
                         : "")
                 << std::endl;
     }
@@ -105,7 +105,7 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
   // we use this to estimate the number of flows based on active app ids
   if (packet->payload_type == PayloadType::APPLICATION_DATA)
     {
-      app_id_last_seen.at (local_if).insert_or_assign (packet->payload.app_data.app_id,
+      app_id_last_seen.at (local_if).insert_or_assign (std::get<AppData> (packet->payload).app_id,
                                                        Simulator::Now ());
     }
 
@@ -147,7 +147,7 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
       std::string app_id = "";
       if (packet->payload_type == PayloadType::APPLICATION_DATA)
         {
-          app_id = std::to_string (packet->payload.app_data.app_id);
+          app_id = std::to_string (std::get<AppData> (packet->payload).app_id);
         }
 
       std::cout << GetLogPrefix () << "Dropping packet of type " << packet->payload_type << " size "
@@ -171,8 +171,8 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
   if (packet->dst_ia != ia_addr && dynamic_cast<BorderRouter *> (this) &&
       packet->payload_type == PayloadType::APPLICATION_PROBE)
     {
-      auto probe = packet->payload.app_probe;
-      if (probe.type == AppProbeType::BANDWIDTH)
+      AppProbe *probe = std::get_if<AppProbe>(&packet->payload);
+      if (probe->type == AppProbeType::BANDWIDTH)
         {
           int64_t transmission_delay = transmission_delays.at (local_if).ToInteger (Time::Unit::PS);
           if (transmission_delay <= 0)
@@ -186,18 +186,18 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
           // TODO: this could pose a problem when probe goes through link where probing app has an active flow (paths share links)
           auto available_fair_share = total_bw / (no_flows.at (local_if) + 1.0);
           // std::cout << "host fair share: " << total_bw << " / " << no_flows.at (local_if) + 1.0 << " = " << available_fair_share << std::endl;
-          if (available_fair_share < probe.min_fair_share)
+          if (available_fair_share < probe->min_fair_share)
             {
-              packet->payload.app_probe.min_fair_share = available_fair_share;
-              packet->payload.app_probe.min_fair_share_hop =
+              probe->min_fair_share = available_fair_share;
+              probe->min_fair_share_hop =
                   packet->path.at (packet->curr_inf)->hops.at (packet->cur_hopf);
-              packet->payload.app_probe.min_fair_share_no_flows = no_flows.at (local_if) + 1;
+              probe->min_fair_share_no_flows = no_flows.at (local_if) + 1;
             }
           uint64_t queuing_delay = transmission_queues_lengths.at (local_if) /
                                    transmission_delays.at (local_if).ToInteger (Time::Unit::PS);
-          if (queuing_delay > probe.max_queuing_delay)
+          if (queuing_delay > probe->max_queuing_delay)
             {
-              packet->payload.app_probe.max_queuing_delay = queuing_delay;
+              probe->max_queuing_delay = queuing_delay;
             }
         }
     }
@@ -211,7 +211,7 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
                 << " with transmission delay " << delay.ToDouble (Time::Unit::MS) << "ms"
                 << ((packet->payload_type == PayloadType::APPLICATION_DATA)
                         ? " with sequence number: " +
-                              std::to_string (packet->payload.app_data.seq_no)
+                              std::to_string (std::get<AppData> (packet->payload).seq_no)
                         : "")
                 << std::endl;
     }
@@ -463,8 +463,7 @@ ScionCapableNode::CreateScionPacket (const Payload &payload, PayloadType payload
 void
 ScionCapableNode::ReturnSCMPResponse (ScionPacket *src_packet, ScmpReqOrResp resp)
 {
-  Payload payload;
-  payload.scmp_req_or_resp = resp;
+  Payload payload = ScmpReqOrResp (resp);
 
   ScionPacket *packet =
       CreateScionPacket (payload, PayloadType::SCMP, src_packet->src_ia, src_packet->src_host,

@@ -283,8 +283,7 @@ public:
     probe.max_queuing_delay = 0;
     in_flight_probes[probe.probe_id] = probe;
 
-    Payload payload;
-    payload.app_probe = probe;
+    Payload payload = probe;
     host->SendAppPacket (this, payload, PayloadType::APPLICATION_PROBE, sizeof (AppProbe),
                          all_paths[path_id]);
   }
@@ -723,16 +722,17 @@ public:
   void
   SendPacket (double packetSize, std::vector<const PathSegment *> path)
   {
-    Payload payload;
-    payload.app_data.app_id = app_id;
-    payload.app_data.path_id = active_path;
-    payload.app_data.seq_no = path_infos[active_path].seq_no++;
-    payload.app_data.frame_no = frame_no;
-    payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
+    AppData app_data;
+    app_data.app_id = app_id;
+    app_data.path_id = active_path;
+    app_data.seq_no = path_infos[active_path].seq_no++;
+    app_data.frame_no = frame_no;
+    app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
+    Payload payload = app_data;
     PayloadType payload_type = PayloadType::APPLICATION_DATA;
     host->SendAppPacket (this, payload, payload_type, packetSize * scale + sizeof (AppData), path);
     Log ("Sending packet with frame_no " + std::to_string (frame_no) + " and seq_no " +
-         std::to_string (payload.app_data.seq_no) + " on path " + std::to_string (active_path));
+         std::to_string (app_data.seq_no) + " on path " + std::to_string (active_path));
   }
 
   void

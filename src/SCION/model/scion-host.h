@@ -105,7 +105,7 @@ protected:
                             Time receive_time);
   void ReceiveProbeResponse (ia_t src_ia, host_addr_t src_addr,
                              ProbeResp probe_resp); // TODO score is just a placeholder
-  void ReceiveAppData (ScionPacket *packet);
+  void ReceiveAppData (ScionPacket *packet, AppData *data);
   void ReceiveAppResp (AppResp app_resp);
   void SendAppResp (app_connection_key_t key);
   void SendREMB (app_connection_key_t key);

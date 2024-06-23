@@ -174,14 +174,16 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
   // std::cout << "BR " << ia_addr << " (" << longitude << ", " << latitude << "), Process probe " << packet->payload.probe_req.probe_id << std::endl;
 
   PayloadType payload_type = PayloadType::QOS_PROBE_RESP;
-  ProbeReq request = packet->payload.probe_req;
-  Payload payload;
-  payload.probe_resp.app_id = request.app_id;
-  payload.probe_resp.probe_id = request.probe_id;
-  payload.probe_resp.time_recv = local_time.ToInteger (Time::Unit::MS);
+  ProbeReq request = std::get<ProbeReq> (packet->payload);
 
-  int64_t avail_bwd_bytes = GetBwdGbit (local_if) * 0.125e9;
-  payload.probe_resp.raw_bwd = avail_bwd_bytes;
+  int32_t avail_bwd_bytes = GetBwdGbit (local_if) * 0.125e9;
+  ProbeResp probe_resp = ProbeResp{
+      .app_id = request.app_id,
+      .probe_id = request.probe_id,
+      .raw_bwd = avail_bwd_bytes,
+      .time_recv = local_time.ToInteger (Time::Unit::MS),
+  };
+
   //std::cout << "Raw bwd " << payload.probe_resp.raw_bwd  << " Gbps" << std::endl;
   double new_loss = 0.;
   if (predicted_new_throughput.at (local_if).size () > 0 &&
@@ -215,13 +217,14 @@ BorderRouter::ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool i
                 << estimated_loss.at (local_if).at (estimated_loss.at (local_if).size () - 1) << " | "
                 << estimated_packetloss.at (local_if).at (estimated_packetloss.at (local_if).size () - 1) << std::endl;*/
     }
-  payload.probe_resp.expected_loss = new_loss;
+  probe_resp.expected_loss = new_loss;
 
   // TODO additional score is currently not implemented
-  payload.probe_resp.score = 0;
+  probe_resp.score = 0;
 
-  payload.probe_resp.src_ia = ia_addr;
-  payload.probe_resp.src_host_addr = local_address;
+  probe_resp.src_ia = ia_addr;
+  probe_resp.src_host_addr = local_address;
+  Payload payload = probe_resp;
   ScionPacket *response_packet =
       CreateScionPacket (payload, payload_type, packet->src_ia, packet->src_host,
                          sizeof (ProbeResp), packet->path, packet->shortcut_hopfs);

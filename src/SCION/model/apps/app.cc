@@ -91,12 +91,13 @@ App::GenerateAppTraffic ()
 void
 App::SendData (uint32_t size, std::vector<const ns3::PathSegment *> path)
 {
-  Payload payload;
+  AppData app_data;
   // set to 0 for backwards compatibility, existing code didn't keep state per path
-  payload.app_data.path_id = 0;
-  payload.app_data.app_id = app_id;
-  payload.app_data.seq_no = packet_id++;
-  payload.app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
+  app_data.path_id = 0;
+  app_data.app_id = app_id;
+  app_data.seq_no = packet_id++;
+  app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
+  Payload payload = app_data;
   PayloadType payload_type = PayloadType::APPLICATION_DATA;
   host->SendAppPacket (this, payload, payload_type, size * scale, path);
 }
@@ -133,10 +134,11 @@ App::SendProbes ()
   for (uint i = 0; i < all_paths.size (); i++)
     {
       PayloadType payload_type = PayloadType::QOS_PROBE_REQ;
-      Payload payload;
-      payload.probe_req.app_id = app_id;
-      payload.probe_req.probe_id = i; // TODO use unique probe_ids and map them to the paths
-      payload.probe_req.expected_bandwidth = ComputeExpectedBandwidth (i);
+      ProbeReq probe_req;
+      probe_req.app_id = app_id;
+      probe_req.probe_id = i; // TODO use unique probe_ids and map them to the paths
+      probe_req.expected_bandwidth = ComputeExpectedBandwidth (i);
+      Payload payload = probe_req;
 
       path_infos->push_back (PathInfo (all_paths.at (i)));
       host->SendAppPacket (this, payload, payload_type, sizeof (ProbeReq), all_paths.at (i));

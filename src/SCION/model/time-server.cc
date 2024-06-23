@@ -95,11 +95,12 @@ TimeServer::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time 
 void
 TimeServer::ReceiveSetOfAllCoreAsesFromPathServer (ScionPacket *packet)
 {
-  if (*packet->payload.list_of_all_ases.set_of_all_ases != set_of_all_core_ases)
+  ListOfAllASes list_of_all_ases = std::get<ListOfAllASes> (packet->payload);
+  if (*list_of_all_ases.set_of_all_ases != set_of_all_core_ases)
     {
       std::vector<ia_t> v1 (set_of_all_core_ases.begin (), set_of_all_core_ases.end ());
-      std::vector<ia_t> v2 (packet->payload.list_of_all_ases.set_of_all_ases->begin (),
-                            packet->payload.list_of_all_ases.set_of_all_ases->end ());
+      std::vector<ia_t> v2 (*list_of_all_ases.set_of_all_ases->begin (),
+                            *list_of_all_ases.set_of_all_ases->end ());
       std::vector<ia_t> result (v1.size () + v2.size ());
       std::vector<ia_t>::iterator it =
           std::set_union (v1.begin (), v1.end (), v2.begin (), v2.end (), result.begin ());
@@ -393,11 +394,12 @@ TimeServer::WriteSetOfDisjointPaths ()
 void
 TimeServer::ReceiveSetOfAllCoreAsesFromOtherTimeServer (ScionPacket *packet)
 {
-  if (*packet->payload.list_of_all_ases.set_of_all_ases != set_of_all_core_ases)
+  ListOfAllASes list_of_all_ases = std::get<ListOfAllASes> (packet->payload);
+  if (*list_of_all_ases.set_of_all_ases != set_of_all_core_ases)
     {
       std::vector<ia_t> v1 (set_of_all_core_ases.begin (), set_of_all_core_ases.end ());
-      std::vector<ia_t> v2 (packet->payload.list_of_all_ases.set_of_all_ases->begin (),
-                            packet->payload.list_of_all_ases.set_of_all_ases->end ());
+      std::vector<ia_t> v2 (*list_of_all_ases.set_of_all_ases->begin (),
+                            *list_of_all_ases.set_of_all_ases->end ());
       std::vector<ia_t> result (v1.size () + v2.size ());
       std::vector<ia_t>::iterator it =
           std::set_union (v1.begin (), v1.end (), v2.begin (), v2.end (), result.begin ());
@@ -465,8 +467,9 @@ TimeServer::SendSetOfAllCoreAsesToNeighbors ()
                                      << GET_HOP_AS (path->hops.back ()));
       PayloadType payload_type = PayloadType::BROADCAST_LIST_OF_ALL_CORE_ASES;
 
-      Payload payload;
-      payload.list_of_all_ases.set_of_all_ases = &set_of_all_core_ases;
+      Payload payload = ListOfAllASes{
+          .set_of_all_ases = &set_of_all_core_ases,
+      };
 
       std::vector<const PathSegment *> the_path;
       the_path.push_back (path);
@@ -715,8 +718,9 @@ TimeServer::SendNtpReqToPeers ()
                                          << GET_ISDN (peer_ia) << ":" << GET_ASN (peer_ia));
           PayloadType payload_type = PayloadType::NTP_REQ;
 
-          Payload payload;
-          payload.ntp_req_or_resp.t0 = local_time.GetTimeStep ();
+          Payload payload = NtpReqOrResp{
+              .t0 = local_time.GetTimeStep (),
+          };
 
           std::vector<const PathSegment *> the_path;
           the_path.push_back (path_seg);
@@ -732,15 +736,16 @@ TimeServer::SendNtpReqToPeers ()
 void
 TimeServer::ModifyPktUponSend (ScionPacket *packet)
 {
+  NtpReqOrResp *ntp_req_or_resp = std::get_if<NtpReqOrResp> (&packet->payload);
   if (packet->payload_type == PayloadType::NTP_REQ)
     {
-      packet->payload.ntp_req_or_resp.t0 = local_time.GetTimeStep ();
+      ntp_req_or_resp->t0 = local_time.GetTimeStep ();
       return;
     }
 
   if (packet->payload_type == PayloadType::NTP_RESP)
     {
-      packet->payload.ntp_req_or_resp.t2 = local_time.GetTimeStep ();
+      ntp_req_or_resp->t2 = local_time.GetTimeStep ();
       return;
     }
 }
@@ -748,24 +753,26 @@ TimeServer::ModifyPktUponSend (ScionPacket *packet)
 void
 TimeServer::ReceiveNtpReqFromPeer (ScionPacket *packet, Time receive_time)
 {
-  int64_t t0 = packet->payload.ntp_req_or_resp.t0;
+  NtpReqOrResp *ntp_req_or_resp = std::get_if<NtpReqOrResp> (&packet->payload);
+  int64_t t0 = ntp_req_or_resp->t0;
   NS_LOG_FUNCTION ("ia_addr: " << isd_number << "-" << as_number << ", local_time: " << local_time
                                << ", sender_ia: " << GET_ISDN (packet->src_ia) << "-"
                                << GET_ASN (packet->src_ia) << ", receive_time: " << receive_time
                                << ", t0: " << (t0 < 0 ? "-" : "+") << TimeStep (std::abs (t0)));
 
   packet->payload_type = PayloadType::NTP_RESP;
-  packet->payload.ntp_req_or_resp.t1 = receive_time.GetTimeStep ();
-  packet->payload.ntp_req_or_resp.t2 = local_time.GetTimeStep ();
+  ntp_req_or_resp->t1 = receive_time.GetTimeStep ();
+  ntp_req_or_resp->t2 = local_time.GetTimeStep ();
   ReturnScionPacket (packet);
 }
 
 void
 TimeServer::ReceiveNtpResFromPeer (ScionPacket *packet, Time receive_time)
 {
-  int64_t t0 = packet->payload.ntp_req_or_resp.t0;
-  int64_t t1 = packet->payload.ntp_req_or_resp.t1;
-  int64_t t2 = packet->payload.ntp_req_or_resp.t2;
+  NtpReqOrResp *ntp_req_or_resp = std::get_if<NtpReqOrResp> (&packet->payload);
+  int64_t t0 = ntp_req_or_resp->t0;
+  int64_t t1 = ntp_req_or_resp->t1;
+  int64_t t2 = ntp_req_or_resp->t2;
 
   NS_LOG_FUNCTION ("TimeServ at " << isd_number << ":" << as_number << " RCV NTP resp from peer "
                                   << GET_ISDN (packet->src_ia) << ":" << GET_ASN (packet->src_ia)
@@ -775,8 +782,8 @@ TimeServer::ReceiveNtpResFromPeer (ScionPacket *packet, Time receive_time)
                                   << ", t2: " << (t2 < 0 ? "-" : "+") << TimeStep (std::abs (t2))
                                   << ", t3: " << receive_time);
 
-  int64_t poff_tmp = ((packet->payload.ntp_req_or_resp.t1 - packet->payload.ntp_req_or_resp.t0) +
-                      (packet->payload.ntp_req_or_resp.t2 - receive_time.GetTimeStep ())) /
+  int64_t poff_tmp = ((ntp_req_or_resp->t1 - ntp_req_or_resp->t0) +
+                      (ntp_req_or_resp->t2 - receive_time.GetTimeStep ())) /
                      2;
 
   if (poff.find (packet->src_ia) == poff.end ())

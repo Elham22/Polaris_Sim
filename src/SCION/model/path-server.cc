@@ -37,7 +37,7 @@ PathServer::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time 
 
   if (packet->payload_type == PayloadType::PATH_REQ_FROM_HOST && packet->src_ia == ia_addr)
     {
-      PathReqFromHost path_req_from_host = packet->payload.path_req_from_host;
+      PathReqFromHost path_req_from_host = std::get<PathReqFromHost> (packet->payload);
       ProcessLocalHostRequestForPath (path_req_from_host.seg_type, path_req_from_host.src_ia,
                                       path_req_from_host.dst_ia, packet->src_host);
 
@@ -190,11 +190,12 @@ PathServer::SendRegisteredPathToLocalHost (host_addr_t host_addr, PathSegmentTyp
                                            const reg_path_segs_to_one_as_t *paths_to_dst_ia)
 {
   PayloadType payload_type = PayloadType::REG_PATHS_FROM_LOCAL_PS;
-  Payload payload;
-  payload.registered_paths_from_local_ps.seg_type = path_type;
-  payload.registered_paths_from_local_ps.src_ia = src_ia;
-  payload.registered_paths_from_local_ps.dst_ia = dst_ia;
-  payload.registered_paths_from_local_ps.registered_path_segments = paths_to_dst_ia;
+  Payload payload = RegPathsFromLocalPs{
+      .registered_path_segments = paths_to_dst_ia,
+      .src_ia = src_ia,
+      .dst_ia = dst_ia,
+      .seg_type = path_type,
+  };
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, ia_addr, host_addr, 0);
   SendScionPacket (packet);
@@ -205,8 +206,9 @@ PathServer::ReturnListOfAllCoreAses (host_addr_t host_addr)
 {
   NS_LOG_FUNCTION ("PthSrv snd LIST_OF_ALL_CORE_ASES to " << host_addr);
   PayloadType payload_type = PayloadType::LIST_OF_ALL_CORE_ASES;
-  Payload payload;
-  payload.list_of_all_ases.set_of_all_ases = &set_of_all_core_ases;
+  Payload payload = ListOfAllASes{
+      .set_of_all_ases = &set_of_all_core_ases,
+  };
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, ia_addr, host_addr, 0);
   SendScionPacket (packet);

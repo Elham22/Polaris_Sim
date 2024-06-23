@@ -134,10 +134,11 @@ ScionHost::SendRequestForPathSegments (PathSegmentType seg_type, ia_t src_ia, ia
 {
   PayloadType payload_type = PayloadType::PATH_REQ_FROM_HOST;
 
-  Payload payload;
-  payload.path_req_from_host.src_ia = src_ia;
-  payload.path_req_from_host.dst_ia = dst_ia;
-  payload.path_req_from_host.seg_type = seg_type;
+  Payload payload = PathReqFromHost{
+      .src_ia = src_ia,
+      .dst_ia = dst_ia,
+      .seg_type = seg_type,
+  };
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, ia_addr, 1, 0);
   SendScionPacket (packet);
@@ -300,38 +301,35 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
 
   ScionCapableNode::ProcessReceivedPacket (local_if, packet, receive_time);
 
-  if (packet->payload_type == PayloadType::REG_PATHS_FROM_LOCAL_PS)
+  if (auto *payload = std::get_if<RegPathsFromLocalPs> (&packet->payload))
     {
-      RegPathsFromLocalPs registered_paths_from_local_ps =
-          packet->payload.registered_paths_from_local_ps;
-      ReceiveRegisteredPathSegments (registered_paths_from_local_ps.seg_type,
-                                     registered_paths_from_local_ps.src_ia,
-                                     registered_paths_from_local_ps.dst_ia,
-                                     registered_paths_from_local_ps.registered_path_segments);
+      ReceiveRegisteredPathSegments (payload->seg_type, payload->src_ia, payload->dst_ia,
+                                     payload->registered_path_segments);
     }
-  if (packet->payload_type == PayloadType::QOS_PROBE_REQ)
+  else if (auto *payload = std::get_if<ProbeReq> (&packet->payload))
     {
-      ReceiveProbeRequest (packet->src_ia, packet->src_host, packet->path,
-                           packet->payload.probe_req, receive_time);
+      // ReceiveProbeRequest (packet->src_ia, packet->src_host, packet->path,
+      //                      packet->payload.probe_req, receive_time);
+      ReceiveProbeRequest (packet->src_ia, packet->src_host, packet->path, *payload, receive_time);
     }
-  if (packet->payload_type == PayloadType::QOS_PROBE_RESP)
+  else if (auto *payload = std::get_if<ProbeResp> (&packet->payload))
     {
-      ReceiveProbeResponse (packet->src_ia, packet->src_host, packet->payload.probe_resp);
+      ReceiveProbeResponse (packet->src_ia, packet->src_host, *payload);
     }
-  if (packet->payload_type == PayloadType::APPLICATION_DATA)
+  else if (auto *payload = std::get_if<AppData> (&packet->payload))
     {
-      ReceiveAppData (packet);
+      ReceiveAppData (packet, payload);
     }
-  if (packet->payload_type == PayloadType::APPLICATION_PROBE)
+  else if (auto *payload = std::get_if<AppProbe> (&packet->payload))
     {
-      auto app_id = packet->payload.app_probe.app_id;
+      auto app_id = payload->app_id;
 
       if (apps.find (app_id) != apps.end ())
         {
           RTCApp *rtc_app = dynamic_cast<RTCApp *> (apps.at (app_id));
           if (rtc_app != nullptr)
             {
-              rtc_app->ReceiveProbeResponse (packet->payload.app_probe);
+              rtc_app->ReceiveProbeResponse (*payload);
             }
           else
             {
@@ -340,23 +338,26 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
         }
       else
         {
-          ReturnAppProbe (packet->src_ia, packet->src_host, packet->path,
-                          packet->payload.app_probe);
+          ReturnAppProbe (packet->src_ia, packet->src_host, packet->path, *payload);
         }
     }
-  if (packet->payload_type == PayloadType::APPLICATION_RESP)
+  else if (auto *payload = std::get_if<AppResp> (&packet->payload))
     {
-      ReceiveAppResp (packet->payload.app_resp);
+      ReceiveAppResp (*payload);
     }
-  if (packet->payload_type == PayloadType::SCMP)
+  else if (auto *payload = std::get_if<ScmpReqOrResp> (&packet->payload))
     {
       // TODO: SCMP packet is just addressed to our host, we don't know which
       // application. If we want to run many applications on one host we need a
       // better concept here.
       // for (auto app : apps)
       //   {
-      //     app.second->HandleSCMP (packet->payload.scmp_req_or_resp);
+      //     app.second->HandleSCMP (*payload);
       //   }
+    }
+  else
+    {
+      NS_FATAL_ERROR ("Unknown payload type: " << packet->payload_type);
     }
   packet->packet_originator->DestroyScionPacket (packet);
   /*
@@ -382,8 +383,7 @@ ScionHost::ReturnAppProbe (ia_t src_ia, host_addr_t src_addr,
   // Everything stays the same, we can just set the RX time and send it back
   app_probe.time_rx = local_time.ToInteger (Time::Unit::US);
 
-  Payload payload;
-  payload.app_probe = app_probe;
+  Payload payload = app_probe;
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, src_ia, src_addr, 0, path);
   packet->path_reversed = true;
@@ -537,13 +537,14 @@ ScionHost::ReceiveProbeRequest (ia_t src_ia, host_addr_t src_addr,
                                 Time receive_time)
 {
   PayloadType payload_type = PayloadType::QOS_PROBE_RESP;
-  Payload payload;
-  payload.probe_resp.app_id = probe_req.app_id;
-  payload.probe_resp.probe_id = probe_req.probe_id;
-  payload.probe_resp.time_recv = receive_time.ToInteger (Time::Unit::MS);
-  payload.probe_resp.score = 0;
-  payload.probe_resp.src_host_addr = local_address;
-  payload.probe_resp.src_ia = ia_addr;
+  Payload payload = ProbeResp{
+      .app_id = probe_req.app_id,
+      .probe_id = probe_req.probe_id,
+      .src_ia = ia_addr,
+      .src_host_addr = local_address,
+      .time_recv = receive_time.ToInteger (Time::Unit::MS),
+      .score = 0,
+  };
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, src_ia, src_addr, 0, path);
   packet->path_reversed = true;
@@ -568,16 +569,14 @@ ScionHost::SendAppPacket (App *app, Payload payload, PayloadType payload_type, u
 }
 
 void
-ScionHost::ReceiveAppData (ScionPacket *packet)
+ScionHost::ReceiveAppData (ScionPacket *packet, AppData *data)
 {
-  std::cout << GetLogPrefix () << "Receiving app data packet from "
-            << packet->payload.app_data.app_id << " via path " << packet->payload.app_data.path_id
-            << ", frame_no: " << packet->payload.app_data.frame_no
-            << ", seq_no: " << packet->payload.app_data.seq_no << std::endl;
+  std::cout << GetLogPrefix () << "Receiving app data packet from " << data->app_id << " via path "
+            << data->path_id << ", frame_no: " << data->frame_no << ", seq_no: " << data->seq_no
+            << std::endl;
 
-  AppData data = packet->payload.app_data;
   app_connection_key_t key =
-      std::make_tuple (packet->src_ia, packet->src_host, data.app_id, data.path_id);
+      std::make_tuple (packet->src_ia, packet->src_host, data->app_id, data->path_id);
 
   // New connection
   if (connection_infos.find (key) == connection_infos.end ())
@@ -585,8 +584,8 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
       std::cout << GetLogPrefix () << "Connection opened: New packets arrived for app_id "
                 << std::get<2> (key) << " on path " << std::get<3> (key) << std::endl;
       ConnectionInfo connection;
-      connection.seq_no_start = data.seq_no;
-      connection.frame_no = data.frame_no;
+      connection.seq_no_start = data->seq_no;
+      connection.frame_no = data->frame_no;
       connection.path = packet->path;
       connection.report = new PacketsReport ();
       connection_infos[key] = connection;
@@ -596,9 +595,9 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   // Add received packet to statistics for current interval
   ConnectionInfo *connection = &connection_infos.at (key);
 
-  if (data.frame_no < connection->frame_no)
+  if (data->frame_no < connection->frame_no)
     {
-      std::cout << GetLogPrefix () << "Received packet from old frame " << data.frame_no
+      std::cout << GetLogPrefix () << "Received packet from old frame " << data->frame_no
                 << " instead of " << connection->frame_no << std::endl;
       return;
     }
@@ -607,11 +606,11 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   connection->num_packets++;
   connection->bytes_received += packet->size;
 
-  if (connection->seq_no_last < data.seq_no)
+  if (connection->seq_no_last < data->seq_no)
     {
-      connection->seq_no_last = data.seq_no;
+      connection->seq_no_last = data->seq_no;
     }
-  auto latency = local_time.ToInteger (Time::Unit::US) - data.timestamp;
+  auto latency = local_time.ToInteger (Time::Unit::US) - data->timestamp;
   connection->aggregated_latencies += latency;
 
   // Keep updating ecn. Last packet to go into the report will determine what
@@ -621,10 +620,10 @@ ScionHost::ReceiveAppData (ScionPacket *packet)
   auto *report = connection->report;
 
   report->AddPacket (PacketRecord{
-      .time_sent = MicroSeconds (data.timestamp),
+      .time_sent = MicroSeconds (data->timestamp),
       .time_received = local_time,
-      .seq_no = data.seq_no,
-      .frame_no = data.frame_no,
+      .seq_no = data->seq_no,
+      .frame_no = data->frame_no,
       .size = packet->size,
   });
 
@@ -670,43 +669,43 @@ ScionHost::SendAppResp (app_connection_key_t key)
   ConnectionInfo *connection = &connection_infos.at (key);
 
   PayloadType payload_type = PayloadType::APPLICATION_RESP;
-  Payload payload;
   auto num_packets_expected = connection->seq_no_last - connection->seq_no_start +
                               1; // +1 because id_start is id of first packet in period
   // std::cout << "app resp 1 from " << std::get<2> (key) << std::endl;
-  payload.app_resp.app_id = std::get<2> (key);
-  payload.app_resp.loss =
+
+  AppResp app_resp;
+  app_resp.app_id = std::get<2> (key);
+  app_resp.loss =
       ((double) num_packets_expected - connection->num_packets) / num_packets_expected / 2;
-  payload.app_resp.avg_latency =
-      ((double) connection->aggregated_latencies) / connection->num_packets;
+  app_resp.avg_latency = ((double) connection->aggregated_latencies) / connection->num_packets;
 
   // Warn if avg_latency is larger than 5 seconds
-  if (payload.app_resp.avg_latency > 5000000)
+  if (app_resp.avg_latency > 5000000)
     {
-      std::cout << "[host] Very high latency detected " << payload.app_resp.app_id
-                << ", exp_num_packets " << num_packets_expected << ", packets arrived "
-                << connection->num_packets << ", loss " << payload.app_resp.loss << ", latency "
-                << payload.app_resp.avg_latency << std::endl;
+      std::cout << "[host] Very high latency detected " << app_resp.app_id << ", exp_num_packets "
+                << num_packets_expected << ", packets arrived " << connection->num_packets
+                << ", loss " << app_resp.loss << ", latency " << app_resp.avg_latency << std::endl;
     }
 
-  payload.app_resp.bytes_received = connection->bytes_received;
-  payload.app_resp.ecn = connection->ecn; // Notify sender of latest ecn status
-  payload.app_resp.timestamp = local_time.ToInteger (Time::Unit::US);
-  payload.app_resp.path_id = std::get<3> (key);
-  payload.app_resp.packets_report = connection->report;
+  app_resp.bytes_received = connection->bytes_received;
+  app_resp.ecn = connection->ecn; // Notify sender of latest ecn status
+  app_resp.timestamp = local_time.ToInteger (Time::Unit::US);
+  app_resp.path_id = std::get<3> (key);
+  app_resp.packets_report = connection->report;
+
+  Payload payload = app_resp;
 
   ScionPacket *packet = CreateScionPacket (payload, payload_type, std::get<0> (key),
                                            std::get<1> (key), sizeof (AppResp), connection->path);
   packet->path_reversed = true;
   packet->curr_inf = packet->path.size () - 1;
   packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
-  std::cout << GetLogPrefix () << "Sending app report to app " << payload.app_resp.app_id
-            << " via path " << payload.app_resp.path_id << ", sequence numbers "
-            << connection->seq_no_start << " to " << connection->seq_no_last
-            << ", num_packets: " << connection->num_packets << ", loss: " << payload.app_resp.loss
-            << ", avg_latency: " << payload.app_resp.avg_latency
-            << ", bytes_received: " << connection->bytes_received
-            << ", ecn: " << payload.app_resp.ecn << std::endl;
+  std::cout << GetLogPrefix () << "Sending app report to app " << app_resp.app_id << " via path "
+            << app_resp.path_id << ", sequence numbers " << connection->seq_no_start << " to "
+            << connection->seq_no_last << ", num_packets: " << connection->num_packets
+            << ", loss: " << app_resp.loss << ", avg_latency: " << app_resp.avg_latency
+            << ", bytes_received: " << connection->bytes_received << ", ecn: " << app_resp.ecn
+            << std::endl;
 
   SendScionPacket (packet);
 
