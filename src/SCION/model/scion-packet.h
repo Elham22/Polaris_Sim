@@ -127,6 +127,7 @@ struct AppData
   app_packet_id_t seq_no;
   uint32_t frame_no; // number of the video frame this packet is part of
   int64_t timestamp; // timestamp of sending in US
+  Ptr<Packet> ip_packet; // IP Layer 3 packet for encapsulated IP traffic
 };
 
 enum class AppProbeType {

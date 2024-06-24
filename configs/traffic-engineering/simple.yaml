@@ -2,7 +2,7 @@ time_resolution: PS
 topology: configs/traffic-engineering/simple.xml
 events_file: configs/traffic-engineering/simple.json
 output: configs/traffic-engineering/out.txt
-simulation_duration: 32min
+simulation_duration: 31min
 NUM_CORE: 24
 beacon_service:
   policy: baseline

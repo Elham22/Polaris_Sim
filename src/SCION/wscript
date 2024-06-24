@@ -4,12 +4,13 @@ def build(bld):
 
 
     env = bld.env
-    sim = bld.create_ns3_module('SCION', ['core', 'network'])
+    sim = bld.create_ns3_module('SCION', ['core', 'internet', 'network', 'applications'])
 
     sim.source = [ 'model/apps/app.cc',
                    'model/apps/general-traffic-app.cc',
                    'model/apps/video-conference-app.cc',
                    'model/apps/rtc-app.cc',
+                   'model/apps/tcp-app.cc',
                    'model/webrtc-cc/delay-based-estimator.cc',
                    'model/webrtc-cc/loss-based-estimator.cc',
                    'model/beaconing/baseline.cc',
