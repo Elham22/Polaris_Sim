@@ -510,6 +510,7 @@ public:
     stopped = true;
 
     // IP stack
+    Config::SetDefault ("ns3::TcpSocket::SegmentSize", UintegerValue (1460));
     Config::SetDefault ("ns3::TcpL4Protocol::SocketType",
                         TypeIdValue (TypeId::LookupByName ("ns3::" + tcp_alg)));
     SetupIPStack ();
