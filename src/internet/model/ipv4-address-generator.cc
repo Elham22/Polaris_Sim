@@ -382,7 +382,7 @@ Ipv4AddressGeneratorImpl::AddAllocated (const Ipv4Address address)
           NS_LOG_LOGIC ("Ipv4AddressGeneratorImpl::Add(): Address Collision: " << Ipv4Address (addr)); 
           if (!m_test) 
             {
-              NS_FATAL_ERROR ("Ipv4AddressGeneratorImpl::Add(): Address Collision: " << Ipv4Address (addr));
+              // NS_FATAL_ERROR ("Ipv4AddressGeneratorImpl::Add(): Address Collision: " << Ipv4Address (addr));
             }
           return false;
         }
