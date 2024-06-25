@@ -377,6 +377,75 @@ protected:
     last_report_time = Simulator::Now ();
   }
 
+  std::string
+  FancyPrettyPrintJSON (const nlohmann::json &jsonObj)
+  {
+    // Overkill function to pretty print the JSON but with the inner most
+    // objects on the same line, which makes the output a bit more readable
+
+    std::string prettyPrinted = jsonObj.dump (4); // Indentation of 4 spaces
+    std::regex innermostObjPattern (R"(\{\n(\s+"[^"]+": [^,\n]+,\n)+\s+"[^"]+": [^,\n]+\n\s+\})");
+    std::string result;
+    std::sregex_iterator currentMatch (prettyPrinted.begin (), prettyPrinted.end (),
+                                       innermostObjPattern);
+    std::sregex_iterator lastMatch;
+
+    // Position of the last match to handle text after the last match
+    size_t lastMatchEnd = 0;
+
+    while (currentMatch != lastMatch)
+      {
+        std::smatch match = *currentMatch;
+        std::string matchedStr = match.str ();
+
+        // Append text before the current match
+        result += prettyPrinted.substr (lastMatchEnd, match.position () - lastMatchEnd);
+
+        // Process and append the current match
+        matchedStr = std::regex_replace (matchedStr, std::regex (R"(\n\s+)"), " ");
+        result += matchedStr;
+
+        // Update the position of the last match
+        lastMatchEnd = match.position () + match.length ();
+        currentMatch++;
+      }
+
+    // Append remaining text after the last match
+    result += prettyPrinted.substr (lastMatchEnd);
+
+    return result;
+  }
+
+  void
+  PrintResultsJSON ()
+  {
+    nlohmann::json j;
+    j["app_id"] = app_id;
+    j["app_type"] = app_type;
+    j["src_ia"] = ia_addr;
+    j["dst_ia"] = dst_ia;
+    j["dst_host_addr"] = dst_host_addr;
+    j["bytes_sent"] = bytes_sent;
+    j["bytes_received"] = bytes_received;
+
+    nlohmann::json j_states;
+    for (TCPAppState state : state_history)
+      {
+        nlohmann::json j_state;
+        j_state["time"] = state.timestamp.ToDouble (Time::Unit::MS);
+        j_state["sendrate"] = state.sendrate / 1e6;
+        j_state["latency"] = state.latency / 1000.0;
+        j_state["loss"] = state.loss;
+        j_state["active_path"] = state.active_path;
+        j_state["fair_share"] = state.fair_share / 1e6;
+        j_states.push_back (j_state);
+      }
+    j["states"] = j_states;
+
+    // Dump JSON into a single line
+    std::cout << j.dump () << std::endl;
+  }
+
   void
   Log (std::string msg, bool with_prefix = true, bool newline = true)
   {
@@ -510,7 +579,10 @@ public:
   void
   PrintResults ()
   {
-    // TODO: Implement printing the state history for plotting
+    if (!is_sink)
+      {
+        PrintResultsJSON ();
+      }
     std::cout << app_type << "-" << app_id << " Results summary:" << std::endl;
     std::cout << "  Total Bytes Sent     (Layer 3): " << bytes_sent << std::endl;
     std::cout << "  Total Bytes Received (Layer 3): " << bytes_received << std::endl;

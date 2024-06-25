@@ -47,10 +47,10 @@ struct PathStatistics
 };
 
 // Struct to store application state for visualization
-struct AppState
+struct RTCAppState
 {
   Time timestamp;
-  double bitrate = 0;
+  double sendrate = 0;
   ControllerStateSnapshot controller_state;
   double A_s = 0;
   double A_r = 0;
@@ -97,7 +97,7 @@ protected:
 
   double A_r = 0; // send rate estimate by the receiver side loss based controller
   double A_s = 0; // send rate estimate by the sender side loss based controller
-  double sendrate = 0.2e7; // in Bytes per second
+  double sendrate = CC_INITIAL_SEND_RATE; // in Bytes per second
 
   double steering_treshold_u = 20;
   double steering_treshold_l = 0;
@@ -111,7 +111,7 @@ protected:
   app_packet_id_t probe_id = 0; // Identifies a probe, not the packet though, that is probe_seq_no
 
   // Store app state at different time points for evaluation
-  std::vector<AppState> statistics;
+  std::vector<RTCAppState> statistics;
 
   void
   Log (std::string msg, bool with_prefix = true)
@@ -186,11 +186,11 @@ public:
     auto path_info = path_infos[active_path];
 
     // store current state of the app
-    AppState state;
+    RTCAppState state;
     state.timestamp = Simulator::Now ();
     state.active_path = active_path;
     // state.path_stats = path_infos;
-    state.bitrate = sendrate;
+    state.sendrate = sendrate;
     state.latency = path_info.latency;
     state.loss = loss_based_estimator.GetLoss ();
     state.controller_state = delay_based_estimator.GetStateSnapshot ();
@@ -248,7 +248,7 @@ public:
 
     if (candidates.empty ())
       {
-        Log ("No candidates for probing.");
+        Log ("Found no probe candidates");
       }
     else
       {
@@ -258,7 +258,7 @@ public:
             candidates_str += std::to_string (candidate) + ", ";
           }
         candidates_str += "]";
-        Log ("Selected candidates: " + candidates_str);
+        Log ("Found probe candidates: " + candidates_str);
       }
     return candidates;
   }
@@ -751,11 +751,11 @@ public:
       }
     else if (cfgLossBwe)
       {
-        info += " L";
+        info += "   L";
       }
     else if (cfgDelayBwe)
       {
-        info += " D";
+        info += " D  ";
       }
     return info;
   }
@@ -763,38 +763,40 @@ public:
   void
   PrintResults ()
   {
-    std::cout << "----- " << InfoString () << " id " << app_id << " dst " << dst_ia << ":"
-              << dst_host_addr << "-------" << std::endl
-              << "----- Timestamp, latency[ms], loss, path, send_rate, A_s, A_r, fair_share, "
-                 "state, signal, estimate_gradient, treshold, measured_gradient ------- "
-              << std::endl;
+    nlohmann::json j;
+    j["app_id"] = app_id;
+    j["app_type"] = InfoString ();
+    j["src_ia"] = ia_addr;
+    j["dst_ia"] = dst_ia;
+    j["dst_host_addr"] = dst_host_addr;
 
-    // print all the app statistics
-    for (AppState state : statistics)
+    nlohmann::json j_states;
+    for (RTCAppState state : statistics)
       {
-        std::cout << state.timestamp.ToInteger (Time::Unit::MS) << "(" << std::setw (16)
-                  << state.timestamp.ToDouble (Time::Unit::MIN) << std::setw (0) << " min), ";
-        std::cout << std::setw (12) << state.latency / 1000.0 << std::setw (0) << ", ";
-        std::cout << std::setw (12) << state.loss << std::setw (0) << ", ";
-        std::cout << std::setw (4) << state.active_path << std::setw (0) << ", ";
-        std::cout << std::setw (12) << state.bitrate << std::setw (0) << ", ";
-        std::cout << std::setw (12) << state.A_s << std::setw (0) << ", ";
-        std::cout << std::setw (12) << state.A_r << std::setw (0) << ", ";
-        std::cout << std::setw (12) << state.fair_share << std::setw (0) << ", ";
-        std::cout << std::setw (3) << static_cast<int> (state.controller_state.state)
-                  << std::setw (0) << ", ";
-        std::cout << std::setw (3) << static_cast<int> (state.controller_state.signal) << ", ";
-        std::cout << std::setw (16) << state.controller_state.m << std::setw (0) << ", ";
-        std::cout << std::setw (16) << state.controller_state.adaptive_treshold << std::setw (0)
-                  << ", ";
-        std::cout << std::setw (16) << state.controller_state.d_m << std::setw (0) << ", ";
-        std::cout << std::setw (16) << state.controller_state.kalman_gain << ", " << std::setw (0);
-        std::cout << std::setw (16) << state.controller_state.measurement_noise_variance << ", "
-                  << std::setw (0);
-        std::cout << std::setw (16) << state.controller_state.e << std::setw (0);
-        std::cout << std::endl;
+        nlohmann::json j_state;
+        j_state["time"] = state.timestamp.ToDouble (Time::Unit::MS);
+        j_state["sendrate"] = state.sendrate / 1e6;
+        j_state["latency"] = state.latency / 1000.0;
+        j_state["loss"] = state.loss;
+        j_state["active_path"] = state.active_path;
+        j_state["fair_share"] = state.fair_share / 1e6;
+        j_state["A_s"] = state.A_s / 1e6;
+        j_state["A_r"] = state.A_r / 1e6;
+        j_state["gradient"] = state.controller_state.m;
+        j_state["treshold_hi"] = state.controller_state.treshold_hi;
+        j_state["treshold_lo"] = 0; // TODO
+        j_state["gcc_state"] = state.controller_state.state;
+        j_state["gcc_signal"] = state.controller_state.signal;
+        j_state["kalman_gain"] = state.controller_state.kalman_gain;
+        j_state["variance"] = state.controller_state.variance;
+        j_state["error"] = state.controller_state.error;
+
+        j_states.push_back (j_state);
       }
-    std::cout << "----- End of app " << app_id << " results ------" << std::endl;
+    j["states"] = j_states;
+
+    // Dump JSON into a single line
+    std::cout << j.dump () << std::endl;
   }
 
   /**

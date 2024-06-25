@@ -42,12 +42,13 @@ struct ControllerStateSnapshot
   ControllerState state;
   double A_r;
   double kalman_gain;
-  double adaptive_treshold;
+  double treshold_hi;
+  double treshold_lo;
   double m;
   double d_m;
   double z;
-  double measurement_noise_variance;
-  double e;
+  double variance;
+  double error;
 };
 
 #endif // SCION_SIMULATOR_CONTROLLER_STATE_H

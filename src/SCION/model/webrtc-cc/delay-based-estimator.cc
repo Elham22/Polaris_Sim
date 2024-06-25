@@ -500,12 +500,13 @@ public:
         .state = state,
         .A_r = A_r,
         .kalman_gain = kalman_gain,
-        .adaptive_treshold = overuse_treshold,
+        .treshold_hi = overuse_treshold,
+        .treshold_lo = underuse_treshold,
         .m = m,
         .d_m = d_m,
         .z = z,
-        .measurement_noise_variance = measurement_noise_variance,
-        .e = e,
+        .variance = measurement_noise_variance,
+        .error = e,
     };
   }
 
