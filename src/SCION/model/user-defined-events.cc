@@ -182,6 +182,20 @@ UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as
       MAKE_IA (std::stoi (dst_isd_number), real_to_alias_as_no.at (std::stoi (real_dst_as_no)));
   src_host->StartApplication (app_type, app_id, dst_ia, std::stoi (dst_local_address),
                               std::stod (backgroundBwdFactor), std::stoi (runtime_config));
+
+  // For a TCP sender, we need to set up a corresponding sink on the destination host
+  if (app_type.find ("Tcp") != std::string::npos)
+    {
+      // App "-sink" to app_type
+      std::string app_type_sink = app_type + "-sink";
+      uint16_t alias_dst_as_no = real_to_alias_as_no.at (std::stoi (real_dst_as_no));
+      ScionAs *dst_as = dynamic_cast<ScionAs *> (PeekPointer (as_nodes.Get (alias_dst_as_no)));
+      ScionHost *dst_host =
+          dynamic_cast<ScionHost *> (dst_as->GetHost (std::stoi (dst_local_address)));
+      ia_t src_ia = MAKE_IA (std::stoi (src_isd_number), alias_as_no);
+      dst_host->StartApplication (app_type_sink, app_id, src_ia, std::stoi (src_local_address),
+                                  std::stod (backgroundBwdFactor), std::stoi (runtime_config));
+    }
 }
 
 void

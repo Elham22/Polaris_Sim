@@ -34,6 +34,7 @@
 #include "ns3/applications-module.h"
 #include "ns3/ipv4.h"
 #include <iomanip>
+#include <regex>
 
 namespace ns3 {
 
@@ -44,31 +45,40 @@ namespace ns3 {
 class TCPApp : public App
 {
 protected:
+  // Struct to store application state for visualization
+  struct TCPAppState
+  {
+    Time timestamp;
+    double sendrate = 0; // in Bytes/s
+    double fair_share = 0; // in Bytes/s
+    double latency = 0;
+    double loss = 0;
+    uint32_t active_path;
+  };
+
   // App config
   bool cfgLogging = false;
   bool cfgPathSwitching = false;
+
+  std::string app_type;
+  std::string tcp_alg;
+  bool is_sink = false;
 
   uint64_t bytes_received = 0;
   uint64_t bytes_sent = 0;
 
   app_path_id_t active_path;
 
-  ApplicationContainer sourceApps;
-  ApplicationContainer sinkApps;
+  ApplicationContainer app;
+  Ptr<TcpL4Protocol> tcpLayer4;
 
-  // What is active and what is inactive must be set by subclass
-  ApplicationContainer *active_app;
-  ApplicationContainer *inactive_app;
-
-  Ptr<Node> sender;
-  Ptr<Node> receiver;
-
-  // References to the layer 4 protocol handlers where we inject our L3 callback or received packets
-  Ptr<TcpL4Protocol> sender_l4;
-  Ptr<TcpL4Protocol> receiver_l4;
-
-  // The source and sink subclasses must set this pointer the l4 of sender and sink respectively
-  Ptr<TcpL4Protocol> layer4;
+  // Things used for state tracking and, ultimately, visualization
+  std::vector<TCPAppState> state_history;
+  uint32_t seq_no = 0; // SCION layer sequence number, for receiver to count packets and loss
+  uint64_t bytes_received_this_window = 0;
+  uint64_t bytes_sent_this_window = 0;
+  AppResp last_report;
+  Time last_report_time = Time::Min ();
 
   void
   SendScionPacket (Ptr<Packet> ip_packet)
@@ -76,7 +86,7 @@ protected:
     Payload payload = AppData{
         .app_id = app_id,
         .path_id = active_path,
-        .seq_no = 0,
+        .seq_no = seq_no++,
         .frame_no = 0,
         .timestamp = Simulator::Now ().GetMicroSeconds (),
         .ip_packet = ip_packet,
@@ -95,16 +105,23 @@ protected:
   CallbackSndL4ToScion (Ptr<Packet> packet, Ipv4Address source, Ipv4Address destination,
                         uint8_t protocol, Ptr<Ipv4Route> route)
   {
+    if (stopped)
+      {
+        Log ("Attempted to send packet while stopped", true, true);
+        return;
+      }
+
     Log ("Encapsulating IP L3 packet via SCION:", true, false);
 
     TcpHeader incomingTcpHeader;
     packet->PeekHeader (incomingTcpHeader);
     auto tcp_payload_size = packet->GetSize () - incomingTcpHeader.GetLength () * 4;
 
-    std::cout << " seq " << incomingTcpHeader.GetSequenceNumber () << " ack "
-              << incomingTcpHeader.GetAckNumber () << " flags "
-              << TcpHeader::FlagsToString (incomingTcpHeader.GetFlags ()) << " payload size "
-              << tcp_payload_size << std::endl;
+    Log (" seq " + std::to_string (incomingTcpHeader.GetSequenceNumber ().GetValue ()) + " ack " +
+             std::to_string (incomingTcpHeader.GetAckNumber ().GetValue ()) + " flags " +
+             TcpHeader::FlagsToString (incomingTcpHeader.GetFlags ()) + " payload size " +
+             std::to_string (tcp_payload_size),
+         false);
 
     // Add IPv4 header before embedding into a SCION packet
     Ipv4Header header;
@@ -118,6 +135,7 @@ protected:
     SendScionPacket (packet);
 
     bytes_sent += packet->GetSize ();
+    bytes_sent_this_window += packet->GetSize ();
   }
 
   /**
@@ -184,7 +202,7 @@ protected:
   }
 
   void
-  SetupInetStack ()
+  SetupIPStack ()
   {
     NodeContainer nodes;
     nodes.Create (2);
@@ -203,67 +221,80 @@ protected:
 
     Ipv4AddressHelper addressHelper;
     addressHelper.NewNetwork ();
-    // Get a random number from 0 to 255
-    std::string a = std::to_string (rand () % 256);
-    // Ipv4Address address = ("10.1." + "1" + ".0").c_str();
+    // TODO: Requires a hack currently (disabling the check) because the
+    // addresshelper is a singleton and will cause a fatal error on collisions
     addressHelper.SetBase ("10.1.1.0", "255.255.255.0");
     Ipv4InterfaceContainer interfaces = addressHelper.Assign (devices);
 
     uint16_t port = 9; // Well-known echo port number
-    BulkSendHelper sourceHelper ("ns3::TcpSocketFactory",
-                                 InetSocketAddress (interfaces.GetAddress (1), port));
-    sourceHelper.SetAttribute ("MaxBytes", UintegerValue (0));
-    sourceApps = sourceHelper.Install (nodes.Get (0));
 
-    // TODO: Adding a custom callback here doesn't seem to work
-    // sourceApps.Get (0)->TraceConnectWithoutContext ("Tx", MakeCallback (&ns3::TCPSender::SendViaScion, this));
+    // "Transport protocol to use: TcpNewReno, "
+    //             "TcpHybla, TcpHighSpeed, TcpHtcp, TcpVegas, TcpScalable, TcpVeno, "
+    //             "TcpBic, TcpYeah, TcpIllinois, TcpWestwood, TcpWestwoodPlus, TcpLedbat, "
 
-    // Access the Internet stack of sender node to get the TCP protocol instance
-    sender = nodes.Get (0);
-    Ptr<Ipv4> ipv4;
-    ipv4 = sender->GetObject<Ipv4> ();
-    if (ipv4)
+    Ptr<Node> node;
+    if (!is_sink) // We're a sender
       {
-        Ptr<IpL4Protocol> ipL4Protocol = ipv4->GetProtocol (6); // 6 is the protocol number for TCP
-        Ptr<TcpL4Protocol> tcp = DynamicCast<TcpL4Protocol> (ipL4Protocol);
-        if (tcp)
+        BulkSendHelper sourceHelper ("ns3::TcpSocketFactory",
+                                     InetSocketAddress (interfaces.GetAddress (1), port));
+
+        // Send as much as possible
+        sourceHelper.SetAttribute ("MaxBytes", UintegerValue (0));
+        ApplicationContainer sourceApps = sourceHelper.Install (nodes.Get (0));
+
+        // NOTE: Attempt to override send callback, doesn't work
+        // sourceApps.Get (0)->TraceConnectWithoutContext ("Tx", MakeCallback (&ns3::TCPSender::SendViaScion, this));
+
+        node = nodes.Get (0);
+        app = sourceApps;
+      }
+    else // We're a sink
+      {
+        PacketSinkHelper sink ("ns3::TcpSocketFactory",
+                               InetSocketAddress (Ipv4Address::GetAny (), port));
+        ApplicationContainer sinkApps = sink.Install (nodes.Get (1));
+
+        node = nodes.Get (1);
+        app = sinkApps;
+      }
+
+    Ptr<Ipv4> ipv4Api = node->GetObject<Ipv4> ();
+    if (ipv4Api)
+      {
+        // Retrieve the instance of the TCP L4 protocol
+        Ptr<IpL4Protocol> ipL4Protocol = ipv4Api->GetProtocol (6); // 6 = TCP
+        tcpLayer4 = DynamicCast<TcpL4Protocol> (ipL4Protocol);
+        if (tcpLayer4)
           {
             // HACK: Override with a custom callback to send packets via SCION
             // instead of passing them on to layer 3
-            sender_l4 = tcp;
-            sender_l4->SetDownTarget (MakeCallback (&TCPApp::CallbackSndL4ToScion, this));
+            tcpLayer4->SetDownTarget (MakeCallback (&TCPApp::CallbackSndL4ToScion, this));
+
+            // NOTE: Attempt to override congestion algorithm below, doesn't work either
+            // TypeId tcpTypeId = TypeId::LookupByName ("ns3::TcpVegas");
+            // tcpLayer4->SetAttribute ("TypeId", TypeIdValue (tcpTypeId));
           }
       }
 
-    // Print the type of congestion control algorithm used
+    // NOTE: Attempt to override congestion algorithm below, doesn't work
     // Ptr<TcpSocketBase> socket = DynamicCast<TcpSocketBase> (sourceApps.Get (0));
-    // Ptr<TcpCongestionOps> congestion_ops = socket->GetCongestionControlAlgorithm ();
-    // std::cout << "Congestion control algorithm: " << congestion_ops->GetName () << std::endl;
 
-    PacketSinkHelper sink ("ns3::TcpSocketFactory",
-                           InetSocketAddress (Ipv4Address::GetAny (), port));
-    sinkApps = sink.Install (nodes.Get (1));
+    // ObjectFactory congestionAlgorithmFactory;
+    // congestionAlgorithmFactory.SetTypeId (TcpNewReno::GetTypeId ());
+    // Ptr<TcpCongestionOps> algo = congestionAlgorithmFactory.Create<TcpCongestionOps> ();
+    // socket->SetCongestionControlAlgorithm (algo);
 
-    receiver = nodes.Get (1);
-    ipv4 = receiver->GetObject<Ipv4> ();
-    if (ipv4)
-      {
-        Ptr<IpL4Protocol> ipL4Protocol = ipv4->GetProtocol (6); // 6 is the protocol number for TCP
-        Ptr<TcpL4Protocol> tcp = DynamicCast<TcpL4Protocol> (ipL4Protocol);
-        if (tcp)
-          {
-            // HACK: Override with a custom callback to send packets via SCION
-            // instead of passing them on to layer 3
-            receiver_l4 = tcp;
-            receiver_l4->SetDownTarget (MakeCallback (&TCPApp::CallbackSndL4ToScion, this));
-          }
-      }
+    // ObjectFactory recoveryAlgorithmFactory;
+    // recoveryAlgorithmFactory.SetTypeId (TcpClassicRecovery::GetTypeId ());
+    // Ptr<TcpRecoveryOps> recovery = recoveryAlgorithmFactory.Create<TcpRecoveryOps> ();
+    // socket->SetRecoveryAlgorithm (recovery);
 
-    std::cout << "Inet Stack setup finished" << std::endl;
+    Log ("IP stack setup complete");
   }
 
+  // Setup stack and applications according to the ns3 docs
   void
-  InitC ()
+  InitFromExample ()
   {
     //
     // Explicitly create the nodes required by the topology (shown above).
@@ -317,9 +348,33 @@ protected:
     //
     PacketSinkHelper sink ("ns3::TcpSocketFactory",
                            InetSocketAddress (Ipv4Address::GetAny (), port));
-    sinkApps = sink.Install (nodes.Get (1));
+    ApplicationContainer sinkApps = sink.Install (nodes.Get (1));
     sinkApps.Start (Seconds (0.0));
     sinkApps.Stop (Seconds (10.0));
+  }
+
+  void
+  TrackState ()
+  {
+    if (stopped)
+      {
+        return;
+      }
+
+    double window_duration_s = (Simulator::Now () - last_report_time).GetSeconds ();
+
+    // Store current state of the app
+    TCPAppState state;
+    state.timestamp = Simulator::Now ();
+    state.active_path = active_path;
+    state.sendrate = bytes_sent_this_window / window_duration_s;
+    state.latency = last_report.avg_latency;
+    state.loss = last_report.loss;
+    state.fair_share = 1e6; // TODO
+    state_history.push_back (state);
+
+    bytes_sent_this_window = 0;
+    last_report_time = Simulator::Now ();
   }
 
   void
@@ -334,7 +389,7 @@ protected:
     if (with_prefix)
       {
         prefix += "[" + std::to_string (Simulator::Now ().ToDouble (Time::Unit::MIN)) + "][" +
-                  InfoString () + "-" + std::to_string (app_id) + "] ";
+                  app_type + "-" + std::to_string (app_id) + "] ";
       }
 
     if (newline)
@@ -350,25 +405,49 @@ protected:
 public:
   TCPApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
           host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
-          uint32_t runtime_config)
+          uint32_t runtime_config, std::string type)
       : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, runtime_config)
   {
-    std::cout << InfoString () << " initializing..." << std::endl;
+    app_type = type;
+
+    // Use the type to define TCP algorithm and infer source/sink
+    std::regex re ("^(Tcp[A-Za-z]+)(?:-(sink|source))?$");
+    std::smatch match;
+    if (std::regex_search (app_type, match, re))
+      {
+        tcp_alg = match[1];
+        if (match[2] == "sink")
+          {
+            is_sink = true;
+          }
+      }
+    else
+      {
+        std::cerr << "Invalid application type: " << app_type << std::endl;
+        exit (1);
+      }
+
+    std::cout << app_type << " initializing... " << std::endl;
+
     // Setup the runtime configuration
     cfgLogging = ENABLE_LOGGING (runtime_config);
     cfgPathSwitching = !(DISABLE_PATH_SWITCHING (runtime_config));
 
-    SetupInetStack ();
+    // TCP applications start time is scheduled at initialization, which happens
+    // when the simulation starts. But we start the SCION applications only
+    // during the runtime of the simulation because the user defined events are
+    // scheduled then. Thus, we just let the TCP sender run from the start, but
+    // inhibit packet sending in our callback function until stopped == false;
+    stopped = true;
+
+    // IP stack
+    Config::SetDefault ("ns3::TcpL4Protocol::SocketType",
+                        TypeIdValue (TypeId::LookupByName ("ns3::" + tcp_alg)));
+    SetupIPStack ();
 
     active_path = 0;
 
-    std::cout << InfoString () << " initialized." << std::endl;
-  }
-
-  virtual std::string
-  InfoString ()
-  {
-    return "TCP-App";
+    std::cout << app_type << " initialized." << std::endl;
   }
 
   /**
@@ -390,10 +469,11 @@ public:
     auto tcp_payload_size = packet->GetSize () - incomingTcpHeader.GetLength () * 4;
 
     Log ("Receiving IP L3 packet via SCION:    ", true, false);
-    std::cout << " seq " << incomingTcpHeader.GetSequenceNumber () << " ack "
-              << incomingTcpHeader.GetAckNumber () << " flags "
-              << TcpHeader::FlagsToString (incomingTcpHeader.GetFlags ()) << " payload size "
-              << tcp_payload_size << std::endl;
+    Log (" seq " + std::to_string (incomingTcpHeader.GetSequenceNumber ().GetValue ()) + " ack " +
+             std::to_string (incomingTcpHeader.GetAckNumber ().GetValue ()) + " flags " +
+             TcpHeader::FlagsToString (incomingTcpHeader.GetFlags ()) + " payload size " +
+             std::to_string (tcp_payload_size),
+         false);
 
     // TODO: We could even set ECN according to the SCION packet ECN
     // information, but this would require checking for support at time of
@@ -401,83 +481,45 @@ public:
     ipHeader.SetEcn (Ipv4Header::EcnType::ECN_NotECT);
 
     // Deliver TCP packet to layer 4
-    layer4->Receive (packet, ipHeader, Ptr<Ipv4Interface> ());
+    tcpLayer4->Receive (packet, ipHeader, Ptr<Ipv4Interface> ());
     bytes_received += ip_pkt_size;
   }
 
   void
   StartAppTraffic ()
   {
+    Log ("Starting application", true);
+    app.Start (Seconds (0));
     stopped = false;
-    active_app->Start (Simulator::Now ());
-    active_app->Stop (Time::Max());
   }
 
   void
   StopAppTraffic ()
   {
+    Log ("Stopping application", true);
     stopped = true;
-    active_app->Stop (Simulator::Now ());
-  }
-};
-
-class TCPSource : public TCPApp
-{
-public:
-  TCPSource (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
-             host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
-             uint32_t runtime_config)
-      : TCPApp (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, runtime_config)
-  {
-    layer4 = sender_l4;
-    active_app = &sourceApps;
-    inactive_app = &sinkApps;
-    inactive_app->Start (Time::Max ());
   }
 
-  std::string
-  InfoString ()
+  void
+  ReceiveAppResponse (AppResp app_resp)
   {
-    return "TCP-Source";
+    last_report = app_resp;
+    TrackState ();
   }
 
   void
   PrintResults ()
   {
-    std::cout << "Results for " << app_id << std::endl;
+    // TODO: Implement printing the state history for plotting
+    std::cout << app_type << "-" << app_id << " Results summary:" << std::endl;
     std::cout << "  Total Bytes Sent     (Layer 3): " << bytes_sent << std::endl;
     std::cout << "  Total Bytes Received (Layer 3): " << bytes_received << std::endl;
-  }
-};
 
-class TCPSink : public TCPApp
-{
-public:
-  TCPSink (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
-           host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
-           uint32_t runtime_config)
-      : TCPApp (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, runtime_config)
-  {
-    layer4 = receiver_l4;
-    active_app = &sinkApps;
-    inactive_app = &sourceApps;
-    inactive_app->Start (Time::Max ());
-  }
-
-  std::string
-  InfoString ()
-  {
-    return "TCP-Sink";
-  }
-
-  void
-  PrintResults ()
-  {
-    std::cout << "Results for " << app_id << std::endl;
-    std::cout << "  Total Bytes Sent     (Layer 3): " << bytes_sent << std::endl;
-    std::cout << "  Total Bytes Received (Layer 3): " << bytes_received << std::endl;
-    Ptr<PacketSink> sink = DynamicCast<PacketSink> (active_app->Get (0));
-    std::cout << "  Total Bytes Received (Layer 4): " << sink->GetTotalRx () << std::endl;
+    if (is_sink)
+      {
+        Ptr<PacketSink> sink = DynamicCast<PacketSink> (app.Get (0));
+        std::cout << "  Total Bytes Received (Layer 4): " << sink->GetTotalRx () << std::endl;
+      }
   }
 };
 

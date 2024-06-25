@@ -508,15 +508,10 @@ ScionHost::StartApplication (std::string app_type, uint32_t app_id, ia_t dst_ia,
         {
           app = new RTCApp (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
         }
-      else if (app_type == "tcp-source")
+      else if (app_type.find ("Tcp") == 0)
         {
-          std::cout << "Source" << std::endl;
-          app = new TCPSource (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
-        }
-      else if (app_type == "tcp-sink")
-        {
-          std::cout << "Sink" << std::endl;
-          app = new TCPSink (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
+          app = new TCPApp (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config,
+                            app_type);
         }
       else
         {
@@ -529,9 +524,10 @@ ScionHost::StartApplication (std::string app_type, uint32_t app_id, ia_t dst_ia,
         }
       apps[app_id] = app;
 
-      BackgroundTrafficApp::AddBackgroundTraffic (all_paths, backgroundBwdFactor);
+      // BackgroundTrafficApp::AddBackgroundTraffic (all_paths, backgroundBwdFactor);
       app->StartAppTrafficDelayed (
-          Seconds (15)); // 15s delay to allow background traffic to reach steady state
+          Seconds (1)); // 15s delay to allow background traffic to reach steady state
+      // app->StartAppTraffic();
     }
   else
     {
@@ -584,22 +580,22 @@ ScionHost::ReceiveAppData (ScionPacket *packet, AppData *data)
 {
   std::cout << GetLogPrefix () << "Receiving app data packet from " << data->app_id << " via path "
             << data->path_id << ", frame_no: " << data->frame_no << ", seq_no: " << data->seq_no
-            << std::endl;
+            << ", size: " << packet->size << std::endl;
 
   // If there is a ip_packet encapsulated in the app_data, we need retrieve the
   // corresponding TCP application and inject the packet to its layer 4
   if (data->ip_packet != nullptr)
     {
-      std::cout << "  Packet has IP packet encapsulated." << std::endl;
+      // std::cout << "  Packet has IP packet encapsulated." << std::endl;
       // Check if an app with app_id exists
       if (apps.find (data->app_id) == apps.end ())
         {
-          std::cout << "  No TCP app with id " << data->app_id << " found" << std::endl;
+          std::cout << GetLogPrefix () << "Received encapsulated IP packet, but no TCP app with id "
+                    << data->app_id << " found" << std::endl;
           return;
         }
       TCPApp *tcp_app = dynamic_cast<TCPApp *> (apps.at (data->app_id));
       tcp_app->RcvScionToInetL4 (data->ip_packet);
-      return;
     }
 
   app_connection_key_t key =
