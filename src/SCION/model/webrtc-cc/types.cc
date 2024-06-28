@@ -18,31 +18,23 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#ifndef SCION_SIMULATOR_CONTROLLER_STATE_H
-#define SCION_SIMULATOR_CONTROLLER_STATE_H
-
 #include "src/SCION/model/webrtc-cc/types.h"
+#include <vector>
 
 namespace ns3 {
-
-/**
- * Struct to hold the state of the controller at a certain point in time for visualization
-*/
-struct ControllerStateSnapshot
+const char *
+BandwidthUsageToString (BandwidthUsage usage)
 {
-  BandwidthUsage signal;
-  ControllerState state;
-  double A_r;
-  double kalman_gain;
-  double threshold_hi;
-  double threshold_lo;
-  double m;
-  double d_m;
-  double z;
-  double variance;
-  double error;
-};
+  switch (usage)
+    {
+    case BandwidthUsage::kBwNormal:
+      return "kBwNormal";
+    case BandwidthUsage::kBwUnderusing:
+      return "kBwUnderusing";
+    case BandwidthUsage::kBwOverusing:
+      return "kBwOverusing";
+    }
+  return "Unknown";
+}
 
 } // namespace ns3
-
-#endif // SCION_SIMULATOR_CONTROLLER_STATE_H

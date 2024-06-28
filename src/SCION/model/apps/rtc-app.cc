@@ -99,12 +99,13 @@ protected:
   double A_s = 0; // send rate estimate by the sender side loss based controller
   double sendrate = CC_INITIAL_SEND_RATE; // in Bytes per second
 
-  double steering_treshold_u = 20;
-  double steering_treshold_l = 0;
+  double steering_threshold_u = 20;
+  double steering_threshold_l = 0;
 
   Time last_path_change = Seconds (0);
   Time last_A_r_update = Seconds (0);
   Time last_report = Seconds (0);
+  Time last_cngst_event = Time::Min ();
 
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
@@ -632,22 +633,22 @@ public:
     // With probability (1 - alpha), try to switch paths
     bool try_switch = !(rand () % 100 < 100 * alpha);
 
-    // score lower than treshold_l
-    if (path_infos[active_path].score < steering_treshold_l)
+    // score lower than threshold_l
+    if (path_infos[active_path].score < steering_threshold_l)
       {
         std::vector<uint32_t> candidate_paths;
 
         // with probability (1-alpha), switch paths
         if (try_switch)
           {
-            // find alternative candidate paths with score > treshold_l
+            // find alternative candidate paths with score > threshold_l
             for (uint32_t i = 0; i < num_paths; i++)
               {
                 if (i == active_path)
                   {
                     continue;
                   }
-                if (path_infos[i].score > steering_treshold_l)
+                if (path_infos[i].score > steering_threshold_l)
                   {
                     candidate_paths.push_back (i);
                   }
@@ -663,7 +664,7 @@ public:
               }
             else
               {
-                Log ("No better path > treshold_l found");
+                Log ("No better path > threshold_l found");
               }
           }
 
@@ -678,8 +679,8 @@ public:
               }
           }
       }
-    // score higher than upper treshold
-    else if (path_infos[active_path].score > steering_treshold_u)
+    // score higher than upper threshold
+    else if (path_infos[active_path].score > steering_threshold_u)
       {
         if (!try_switch)
           {
@@ -695,11 +696,11 @@ public:
       {
         if (try_switch)
           {
-            // Try to find a better path with score > treshold_u
+            // Try to find a better path with score > threshold_u
             std::set<uint32_t> candidate_paths;
             for (uint32_t i = 0; i < num_paths; i++)
               {
-                if (i != active_path && path_infos[i].score > steering_treshold_u)
+                if (i != active_path && path_infos[i].score > steering_threshold_u)
                   {
                     candidate_paths.insert (i);
                   }
@@ -713,7 +714,7 @@ public:
               }
             else
               {
-                Log ("No better path > treshold_u found");
+                Log ("No better path > threshold_u found");
               }
           }
       }
@@ -783,8 +784,8 @@ public:
         j_state["A_s"] = state.A_s / 1e6;
         j_state["A_r"] = state.A_r / 1e6;
         j_state["gradient"] = state.controller_state.m;
-        j_state["treshold_hi"] = state.controller_state.treshold_hi;
-        j_state["treshold_lo"] = 0; // TODO
+        j_state["threshold_hi"] = state.controller_state.threshold_hi;
+        j_state["threshold_lo"] = 0; // TODO
         j_state["gcc_state"] = state.controller_state.state;
         j_state["gcc_signal"] = state.controller_state.signal;
         j_state["kalman_gain"] = state.controller_state.kalman_gain;

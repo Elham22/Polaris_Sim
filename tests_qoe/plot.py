@@ -13,6 +13,12 @@ def parse_args():
                                      description="Plotting of host QOE simulation results from SCION simulator")
     parser.add_argument(
         "filepath", help="Input file (result file of simulation) to parse")
+    parser.add_argument("-g", "--gradient",
+                        action="store_true", help="Plot the GCC gradient")
+    parser.add_argument("-p", "--paths",
+                        action="store_true", help="Plot the active paths")
+    parser.add_argument("-s", "--state", action="store_true",
+                        help="Plot the GCC state")
     return parser.parse_args()
 
 
@@ -28,9 +34,9 @@ def plotAppResults(apps: list[dict]):
     # plt.style.use('dark_background')
 
     plot_total_send_rate = False
-    plot_active_paths = True
-    plot_gcc_gradient = False
-    plot_gcc_state = False
+    plot_active_paths = args.paths
+    plot_gcc_gradient = args.gradient
+    plot_gcc_state = args.state
     plot_gcc_params = False
 
     # For which app to plot extra details if there are multiple applications
@@ -51,7 +57,7 @@ def plotAppResults(apps: list[dict]):
     plot_number = 0
     gs = gridspec.GridSpec(no_plots, 1, height_ratios=ratios)
 
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=-0.15)
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=-0.5 / no_plots)
 
     ax1 = plt.subplot(gs[plot_number])
     plot_number += 1
@@ -138,9 +144,9 @@ def plotAppResults(apps: list[dict]):
         app = apps[detail_app]
         plt.plot(app['time'], app['gradient'], label="Gradient",
                  color='red', linestyle='-', linewidth=1)
-        plt.plot(app['time'], app['treshold_hi'], label="Treshold γ",
+        plt.plot(app['time'], app['threshold_hi'], label="threshold γ",
                  color='black', linestyle=':', linewidth=0.5)
-        plt.plot(app['time'], app['treshold_lo'], label="Treshold -γ",
+        plt.plot(app['time'], app['threshold_lo'], label="threshold -γ",
                  color='black', linestyle=':', linewidth=0.5)
         plt.legend()
         plt.ylabel("GCC Gradient")
