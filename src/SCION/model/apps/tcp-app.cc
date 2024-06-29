@@ -513,6 +513,12 @@ public:
     Config::SetDefault ("ns3::TcpSocket::SegmentSize", UintegerValue (1460));
     Config::SetDefault ("ns3::TcpL4Protocol::SocketType",
                         TypeIdValue (TypeId::LookupByName ("ns3::" + tcp_alg)));
+
+    // 1 MB of TCP buffer
+    Config::SetDefault ("ns3::TcpSocket::RcvBufSize", UintegerValue (1 << 20));
+    Config::SetDefault ("ns3::TcpSocket::SndBufSize", UintegerValue (1 << 20));
+    Config::SetDefault ("ns3::TcpSocketBase::Sack", BooleanValue (true));
+
     SetupIPStack ();
 
     active_path = 0;
