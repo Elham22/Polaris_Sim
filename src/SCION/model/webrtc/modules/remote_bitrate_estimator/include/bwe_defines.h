@@ -14,15 +14,18 @@
 #include <stdint.h>
 
 #include "absl/types/optional.h"
-#include "api/network_state_predictor.h"
-#include "api/units/data_rate.h"
-#include "api/units/time_delta.h"
+// #include "api/network_state_predictor.h"
+// #include "api/units/data_rate.h"
+// #include "api/units/time_delta.h"
 
-namespace webrtc {
+#include "src/SCION/model/webrtc/api/network_state_predictor.h"
+#include "src/SCION/model/webrtc/types.h"
 
-inline constexpr DataRate kCongestionControllerMinBitrate =
-    DataRate::BitsPerSec(5'000);
-inline constexpr TimeDelta kBitrateWindow = TimeDelta::Seconds(1);
+namespace ns3 {
+
+inline BitRate kCongestionControllerMinBitrate =
+    BitRate::BitsPerSec(5'000);
+inline TimeDelta kBitrateWindow = TimeDelta::Seconds(1);
 
 extern const char kBweTypeHistogram[];
 
@@ -36,12 +39,12 @@ enum BweNames {
 
 struct RateControlInput {
   RateControlInput(BandwidthUsage bw_state,
-                   const absl::optional<DataRate>& estimated_throughput);
+                   const absl::optional<BitRate>& estimated_throughput);
   ~RateControlInput();
 
   BandwidthUsage bw_state;
-  absl::optional<DataRate> estimated_throughput;
+  absl::optional<BitRate> estimated_throughput;
 };
-}  // namespace webrtc
+}  // namespace ns3
 
 #endif  // MODULES_REMOTE_BITRATE_ESTIMATOR_INCLUDE_BWE_DEFINES_H_

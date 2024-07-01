@@ -8,18 +8,18 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "modules/remote_bitrate_estimator/overuse_estimator.h"
+#include "overuse_estimator.h"
 
 #include <math.h>
 #include <string.h>
 
 #include <algorithm>
 
-#include "api/network_state_predictor.h"
-#include "modules/remote_bitrate_estimator/test/bwe_test_logging.h"
-#include "rtc_base/logging.h"
+// #include "api/network_state_predictor.h"
+// #include "modules/remote_bitrate_estimator/test/bwe_test_logging.h"
+// #include "rtc_base/logging.h"
 
-namespace webrtc {
+namespace ns3 {
 namespace {
 
 constexpr int kMinFramePeriodHistoryLength = 60;
@@ -36,7 +36,7 @@ void OveruseEstimator::Update(int64_t t_delta,
                               int64_t now_ms) {
   const double min_frame_period = UpdateMinFramePeriod(ts_delta);
   const double t_ts_delta = t_delta - ts_delta;
-  BWE_TEST_LOGGING_PLOT(1, "dm_ms", now_ms, t_ts_delta);
+  // BWE_TEST_LOGGING_PLOT(1, "dm_ms", now_ms, t_ts_delta);
   double fs_delta = size_delta;
 
   ++num_of_deltas_;
@@ -59,7 +59,7 @@ void OveruseEstimator::Update(int64_t t_delta,
   const double Eh[2] = {E_[0][0] * h[0] + E_[0][1] * h[1],
                         E_[1][0] * h[0] + E_[1][1] * h[1]};
 
-  BWE_TEST_LOGGING_PLOT(1, "d_ms", now_ms, slope_ * h[0] - offset_);
+  // BWE_TEST_LOGGING_PLOT(1, "d_ms", now_ms, slope_ * h[0] - offset_);
 
   const double residual = t_ts_delta - slope_ * h[0] - offset_;
 
@@ -94,21 +94,21 @@ void OveruseEstimator::Update(int64_t t_delta,
   bool positive_semi_definite =
       E_[0][0] + E_[1][1] >= 0 &&
       E_[0][0] * E_[1][1] - E_[0][1] * E_[1][0] >= 0 && E_[0][0] >= 0;
-  RTC_DCHECK(positive_semi_definite);
+  // RTC_DCHECK(positive_semi_definite);
   if (!positive_semi_definite) {
-    RTC_LOG(LS_ERROR)
-        << "The over-use estimator's covariance matrix is no longer "
-           "semi-definite.";
+    // RTC_LOG(LS_ERROR)
+    //     << "The over-use estimator's covariance matrix is no longer "
+    //        "semi-definite.";
   }
 
   slope_ = slope_ + K[0] * residual;
   prev_offset_ = offset_;
   offset_ = offset_ + K[1] * residual;
 
-  BWE_TEST_LOGGING_PLOT(1, "kc", now_ms, K[0]);
-  BWE_TEST_LOGGING_PLOT(1, "km", now_ms, K[1]);
-  BWE_TEST_LOGGING_PLOT(1, "slope_1/bps", now_ms, slope_);
-  BWE_TEST_LOGGING_PLOT(1, "var_noise", now_ms, var_noise_);
+  // BWE_TEST_LOGGING_PLOT(1, "kc", now_ms, K[0]);
+  // BWE_TEST_LOGGING_PLOT(1, "km", now_ms, K[1]);
+  // BWE_TEST_LOGGING_PLOT(1, "slope_1/bps", now_ms, slope_);
+  // BWE_TEST_LOGGING_PLOT(1, "var_noise", now_ms, var_noise_);
 }
 
 double OveruseEstimator::UpdateMinFramePeriod(double ts_delta) {
@@ -146,4 +146,4 @@ void OveruseEstimator::UpdateNoiseEstimate(double residual,
     var_noise_ = 1;
   }
 }
-}  // namespace webrtc
+}  // namespace ns3

@@ -13,10 +13,13 @@
 
 #include <cstddef>
 
-#include "api/units/time_delta.h"
-#include "api/units/timestamp.h"
+// #include "api/units/time_delta.h"
+// #include "api/units/timestamp.h"
 
-namespace webrtc {
+// types.h
+#include "src/SCION/model/webrtc/types.h"
+
+namespace ns3 {
 
 // Helper class to compute the inter-arrival time delta and the size delta
 // between two send bursts. This code is branched from
@@ -26,8 +29,7 @@ class InterArrivalDelta {
   // After this many packet groups received out of order InterArrival will
   // reset, assuming that clocks have made a jump.
   static constexpr int kReorderedResetThreshold = 3;
-  static constexpr TimeDelta kArrivalTimeOffsetThreshold =
-      TimeDelta::Seconds(3);
+  const TimeDelta kArrivalTimeOffsetThreshold = TimeDelta::Seconds(3);
 
   // A send time group is defined as all packets with a send time which are at
   // most send_time_group_length older than the first timestamp in that
@@ -87,6 +89,6 @@ class InterArrivalDelta {
   SendTimeGroup prev_timestamp_group_;
   int num_consecutive_reordered_packets_;
 };
-}  // namespace webrtc
+}  // namespace ns3
 
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_INTER_ARRIVAL_DELTA_H_

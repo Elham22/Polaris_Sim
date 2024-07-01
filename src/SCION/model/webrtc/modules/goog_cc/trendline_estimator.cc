@@ -8,7 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "modules/congestion_controller/goog_cc/trendline_estimator.h"
+// #include "modules/congestion_controller/goog_cc/trendline_estimator.h"
+#include "src/SCION/model/webrtc/modules/goog_cc/trendline_estimator.h"
 
 #include <math.h>
 
@@ -23,15 +24,16 @@
 
 #include "absl/strings/match.h"
 #include "absl/types/optional.h"
-#include "api/field_trials_view.h"
-#include "api/network_state_predictor.h"
-#include "modules/remote_bitrate_estimator/test/bwe_test_logging.h"
-#include "rtc_base/checks.h"
-#include "rtc_base/experiments/struct_parameters_parser.h"
-#include "rtc_base/logging.h"
-#include "rtc_base/numerics/safe_minmax.h"
 
-namespace webrtc {
+// #include "api/field_trials_view.h"
+// #include "api/network_state_predictor.h"
+// #include "modules/remote_bitrate_estimator/test/bwe_test_logging.h"
+// #include "rtc_base/checks.h"
+// #include "rtc_base/experiments/struct_parameters_parser.h"
+// #include "rtc_base/logging.h"
+// #include "rtc_base/numerics/safe_minmax.h"
+
+namespace ns3 {
 
 namespace {
 
@@ -41,25 +43,25 @@ constexpr double kDefaultTrendlineThresholdGain = 4.0;
 const char kBweWindowSizeInPacketsExperiment[] =
     "WebRTC-BweWindowSizeInPackets";
 
-size_t ReadTrendlineFilterWindowSize(const FieldTrialsView* key_value_config) {
-  std::string experiment_string =
-      key_value_config->Lookup(kBweWindowSizeInPacketsExperiment);
-  size_t window_size;
-  int parsed_values =
-      sscanf(experiment_string.c_str(), "Enabled-%zu", &window_size);
-  if (parsed_values == 1) {
-    if (window_size > 1)
-      return window_size;
-    RTC_LOG(LS_WARNING) << "Window size must be greater than 1.";
-  }
-  RTC_LOG(LS_WARNING) << "Failed to parse parameters for BweWindowSizeInPackets"
-                         " experiment from field trial string. Using default.";
-  return TrendlineEstimatorSettings::kDefaultTrendlineWindowSize;
-}
+// size_t ReadTrendlineFilterWindowSize(const FieldTrialsView* key_value_config) {
+//   std::string experiment_string =
+//       key_value_config->Lookup(kBweWindowSizeInPacketsExperiment);
+//   size_t window_size;
+//   int parsed_values =
+//       sscanf(experiment_string.c_str(), "Enabled-%zu", &window_size);
+//   if (parsed_values == 1) {
+//     if (window_size > 1)
+//       return window_size;
+//     RTC_LOG(LS_WARNING) << "Window size must be greater than 1.";
+//   }
+//   RTC_LOG(LS_WARNING) << "Failed to parse parameters for BweWindowSizeInPackets"
+//                          " experiment from field trial string. Using default.";
+//   return TrendlineEstimatorSettings::kDefaultTrendlineWindowSize;
+// }
 
 absl::optional<double> LinearFitSlope(
     const std::deque<TrendlineEstimator::PacketTiming>& packets) {
-  RTC_DCHECK(packets.size() >= 2);
+  // RTC_DCHECK(packets.size() >= 2);
   // Compute the "center of mass".
   double sum_x = 0;
   double sum_y = 0;
@@ -86,12 +88,12 @@ absl::optional<double> LinearFitSlope(
 absl::optional<double> ComputeSlopeCap(
     const std::deque<TrendlineEstimator::PacketTiming>& packets,
     const TrendlineEstimatorSettings& settings) {
-  RTC_DCHECK(1 <= settings.beginning_packets &&
-             settings.beginning_packets < packets.size());
-  RTC_DCHECK(1 <= settings.end_packets &&
-             settings.end_packets < packets.size());
-  RTC_DCHECK(settings.beginning_packets + settings.end_packets <=
-             packets.size());
+  // RTC_DCHECK(1 <= settings.beginning_packets &&
+  //            settings.beginning_packets < packets.size());
+  // RTC_DCHECK(1 <= settings.end_packets &&
+  //            settings.end_packets < packets.size());
+  // RTC_DCHECK(settings.beginning_packets + settings.end_packets <=
+  //            packets.size());
   TrendlineEstimator::PacketTiming early = packets[0];
   for (size_t i = 1; i < settings.beginning_packets; ++i) {
     if (packets[i].raw_delay_ms < early.raw_delay_ms)
@@ -118,58 +120,85 @@ constexpr int kDeltaCounterMax = 1000;
 
 }  // namespace
 
-constexpr char TrendlineEstimatorSettings::kKey[];
+// constexpr char TrendlineEstimatorSettings::kKey[];
 
-TrendlineEstimatorSettings::TrendlineEstimatorSettings(
-    const FieldTrialsView* key_value_config) {
-  if (absl::StartsWith(
-          key_value_config->Lookup(kBweWindowSizeInPacketsExperiment),
-          "Enabled")) {
-    window_size = ReadTrendlineFilterWindowSize(key_value_config);
-  }
-  Parser()->Parse(key_value_config->Lookup(TrendlineEstimatorSettings::kKey));
-  if (window_size < 10 || 200 < window_size) {
-    RTC_LOG(LS_WARNING) << "Window size must be between 10 and 200 packets";
-    window_size = kDefaultTrendlineWindowSize;
-  }
-  if (enable_cap) {
-    if (beginning_packets < 1 || end_packets < 1 ||
-        beginning_packets > window_size || end_packets > window_size) {
-      RTC_LOG(LS_WARNING) << "Size of beginning and end must be between 1 and "
-                          << window_size;
-      enable_cap = false;
-      beginning_packets = end_packets = 0;
-      cap_uncertainty = 0.0;
-    }
-    if (beginning_packets + end_packets > window_size) {
-      RTC_LOG(LS_WARNING)
-          << "Size of beginning plus end can't exceed the window size";
-      enable_cap = false;
-      beginning_packets = end_packets = 0;
-      cap_uncertainty = 0.0;
-    }
-    if (cap_uncertainty < 0.0 || 0.025 < cap_uncertainty) {
-      RTC_LOG(LS_WARNING) << "Cap uncertainty must be between 0 and 0.025";
-      cap_uncertainty = 0.0;
-    }
-  }
-}
+// TrendlineEstimatorSettings::TrendlineEstimatorSettings(
+//     const FieldTrialsView* key_value_config) {
+//   if (absl::StartsWith(
+//           key_value_config->Lookup(kBweWindowSizeInPacketsExperiment),
+//           "Enabled")) {
+//     window_size = ReadTrendlineFilterWindowSize(key_value_config);
+//   }
+//   Parser()->Parse(key_value_config->Lookup(TrendlineEstimatorSettings::kKey));
+//   if (window_size < 10 || 200 < window_size) {
+//     RTC_LOG(LS_WARNING) << "Window size must be between 10 and 200 packets";
+//     window_size = kDefaultTrendlineWindowSize;
+//   }
+//   if (enable_cap) {
+//     if (beginning_packets < 1 || end_packets < 1 ||
+//         beginning_packets > window_size || end_packets > window_size) {
+//       RTC_LOG(LS_WARNING) << "Size of beginning and end must be between 1 and "
+//                           << window_size;
+//       enable_cap = false;
+//       beginning_packets = end_packets = 0;
+//       cap_uncertainty = 0.0;
+//     }
+//     if (beginning_packets + end_packets > window_size) {
+//       RTC_LOG(LS_WARNING)
+//           << "Size of beginning plus end can't exceed the window size";
+//       enable_cap = false;
+//       beginning_packets = end_packets = 0;
+//       cap_uncertainty = 0.0;
+//     }
+//     if (cap_uncertainty < 0.0 || 0.025 < cap_uncertainty) {
+//       RTC_LOG(LS_WARNING) << "Cap uncertainty must be between 0 and 0.025";
+//       cap_uncertainty = 0.0;
+//     }
+//   }
+// }
 
-std::unique_ptr<StructParametersParser> TrendlineEstimatorSettings::Parser() {
-  return StructParametersParser::Create("sort", &enable_sort,  //
-                                        "cap", &enable_cap,    //
-                                        "beginning_packets",
-                                        &beginning_packets,                   //
-                                        "end_packets", &end_packets,          //
-                                        "cap_uncertainty", &cap_uncertainty,  //
-                                        "window_size", &window_size);
-}
+// std::unique_ptr<StructParametersParser> TrendlineEstimatorSettings::Parser() {
+//   return StructParametersParser::Create("sort", &enable_sort,  //
+//                                         "cap", &enable_cap,    //
+//                                         "beginning_packets",
+//                                         &beginning_packets,                   //
+//                                         "end_packets", &end_packets,          //
+//                                         "cap_uncertainty", &cap_uncertainty,  //
+//                                         "window_size", &window_size);
+// }
 
-TrendlineEstimator::TrendlineEstimator(
-    const FieldTrialsView* key_value_config,
-    NetworkStatePredictor* network_state_predictor)
-    : settings_(key_value_config),
-      smoothing_coef_(kDefaultTrendlineSmoothingCoeff),
+// TrendlineEstimator::TrendlineEstimator(
+//     const FieldTrialsView* key_value_config,
+//     NetworkStatePredictor* network_state_predictor)
+//     : settings_(key_value_config),
+//       smoothing_coef_(kDefaultTrendlineSmoothingCoeff),
+//       threshold_gain_(kDefaultTrendlineThresholdGain),
+//       num_of_deltas_(0),
+//       first_arrival_time_ms_(-1),
+//       accumulated_delay_(0),
+//       smoothed_delay_(0),
+//       delay_hist_(),
+//       k_up_(0.0087),
+//       k_down_(0.039),
+//       overusing_time_threshold_(kOverUsingTimeThreshold),
+//       threshold_(12.5),
+//       prev_modified_trend_(NAN),
+//       last_update_ms_(-1),
+//       prev_trend_(0.0),
+//       time_over_using_(-1),
+//       overuse_counter_(0),
+//       hypothesis_(BandwidthUsage::kBwNormal),
+//       hypothesis_predicted_(BandwidthUsage::kBwNormal),
+//       network_state_predictor_(network_state_predictor) {
+//   RTC_LOG(LS_INFO)
+//       << "Using Trendline filter for delay change estimation with settings "
+//       << settings_.Parser()->Encode() << " and "
+//       << (network_state_predictor_ ? "injected" : "no")
+//       << " network state predictor";
+// }
+
+TrendlineEstimator::TrendlineEstimator()
+    : smoothing_coef_(kDefaultTrendlineSmoothingCoeff),
       threshold_gain_(kDefaultTrendlineThresholdGain),
       num_of_deltas_(0),
       first_arrival_time_ms_(-1),
@@ -187,12 +216,12 @@ TrendlineEstimator::TrendlineEstimator(
       overuse_counter_(0),
       hypothesis_(BandwidthUsage::kBwNormal),
       hypothesis_predicted_(BandwidthUsage::kBwNormal),
-      network_state_predictor_(network_state_predictor) {
-  RTC_LOG(LS_INFO)
-      << "Using Trendline filter for delay change estimation with settings "
-      << settings_.Parser()->Encode() << " and "
-      << (network_state_predictor_ ? "injected" : "no")
-      << " network state predictor";
+      network_state_predictor_(nullptr) {
+}
+
+TrendlineEstimator::TrendlineEstimator(
+  NetworkStatePredictor* network_state_predictor) : TrendlineEstimator() {
+  network_state_predictor_ = network_state_predictor;
 }
 
 TrendlineEstimator::~TrendlineEstimator() {}
@@ -210,12 +239,12 @@ void TrendlineEstimator::UpdateTrendline(double recv_delta_ms,
 
   // Exponential backoff filter.
   accumulated_delay_ += delta_ms;
-  BWE_TEST_LOGGING_PLOT(1, "accumulated_delay_ms", arrival_time_ms,
-                        accumulated_delay_);
+  // BWE_TEST_LOGGING_PLOT(1, "accumulated_delay_ms", arrival_time_ms,
+  //                       accumulated_delay_);
   smoothed_delay_ = smoothing_coef_ * smoothed_delay_ +
                     (1 - smoothing_coef_) * accumulated_delay_;
-  BWE_TEST_LOGGING_PLOT(1, "smoothed_delay_ms", arrival_time_ms,
-                        smoothed_delay_);
+  // BWE_TEST_LOGGING_PLOT(1, "smoothed_delay_ms", arrival_time_ms,
+  //                       smoothed_delay_);
 
   // Maintain packet window
   delay_hist_.emplace_back(
@@ -250,7 +279,7 @@ void TrendlineEstimator::UpdateTrendline(double recv_delta_ms,
       }
     }
   }
-  BWE_TEST_LOGGING_PLOT(1, "trendline_slope", arrival_time_ms, trend);
+  // BWE_TEST_LOGGING_PLOT(1, "trendline_slope", arrival_time_ms, trend);
 
   Detect(trend, send_delta_ms, arrival_time_ms);
 }
@@ -283,8 +312,8 @@ void TrendlineEstimator::Detect(double trend, double ts_delta, int64_t now_ms) {
   const double modified_trend =
       std::min(num_of_deltas_, kMinNumDeltas) * trend * threshold_gain_;
   prev_modified_trend_ = modified_trend;
-  BWE_TEST_LOGGING_PLOT(1, "T", now_ms, modified_trend);
-  BWE_TEST_LOGGING_PLOT(1, "threshold", now_ms, threshold_);
+  // BWE_TEST_LOGGING_PLOT(1, "T", now_ms, modified_trend);
+  // BWE_TEST_LOGGING_PLOT(1, "threshold", now_ms, threshold_);
   if (modified_trend > threshold_) {
     if (time_over_using_ == -1) {
       // Initialize the timer. Assume that we've been
@@ -332,8 +361,9 @@ void TrendlineEstimator::UpdateThreshold(double modified_trend,
   const int64_t kMaxTimeDeltaMs = 100;
   int64_t time_delta_ms = std::min(now_ms - last_update_ms_, kMaxTimeDeltaMs);
   threshold_ += k * (fabs(modified_trend) - threshold_) * time_delta_ms;
-  threshold_ = rtc::SafeClamp(threshold_, 6.f, 600.f);
+  // threshold_ = rtc::SafeClamp(threshold_, 6.f, 600.f);
+  threshold_ = std::max(6.0, std::min(600.0, threshold_));
   last_update_ms_ = now_ms;
 }
 
-}  // namespace webrtc
+}  // namespace ns3

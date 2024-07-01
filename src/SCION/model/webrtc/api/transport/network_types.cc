@@ -8,23 +8,24 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "api/transport/network_types.h"
+// #include "api/transport/network_types.h"
+#include "src/SCION/model/webrtc/api/transport/network_types.h"
 
 #include <algorithm>
 
-namespace webrtc {
-StreamsConfig::StreamsConfig() = default;
-StreamsConfig::StreamsConfig(const StreamsConfig&) = default;
-StreamsConfig::~StreamsConfig() = default;
+namespace ns3 {
+// StreamsConfig::StreamsConfig() = default;
+// StreamsConfig::StreamsConfig(const StreamsConfig&) = default;
+// StreamsConfig::~StreamsConfig() = default;
 
-TargetRateConstraints::TargetRateConstraints() = default;
-TargetRateConstraints::TargetRateConstraints(const TargetRateConstraints&) =
-    default;
-TargetRateConstraints::~TargetRateConstraints() = default;
+// TargetRateConstraints::TargetRateConstraints() = default;
+// TargetRateConstraints::TargetRateConstraints(const TargetRateConstraints&) =
+//     default;
+// TargetRateConstraints::~TargetRateConstraints() = default;
 
-NetworkRouteChange::NetworkRouteChange() = default;
-NetworkRouteChange::NetworkRouteChange(const NetworkRouteChange&) = default;
-NetworkRouteChange::~NetworkRouteChange() = default;
+// NetworkRouteChange::NetworkRouteChange() = default;
+// NetworkRouteChange::NetworkRouteChange(const NetworkRouteChange&) = default;
+// NetworkRouteChange::~NetworkRouteChange() = default;
 
 PacketResult::PacketResult() = default;
 PacketResult::PacketResult(const PacketResult& other) = default;
@@ -87,20 +88,20 @@ NetworkControlUpdate::NetworkControlUpdate(const NetworkControlUpdate&) =
     default;
 NetworkControlUpdate::~NetworkControlUpdate() = default;
 
-PacedPacketInfo::PacedPacketInfo() = default;
+// PacedPacketInfo::PacedPacketInfo() = default;
 
-PacedPacketInfo::PacedPacketInfo(int probe_cluster_id,
-                                 int probe_cluster_min_probes,
-                                 int probe_cluster_min_bytes)
-    : probe_cluster_id(probe_cluster_id),
-      probe_cluster_min_probes(probe_cluster_min_probes),
-      probe_cluster_min_bytes(probe_cluster_min_bytes) {}
+// PacedPacketInfo::PacedPacketInfo(int probe_cluster_id,
+//                                  int probe_cluster_min_probes,
+//                                  int probe_cluster_min_bytes)
+//     : probe_cluster_id(probe_cluster_id),
+//       probe_cluster_min_probes(probe_cluster_min_probes),
+//       probe_cluster_min_bytes(probe_cluster_min_bytes) {}
 
-bool PacedPacketInfo::operator==(const PacedPacketInfo& rhs) const {
-  return send_bitrate == rhs.send_bitrate &&
-         probe_cluster_id == rhs.probe_cluster_id &&
-         probe_cluster_min_probes == rhs.probe_cluster_min_probes &&
-         probe_cluster_min_bytes == rhs.probe_cluster_min_bytes;
-}
+// bool PacedPacketInfo::operator==(const PacedPacketInfo& rhs) const {
+//   return send_bitrate == rhs.send_bitrate &&
+//          probe_cluster_id == rhs.probe_cluster_id &&
+//          probe_cluster_min_probes == rhs.probe_cluster_min_probes &&
+//          probe_cluster_min_bytes == rhs.probe_cluster_min_bytes;
+// }
 
-}  // namespace webrtc
+}  // namespace ns3

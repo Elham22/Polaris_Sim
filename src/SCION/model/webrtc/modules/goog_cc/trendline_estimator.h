@@ -16,19 +16,22 @@
 #include <deque>
 #include <memory>
 
-#include "api/field_trials_view.h"
-#include "api/network_state_predictor.h"
-#include "modules/congestion_controller/goog_cc/delay_increase_detector_interface.h"
-#include "rtc_base/experiments/struct_parameters_parser.h"
+// #include "api/field_trials_view.h"
+// #include "api/network_state_predictor.h"
+// #include "modules/congestion_controller/goog_cc/delay_increase_detector_interface.h"
+// #include "rtc_base/experiments/struct_parameters_parser.h"
 
-namespace webrtc {
+#include "src/SCION/model/webrtc/api/network_state_predictor.h"
+#include "src/SCION/model/webrtc/modules/goog_cc/delay_increase_detector_interface.h"
+
+namespace ns3 {
 
 struct TrendlineEstimatorSettings {
   static constexpr char kKey[] = "WebRTC-Bwe-TrendlineEstimatorSettings";
   static constexpr unsigned kDefaultTrendlineWindowSize = 20;
 
-  TrendlineEstimatorSettings() = delete;
-  explicit TrendlineEstimatorSettings(const FieldTrialsView* key_value_config);
+  // TrendlineEstimatorSettings() = delete;
+  // explicit TrendlineEstimatorSettings(const FieldTrialsView* key_value_config);
 
   // Sort the packets in the window. Should be redundant,
   // but then almost no cost.
@@ -44,13 +47,16 @@ struct TrendlineEstimatorSettings {
   // Size (in packets) of the window.
   unsigned window_size = kDefaultTrendlineWindowSize;
 
-  std::unique_ptr<StructParametersParser> Parser();
+  // std::unique_ptr<StructParametersParser> Parser();
 };
 
 class TrendlineEstimator : public DelayIncreaseDetectorInterface {
  public:
-  TrendlineEstimator(const FieldTrialsView* key_value_config,
-                     NetworkStatePredictor* network_state_predictor);
+  // TrendlineEstimator(const FieldTrialsView* key_value_config,
+  //                    NetworkStatePredictor* network_state_predictor);
+
+  TrendlineEstimator();
+  TrendlineEstimator(NetworkStatePredictor* network_state_predictor);
 
   ~TrendlineEstimator() override;
 
@@ -119,6 +125,6 @@ class TrendlineEstimator : public DelayIncreaseDetectorInterface {
   BandwidthUsage hypothesis_predicted_;
   NetworkStatePredictor* network_state_predictor_;
 };
-}  // namespace webrtc
+}  // namespace ns3
 
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_TRENDLINE_ESTIMATOR_H_

@@ -8,21 +8,22 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "modules/congestion_controller/goog_cc/inter_arrival_delta.h"
+// #include "modules/congestion_controller/goog_cc/inter_arrival_delta.h"
+#include "src/SCION/model/webrtc/modules/goog_cc/inter_arrival_delta.h"
 
 #include <algorithm>
 #include <cstddef>
 
-#include "api/units/time_delta.h"
-#include "api/units/timestamp.h"
-#include "rtc_base/checks.h"
-#include "rtc_base/logging.h"
+// #include "api/units/time_delta.h"
+// #include "api/units/timestamp.h"
+// #include "rtc_base/checks.h"
+// #include "rtc_base/logging.h"
 
-namespace webrtc {
+namespace ns3 {
 
-static constexpr TimeDelta kBurstDeltaThreshold = TimeDelta::Millis(5);
-static constexpr TimeDelta kMaxBurstDuration = TimeDelta::Millis(100);
-constexpr TimeDelta InterArrivalDelta::kArrivalTimeOffsetThreshold;
+TimeDelta kBurstDeltaThreshold = TimeDelta::Millis(5);
+TimeDelta kMaxBurstDuration = TimeDelta::Millis(100);
+// constexpr TimeDelta InterArrivalDelta::kArrivalTimeOffsetThreshold;
 
 InterArrivalDelta::InterArrivalDelta(TimeDelta send_time_group_length)
     : send_time_group_length_(send_time_group_length),
@@ -60,10 +61,10 @@ bool InterArrivalDelta::ComputeDeltas(Timestamp send_time,
 
       if (*arrival_time_delta - system_time_delta >=
           kArrivalTimeOffsetThreshold) {
-        RTC_LOG(LS_WARNING)
-            << "The arrival time clock offset has changed (diff = "
-            << arrival_time_delta->ms() - system_time_delta.ms()
-            << " ms), resetting.";
+        // RTC_LOG(LS_WARNING)
+        //     << "The arrival time clock offset has changed (diff = "
+        //     << arrival_time_delta->ms() - system_time_delta.ms()
+        //     << " ms), resetting.";
         Reset();
         return false;
       }
@@ -72,10 +73,10 @@ bool InterArrivalDelta::ComputeDeltas(Timestamp send_time,
         // arrival timestamp.
         ++num_consecutive_reordered_packets_;
         if (num_consecutive_reordered_packets_ >= kReorderedResetThreshold) {
-          RTC_LOG(LS_WARNING)
-              << "Packets between send burst arrived out of order, resetting:"
-              << " arrival_time_delta_ms=" << arrival_time_delta->ms()
-              << ", send_time_delta_ms=" << send_time_delta->ms();
+          // RTC_LOG(LS_WARNING)
+          //     << "Packets between send burst arrived out of order, resetting:"
+          //     << " arrival_time_delta_ms=" << arrival_time_delta->ms()
+          //     << ", send_time_delta_ms=" << send_time_delta->ms();
           Reset();
         }
         return false;
@@ -120,7 +121,7 @@ bool InterArrivalDelta::NewTimestampGroup(Timestamp arrival_time,
 
 bool InterArrivalDelta::BelongsToBurst(Timestamp arrival_time,
                                        Timestamp send_time) const {
-  RTC_DCHECK(current_timestamp_group_.complete_time.IsFinite());
+  // RTC_DCHECK(current_timestamp_group_.complete_time.IsFinite());
   TimeDelta arrival_time_delta =
       arrival_time - current_timestamp_group_.complete_time;
   TimeDelta send_time_delta = send_time - current_timestamp_group_.send_time;
@@ -139,4 +140,4 @@ void InterArrivalDelta::Reset() {
   current_timestamp_group_ = SendTimeGroup();
   prev_timestamp_group_ = SendTimeGroup();
 }
-}  // namespace webrtc
+}  // namespace ns3

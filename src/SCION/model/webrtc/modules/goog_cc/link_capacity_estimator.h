@@ -13,7 +13,7 @@
 #include "absl/types/optional.h"
 
 // #include "src/network/utils/data-rate.h"
-#include "src/SCION/model/webrtc-cc/types.h"
+#include "src/SCION/model/webrtc/types.h"
 
 namespace ns3 {
 class LinkCapacityEstimator

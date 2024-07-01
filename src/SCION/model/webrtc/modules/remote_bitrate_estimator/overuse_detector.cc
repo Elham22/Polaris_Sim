@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "modules/remote_bitrate_estimator/overuse_detector.h"
+#include "overuse_detector.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -16,11 +16,11 @@
 #include <algorithm>
 #include <string>
 
-#include "modules/remote_bitrate_estimator/test/bwe_test_logging.h"
-#include "rtc_base/checks.h"
-#include "rtc_base/numerics/safe_minmax.h"
+// #include "modules/remote_bitrate_estimator/test/bwe_test_logging.h"
+// #include "rtc_base/checks.h"
+// #include "rtc_base/numerics/safe_minmax.h"
 
-namespace webrtc {
+namespace ns3 {
 namespace {
 
 constexpr double kMaxAdaptOffsetMs = 15.0;
@@ -45,8 +45,8 @@ BandwidthUsage OveruseDetector::Detect(double offset,
     return BandwidthUsage::kBwNormal;
   }
   const double T = std::min(num_of_deltas, kMaxNumDeltas) * offset;
-  BWE_TEST_LOGGING_PLOT(1, "T", now_ms, T);
-  BWE_TEST_LOGGING_PLOT(1, "threshold", now_ms, threshold_);
+  // BWE_TEST_LOGGING_PLOT(1, "T", now_ms, T);
+  // BWE_TEST_LOGGING_PLOT(1, "threshold", now_ms, threshold_);
   if (T > threshold_) {
     if (time_over_using_ == -1) {
       // Initialize the timer. Assume that we've been
@@ -96,8 +96,9 @@ void OveruseDetector::UpdateThreshold(double modified_offset, int64_t now_ms) {
   const int64_t kMaxTimeDeltaMs = 100;
   int64_t time_delta_ms = std::min(now_ms - last_update_ms_, kMaxTimeDeltaMs);
   threshold_ += k * (fabs(modified_offset) - threshold_) * time_delta_ms;
-  threshold_ = rtc::SafeClamp(threshold_, 6.f, 600.f);
+  // threshold_ = rtc::SafeClamp(threshold_, 6.f, 600.f);
+  threshold_ = std::max(6.0, std::min(600.0, threshold_));
   last_update_ms_ = now_ms;
 }
 
-}  // namespace webrtc
+}  // namespace ns3

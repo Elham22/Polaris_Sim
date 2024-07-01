@@ -14,9 +14,9 @@
 
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
-#include "rtc_base/system/rtc_export.h"
+// #include "rtc_base/system/rtc_export.h"
 
-namespace webrtc {
+namespace ns3 {
 
 // An interface that provides the means to access field trials.
 //
@@ -24,7 +24,8 @@ namespace webrtc {
 // mapping will be preserved over time and no announcements will be made if they
 // are changed. It's up to the library user to ensure that the behavior does not
 // break.
-class RTC_EXPORT FieldTrialsView {
+// class RTC_EXPORT FieldTrialsView {
+class FieldTrialsView {
  public:
   virtual ~FieldTrialsView() = default;
 
@@ -41,6 +42,6 @@ class RTC_EXPORT FieldTrialsView {
   }
 };
 
-}  // namespace webrtc
+}  // namespace ns3
 
 #endif  // API_FIELD_TRIALS_VIEW_H_

@@ -14,9 +14,9 @@
 
 #include <cstddef>
 
-#include "api/network_state_predictor.h"
+#include "src/SCION/model/webrtc/types.h"
 
-namespace webrtc {
+namespace ns3 {
 
 class DelayIncreaseDetectorInterface {
  public:
@@ -40,6 +40,6 @@ class DelayIncreaseDetectorInterface {
   virtual BandwidthUsage State() const = 0;
 };
 
-}  // namespace webrtc
+}  // namespace ns3
 
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_DELAY_INCREASE_DETECTOR_INTERFACE_H_

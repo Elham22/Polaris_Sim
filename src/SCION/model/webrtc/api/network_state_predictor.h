@@ -14,7 +14,7 @@
 #include <memory>
 #include <vector>
 
-namespace webrtc {
+namespace ns3 {
 
 enum class BandwidthUsage {
   kBwNormal = 0,
@@ -51,6 +51,6 @@ class NetworkStatePredictorFactoryInterface {
   virtual ~NetworkStatePredictorFactoryInterface() = default;
 };
 
-}  // namespace webrtc
+}  // namespace ns3
 
 #endif  // API_NETWORK_STATE_PREDICTOR_H_

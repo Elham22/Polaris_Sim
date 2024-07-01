@@ -18,23 +18,21 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#include "src/SCION/model/webrtc/types.h"
-#include <vector>
+
+#include "types.h"
 
 namespace ns3 {
-// const char *
-// BandwidthUsageToString (BandwidthUsage usage)
-// {
-//   switch (usage)
-//     {
-//     case BandwidthUsage::kBwNormal:
-//       return "kBwNormal";
-//     case BandwidthUsage::kBwUnderusing:
-//       return "kBwUnderusing";
-//     case BandwidthUsage::kBwOverusing:
-//       return "kBwOverusing";
-//     }
-//   return "Unknown";
-// }
+
+  DataSize BitRate::operator*(const TimeDelta& delta) const {
+    return DataSize(bps_ * delta.seconds());
+  }
+
+  BitRate DataSize::operator/(const TimeDelta& delta) const {
+    return BitRate(bits_ / delta.seconds());
+  }
+
+  TimeDelta DataSize::operator/(const BitRate& rate) const {
+    return TimeDelta(bits_ / static_cast<double>(rate.bps()));
+  }
 
 } // namespace ns3

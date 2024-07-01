@@ -8,17 +8,17 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "modules/remote_bitrate_estimator/include/bwe_defines.h"
+#include "include/bwe_defines.h"
 
-namespace webrtc {
+namespace ns3 {
 
 const char kBweTypeHistogram[] = "WebRTC.BWE.Types";
 
 RateControlInput::RateControlInput(
     BandwidthUsage bw_state,
-    const absl::optional<DataRate>& estimated_throughput)
+    const absl::optional<BitRate>& estimated_throughput)
     : bw_state(bw_state), estimated_throughput(estimated_throughput) {}
 
 RateControlInput::~RateControlInput() = default;
 
-}  // namespace webrtc
+}  // namespace ns3

@@ -12,9 +12,10 @@
 
 #include <stdint.h>
 
-#include "api/network_state_predictor.h"
+// #include "api/network_state_predictor.h"
+#include "src/SCION/model/webrtc/types.h"
 
-namespace webrtc {
+namespace ns3 {
 
 class OveruseDetector {
  public:
@@ -49,6 +50,6 @@ class OveruseDetector {
   int overuse_counter_ = 0;
   BandwidthUsage hypothesis_ = BandwidthUsage::kBwNormal;
 };
-}  // namespace webrtc
+}  // namespace ns3
 
 #endif  // MODULES_REMOTE_BITRATE_ESTIMATOR_OVERUSE_DETECTOR_H_

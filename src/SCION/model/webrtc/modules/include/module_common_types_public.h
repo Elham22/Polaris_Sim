@@ -15,7 +15,11 @@
 
 #include "absl/types/optional.h"
 
-namespace webrtc {
+// ...
+typedef u_int16_t uint16_t;
+typedef u_int32_t uint32_t;
+
+namespace ns3 {
 
 template <typename U>
 inline bool IsNewer(U value, U prev_value) {
@@ -58,5 +62,5 @@ inline uint32_t LatestTimestamp(uint32_t timestamp1, uint32_t timestamp2) {
   return IsNewerTimestamp(timestamp1, timestamp2) ? timestamp1 : timestamp2;
 }
 
-}  // namespace webrtc
+}  // namespace ns3
 #endif  // MODULES_INCLUDE_MODULE_COMMON_TYPES_PUBLIC_H_
