@@ -199,6 +199,8 @@ public:
 
   double seconds() const { return time_.GetDouble(); }
 
+  int64_t ms() const { return time_.GetMilliSeconds(); }
+
   template<typename T>
   T seconds() const {
     return time_.GetSeconds(); // HACK
@@ -275,6 +277,8 @@ public:
 
   TimeDelta operator+ (const Timestamp &other) const { return TimeDelta (time_ + other.time_); }
   TimeDelta operator- (const Timestamp &other) const { return TimeDelta (time_ - other.time_); }
+  Timestamp operator+ (const TimeDelta &delta) const { return Timestamp (time_ + delta.GetTime ()); }
+  Timestamp operator- (const TimeDelta &delta) const { return Timestamp (time_ - delta.GetTime ()); }
 
   bool operator== (const Timestamp &other) const { return time_ == other.time_; }
   bool operator!= (const Timestamp &other) const { return time_ != other.time_; }

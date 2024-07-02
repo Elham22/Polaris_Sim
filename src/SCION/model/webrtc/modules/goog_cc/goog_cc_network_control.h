@@ -18,30 +18,49 @@
 #include <vector>
 
 #include "absl/types/optional.h"
-#include "api/field_trials_view.h"
-#include "api/network_state_predictor.h"
-#include "api/rtc_event_log/rtc_event_log.h"
-#include "api/transport/field_trial_based_config.h"
-#include "api/transport/network_control.h"
-#include "api/transport/network_types.h"
-#include "api/units/data_rate.h"
-#include "api/units/data_size.h"
-#include "api/units/time_delta.h"
-#include "api/units/timestamp.h"
-#include "modules/congestion_controller/goog_cc/acknowledged_bitrate_estimator_interface.h"
-#include "modules/congestion_controller/goog_cc/alr_detector.h"
-#include "modules/congestion_controller/goog_cc/congestion_window_pushback_controller.h"
-#include "modules/congestion_controller/goog_cc/delay_based_bwe.h"
-#include "modules/congestion_controller/goog_cc/probe_bitrate_estimator.h"
-#include "modules/congestion_controller/goog_cc/probe_controller.h"
-#include "modules/congestion_controller/goog_cc/send_side_bandwidth_estimation.h"
-#include "rtc_base/experiments/field_trial_parser.h"
-#include "rtc_base/experiments/rate_control_settings.h"
+// #include "api/field_trials_view.h"
+// #include "api/network_state_predictor.h"
+// #include "api/rtc_event_log/rtc_event_log.h"
+// #include "api/transport/field_trial_based_config.h"
+// #include "api/transport/network_control.h"
+// #include "api/transport/network_types.h"
+// #include "api/units/data_rate.h"
+// #include "api/units/data_size.h"
+// #include "api/units/time_delta.h"
+// #include "api/units/timestamp.h"
+// #include "modules/congestion_controller/goog_cc/acknowledged_bitrate_estimator_interface.h"
+// #include "modules/congestion_controller/goog_cc/alr_detector.h"
+// #include "modules/congestion_controller/goog_cc/congestion_window_pushback_controller.h"
+// #include "modules/congestion_controller/goog_cc/delay_based_bwe.h"
+// #include "modules/congestion_controller/goog_cc/probe_bitrate_estimator.h"
+// #include "modules/congestion_controller/goog_cc/probe_controller.h"
+// #include "modules/congestion_controller/goog_cc/send_side_bandwidth_estimation.h"
+// #include "rtc_base/experiments/field_trial_parser.h"
+// #include "rtc_base/experiments/rate_control_settings.h"
 
-namespace webrtc {
+#include "src/SCION/model/webrtc/api/field_trials_view.h"
+#include "src/SCION/model/webrtc/api/network_state_predictor.h"
+// #include "src/SCION/model/webrtc/api/rtc_event_log/rtc_event_log.h"
+// #include "src/SCION/model/webrtc/api/transport/field_trial_based_config.h"
+#include "src/SCION/model/webrtc/api/transport/network_control.h"
+#include "src/SCION/model/webrtc/api/transport/network_types.h"
+// #include "src/SCION/model/webrtc/modules/goog_cc/acknowledged_bitrate_estimator_interface.h"
+// #include "src/SCION/model/webrtc/modules/goog_cc/alr_detector.h"
+// #include "src/SCION/model/webrtc/modules/goog_cc/congestion_window_pushback_controller.h"
+#include "src/SCION/model/webrtc/modules/goog_cc/delay_based_bwe.h"
+// #include "src/SCION/model/webrtc/modules/goog_cc/probe_bitrate_estimator.h"
+// #include "src/SCION/model/webrtc/modules/goog_cc/probe_controller.h"
+#include "src/SCION/model/webrtc/modules/goog_cc/send_side_bandwidth_estimation.h"
+// #include "src/SCION/model/webrtc/rtc_base/experiments/field_trial_parser.h"
+// #include "src/SCION/model/webrtc/rtc_base/experiments/rate_control_settings.h"
+
+// types.h
+#include "src/SCION/model/webrtc/types.h"
+
+namespace ns3 {
 struct GoogCcConfig {
   std::unique_ptr<NetworkStateEstimator> network_state_estimator = nullptr;
-  std::unique_ptr<NetworkStatePredictor> network_state_predictor = nullptr;
+//   std::unique_ptr<NetworkStatePredictor> network_state_predictor = nullptr;
   bool feedback_only = false;
 };
 
@@ -84,38 +103,38 @@ class GoogCcNetworkController : public NetworkControllerInterface {
                                     Timestamp at_time);
   void UpdateCongestionWindowSize();
   PacerConfig GetPacingRates(Timestamp at_time) const;
-  const FieldTrialBasedConfig trial_based_config_;
+//   const FieldTrialBasedConfig trial_based_config_;
 
   const FieldTrialsView* const key_value_config_;
   RtcEventLog* const event_log_;
   const bool packet_feedback_only_;
-  FieldTrialFlag safe_reset_on_route_change_;
-  FieldTrialFlag safe_reset_acknowledged_rate_;
+//   FieldTrialFlag safe_reset_on_route_change_;
+//   FieldTrialFlag safe_reset_acknowledged_rate_;
   const bool use_min_allocatable_as_lower_bound_;
   const bool ignore_probes_lower_than_network_estimate_;
   const bool limit_probes_lower_than_throughput_estimate_;
-  const RateControlSettings rate_control_settings_;
+//   const RateControlSettings rate_control_settings_;
   const bool pace_at_max_of_bwe_and_lower_link_capacity_;
 
-  const std::unique_ptr<ProbeController> probe_controller_;
-  const std::unique_ptr<CongestionWindowPushbackController>
-      congestion_window_pushback_controller_;
+//   const std::unique_ptr<ProbeController> probe_controller_;
+//   const std::unique_ptr<CongestionWindowPushbackController>
+//       congestion_window_pushback_controller_;
 
   std::unique_ptr<SendSideBandwidthEstimation> bandwidth_estimation_;
-  std::unique_ptr<AlrDetector> alr_detector_;
-  std::unique_ptr<ProbeBitrateEstimator> probe_bitrate_estimator_;
+//   std::unique_ptr<AlrDetector> alr_detector_;
+//   std::unique_ptr<ProbeBitrateEstimator> probe_bitrate_estimator_;
   std::unique_ptr<NetworkStateEstimator> network_estimator_;
   std::unique_ptr<NetworkStatePredictor> network_state_predictor_;
   std::unique_ptr<DelayBasedBwe> delay_based_bwe_;
-  std::unique_ptr<AcknowledgedBitrateEstimatorInterface>
-      acknowledged_bitrate_estimator_;
+//   std::unique_ptr<AcknowledgedBitrateEstimatorInterface>
+//       acknowledged_bitrate_estimator_;
 
   absl::optional<NetworkControllerConfig> initial_config_;
 
-  DataRate min_target_rate_ = DataRate::Zero();
-  DataRate min_data_rate_ = DataRate::Zero();
-  DataRate max_data_rate_ = DataRate::PlusInfinity();
-  absl::optional<DataRate> starting_rate_;
+  BitRate min_target_rate_ = BitRate::Zero();
+  BitRate min_data_rate_ = BitRate::Zero();
+  BitRate max_data_rate_ = BitRate::PlusInfinity();
+  absl::optional<BitRate> starting_rate_;
 
   bool first_packet_sent_ = false;
 
@@ -127,23 +146,23 @@ class GoogCcNetworkController : public NetworkControllerInterface {
 
   std::deque<int64_t> feedback_max_rtts_;
 
-  DataRate last_loss_based_target_rate_;
-  DataRate last_pushback_target_rate_;
-  DataRate last_stable_target_rate_;
-  LossBasedState last_loss_base_state_;
+  BitRate last_loss_based_target_rate_;
+  BitRate last_pushback_target_rate_;
+  BitRate last_stable_target_rate_;
+//   LossBasedState last_loss_base_state_;
 
   absl::optional<uint8_t> last_estimated_fraction_loss_ = 0;
   TimeDelta last_estimated_round_trip_time_ = TimeDelta::PlusInfinity();
 
   double pacing_factor_;
-  DataRate min_total_allocated_bitrate_;
-  DataRate max_padding_rate_;
+  BitRate min_total_allocated_bitrate_;
+  BitRate max_padding_rate_;
 
   bool previously_in_alr_ = false;
 
   absl::optional<DataSize> current_data_window_;
 };
 
-}  // namespace webrtc
+}  // namespace ns3
 
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_GOOG_CC_NETWORK_CONTROL_H_

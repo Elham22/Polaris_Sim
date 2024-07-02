@@ -16,10 +16,10 @@
 
 #include "absl/base/attributes.h"
 #include "api/field_trials_view.h"
-#include "api/rtc_event_log/rtc_event_log.h"
+// #include "api/rtc_event_log/rtc_event_log.h"
 #include "api/transport/network_types.h"
 
-namespace webrtc {
+namespace ns3 {
 
 class TargetTransferRateObserver {
  public:
@@ -29,7 +29,7 @@ class TargetTransferRateObserver {
   virtual void OnTargetTransferRate(TargetTransferRate) = 0;
   // Called to provide updates to the expected target rate in case it changes
   // before the first call to OnTargetTransferRate.
-  virtual void OnStartRateUpdate(DataRate) {}
+  virtual void OnStartRateUpdate(BitRate) {}
 };
 
 // Configuration sent to factory create function. The parameters here are
@@ -135,6 +135,6 @@ class NetworkStateEstimatorFactory {
       const FieldTrialsView* key_value_config) = 0;
   virtual ~NetworkStateEstimatorFactory() = default;
 };
-}  // namespace webrtc
+}  // namespace ns3
 
 #endif  // API_TRANSPORT_NETWORK_CONTROL_H_
