@@ -105,7 +105,7 @@ OnDemandOptimization::PerLinkInitializations (rapidxml::xml_node<> *cur_xml_link
       cur_xml_target = cur_xml_target->next_sibling (target_element_str.c_str ());
     }
 #if NS3_ASSERT_ENABLE
-  for (uint32_t i = 0; i < AS->interfaces_coordinates.size (); ++i)
+  for (uint32_t i = 0; i < as->interfaces_coordinates.size (); ++i)
     {
       NS_ASSERT (if_to_if_group.find (i) != if_to_if_group.end ());
       NS_ASSERT (if_to_push_based_optimization_targets_map.find (i) !=
