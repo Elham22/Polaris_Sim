@@ -104,23 +104,28 @@ GoogCcNetworkController::GoogCcNetworkController(NetworkControllerConfig config,
     : key_value_config_(config.key_value_config ? config.key_value_config
                                                 // : &trial_based_config_),
                                                 : nullptr),
-      event_log_(config.event_log),
+      // event_log_(config.event_log),
+      event_log_(nullptr),
       packet_feedback_only_(goog_cc_config.feedback_only),
       // safe_reset_on_route_change_("Enabled"),
       // safe_reset_acknowledged_rate_("ack"),
-      use_min_allocatable_as_lower_bound_(
-          IsNotDisabled(key_value_config_, "WebRTC-Bwe-MinAllocAsLowerBound")),
-      ignore_probes_lower_than_network_estimate_(IsNotDisabled(
-          key_value_config_,
-          "WebRTC-Bwe-IgnoreProbesLowerThanNetworkStateEstimate")),
-      limit_probes_lower_than_throughput_estimate_(
-          IsNotDisabled(key_value_config_,
-                        "WebRTC-Bwe-LimitProbesLowerThanThroughputEstimate")),
+      // use_min_allocatable_as_lower_bound_(
+          // IsNotDisabled(key_value_config_, "WebRTC-Bwe-MinAllocAsLowerBound")),
+      use_min_allocatable_as_lower_bound_(true),
+      // ignore_probes_lower_than_network_estimate_(IsNotDisabled(
+      //     key_value_config_,
+      //     "WebRTC-Bwe-IgnoreProbesLowerThanNetworkStateEstimate")),
+      ignore_probes_lower_than_network_estimate_(true),
+      // limit_probes_lower_than_throughput_estimate_(
+      //     IsNotDisabled(key_value_config_,
+      //                   "WebRTC-Bwe-LimitProbesLowerThanThroughputEstimate")),
+      limit_probes_lower_than_throughput_estimate_(true),
       // rate_control_settings_(
       //     RateControlSettings::ParseFromKeyValueConfig(key_value_config_)),
-      pace_at_max_of_bwe_and_lower_link_capacity_(
-          IsEnabled(key_value_config_,
-                    "WebRTC-Bwe-PaceAtMaxOfBweAndLowerLinkCapacity")),
+      // pace_at_max_of_bwe_and_lower_link_capacity_(
+      //     IsEnabled(key_value_config_,
+      //               "WebRTC-Bwe-PaceAtMaxOfBweAndLowerLinkCapacity")),
+      pace_at_max_of_bwe_and_lower_link_capacity_(false),
       // probe_controller_(
       //     new ProbeController(key_value_config_, config.event_log)),
       // congestion_window_pushback_controller_(
@@ -129,8 +134,9 @@ GoogCcNetworkController::GoogCcNetworkController(NetworkControllerConfig config,
       //               key_value_config_)
       //         : nullptr),
       bandwidth_estimation_(
-          std::make_unique<SendSideBandwidthEstimation>(key_value_config_,
-                                                        event_log_)),
+          std::make_unique<SendSideBandwidthEstimation>(//key_value_config_,
+                                                        //event_log_)),
+          )),
       // alr_detector_(
       //     std::make_unique<AlrDetector>(key_value_config_, config.event_log)),
       // probe_bitrate_estimator_(new ProbeBitrateEstimator(config.event_log)),

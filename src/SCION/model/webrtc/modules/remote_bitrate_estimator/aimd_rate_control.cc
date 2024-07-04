@@ -72,14 +72,17 @@ AimdRateControl::AimdRateControl(const FieldTrialsView& key_value_config,
       time_last_bitrate_decrease_(Timestamp::MinusInfinity()),
       time_first_throughput_estimate_(Timestamp::MinusInfinity()),
       bitrate_is_initialized_(false),
-      beta_(key_value_config.IsEnabled(kBweBackOffFactorExperiment)
-                ? ReadBackoffFactor(key_value_config)
-                : kDefaultBackoffFactor),
+      // beta_(key_value_config.IsEnabled(kBweBackOffFactorExperiment)
+      //           ? ReadBackoffFactor(key_value_config)
+      //           : kDefaultBackoffFactor),
+      beta_(kDefaultBackoffFactor),
       in_alr_(false),
       rtt_(kDefaultRtt),
       send_side_(send_side),
-      no_bitrate_increase_in_alr_(
-          key_value_config.IsEnabled("WebRTC-DontIncreaseDelayBasedBweInAlr")) {
+      // no_bitrate_increase_in_alr_(
+      //     key_value_config.IsEnabled("WebRTC-DontIncreaseDelayBasedBweInAlr"))
+      no_bitrate_increase_in_alr_(false)
+          {
   // ParseFieldTrial(
   //     {&disable_estimate_bounded_increase_,
   //      &use_current_estimate_as_min_upper_bound_},

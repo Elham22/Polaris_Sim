@@ -13,7 +13,7 @@
 #include <stdint.h>
 
 // #include "api/network_state_predictor.h"
-#include "src/SCION/model/webrtc/types.h"
+#include "src/SCION/model/webrtc/api/network_state_predictor.h"
 
 namespace ns3 {
 

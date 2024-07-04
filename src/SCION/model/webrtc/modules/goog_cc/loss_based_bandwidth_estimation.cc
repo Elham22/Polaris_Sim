@@ -124,6 +124,8 @@ double ExponentialUpdate(TimeDelta window, TimeDelta interval) {
 //        &allow_resets, &decrease_interval, &loss_report_timeout},
 //       key_value_config->Lookup(kBweLossBasedControl));
 // }
+
+LossBasedControlConfig::LossBasedControlConfig() = default;
 LossBasedControlConfig::LossBasedControlConfig(const LossBasedControlConfig&) =
     default;
 LossBasedControlConfig::~LossBasedControlConfig() = default;
@@ -167,7 +169,7 @@ void LossBasedBandwidthEstimation::UpdateLossStatistics(
   last_loss_ratio_ = static_cast<double>(loss_count) / packet_results.size();
   const TimeDelta time_passed = last_loss_packet_report_ != Seconds(0)
                                     ? at_time - last_loss_packet_report_
-                                    : Seconds(1);
+                                    : TimeDelta(Seconds(1));
   last_loss_packet_report_ = at_time;
   has_decreased_since_last_loss_report_ = false;
 
@@ -189,7 +191,7 @@ void LossBasedBandwidthEstimation::UpdateAcknowledgedBitrate(
       acknowledged_bitrate_last_update_.IsFinite()
       // acknowledged_bitrate_last_update_ != Seconds(0)
           ? at_time - acknowledged_bitrate_last_update_
-          : Seconds(1);
+          : TimeDelta(Seconds(1));
   acknowledged_bitrate_last_update_ = at_time;
   if (acknowledged_bitrate > acknowledged_bitrate_max_) {
     acknowledged_bitrate_max_ = acknowledged_bitrate;

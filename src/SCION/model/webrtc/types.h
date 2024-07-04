@@ -41,11 +41,11 @@ private:
   int64_t bps_; // bits per second
 
 public:
-  constexpr BitRate () : bps_ (0) {}
-  constexpr explicit BitRate (int64_t rate) : bps_ (rate) {}
-  constexpr BitRate (const BitRate &other) : bps_ (other.bps_) {}
+  BitRate () : bps_ (0) {}
+  explicit BitRate (int64_t rate) : bps_ (rate) {}
+  BitRate (const BitRate &other) : bps_ (other.bps_) {}
 
-  constexpr BitRate &operator= (const BitRate &other)
+  BitRate &operator= (const BitRate &other)
   {
     bps_ = other.bps_;
     return *this;
@@ -60,26 +60,26 @@ public:
   static BitRate KilobitsPerSec (int64_t rate) { return BitRate (rate * 1'000); }
   static BitRate BytesPerSec (int64_t rate) { return BitRate (rate * 8); }
 
-  constexpr bool IsZero () const { return bps_ == 0; }
-  constexpr bool
+  bool IsZero () const { return bps_ == 0; }
+  bool
   IsFinite () const
   {
     return bps_ != std::numeric_limits<int64_t>::max () &&
            bps_ != std::numeric_limits<int64_t>::min ();
   }
 
-  constexpr int64_t bps() const { return bps_; }
-  constexpr double kbps() const { return bps_ / 1'000.0; }
-  constexpr double mbps() const { return bps_ / 1'000'000.0; } 
-  constexpr int64_t Bps () const { return bps_ / 8; }
+  int64_t bps() const { return bps_; }
+  double kbps() const { return bps_ / 1'000.0; }
+  double mbps() const { return bps_ / 1'000'000.0; } 
+  int64_t Bps () const { return bps_ / 8; }
 
   template<typename T>
-  constexpr T bps() const {
+  T bps() const {
     return static_cast<T>(bps_);
   }
 
   template<typename T>
-  constexpr T kbps() const {
+  T kbps() const {
     return static_cast<T>(bps_ / 1'000.0);
   }
 
@@ -106,14 +106,14 @@ public:
 
   // Template operators to work with any numeric type
   template<typename T>
-  constexpr BitRate operator* (T factor) const {
+  BitRate operator* (T factor) const {
     static_assert(std::is_arithmetic<T>::value, "Factor must be a numeric type");
     return BitRate(bps_ * static_cast<double>(factor));
   }
 
   // Template operator/ to work with any numeric type
   template<typename T>
-  constexpr BitRate operator/ (T divisor) const {
+  BitRate operator/ (T divisor) const {
     static_assert(std::is_arithmetic<T>::value, "Divisor must be a numeric type");
     if (divisor == 0) {
       throw std::invalid_argument("Division by zero");
@@ -122,17 +122,17 @@ public:
   }
 
   // Double cast
-  constexpr operator double () const { return bps_; }
+  operator double () const { return bps_; }
 
   // Allow double as LHS for multiplication
   friend BitRate operator* (double factor, const BitRate &rate) { return rate * factor; }
 
-  constexpr bool operator== (const BitRate &other) const { return bps_ == other.bps_; }
-  constexpr bool operator!= (const BitRate &other) const { return bps_ != other.bps_; }
-  constexpr bool operator< (const BitRate &other) const { return bps_ < other.bps_; }
-  constexpr bool operator> (const BitRate &other) const { return bps_ > other.bps_; }
-  constexpr bool operator<= (const BitRate &other) const { return bps_ <= other.bps_; }
-  constexpr bool operator>= (const BitRate &other) const { return bps_ >= other.bps_; }
+  bool operator== (const BitRate &other) const { return bps_ == other.bps_; }
+  bool operator!= (const BitRate &other) const { return bps_ != other.bps_; }
+  bool operator< (const BitRate &other) const { return bps_ < other.bps_; }
+  bool operator> (const BitRate &other) const { return bps_ > other.bps_; }
+  bool operator<= (const BitRate &other) const { return bps_ <= other.bps_; }
+  bool operator>= (const BitRate &other) const { return bps_ >= other.bps_; }
 };
 
 /**
@@ -189,7 +189,6 @@ public:
   TimeDelta () : time_ (Time (0)) {}
   explicit TimeDelta (Time time) : time_ (time) {}
   TimeDelta (const TimeDelta &other) : time_ (other.time_) {}
-  explicit TimeDelta (double seconds) : time_ (seconds) {}
   TimeDelta &operator= (const TimeDelta &other)
   {
     time_ = other.time_;
@@ -214,7 +213,7 @@ public:
   static TimeDelta PlusInfinity () { return TimeDelta (Time::Max ()); }
   static TimeDelta MinusInfinity () { return TimeDelta (Time::Min ()); }
   static TimeDelta Millis (int64_t ms) { return TimeDelta (MilliSeconds (ms)); }
-  static TimeDelta Seconds (double s) { return TimeDelta (Time (s)); }
+  static TimeDelta Seconds (double s) { return TimeDelta (Time::FromDouble(s, Time::Unit::S)); }
   static TimeDelta Zero () { return TimeDelta (Time (0)); }
 
   Time GetTime () const { return time_; }

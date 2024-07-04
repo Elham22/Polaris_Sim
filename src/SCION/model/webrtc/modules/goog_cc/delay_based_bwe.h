@@ -48,8 +48,8 @@ struct BweSeparateAudioPacketsSettings {
   static constexpr char kKey[] = "WebRTC-Bwe-SeparateAudioPackets";
 
   BweSeparateAudioPacketsSettings() = default;
-  explicit BweSeparateAudioPacketsSettings(
-      const FieldTrialsView* key_value_config);
+  // explicit BweSeparateAudioPacketsSettings(
+  //     const FieldTrialsView* key_value_config);
 
   bool enabled = false;
   int packet_threshold = 10;

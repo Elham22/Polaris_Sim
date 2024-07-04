@@ -102,7 +102,7 @@ DelayBasedBwe::Result::Result()
 DelayBasedBwe::DelayBasedBwe(const FieldTrialsView* key_value_config,
                              NetworkStatePredictor* network_state_predictor)
     : key_value_config_(key_value_config),
-      separate_audio_(key_value_config),
+      // separate_audio_(key_value_config),
       audio_packets_since_last_video_(0),
       last_video_packet_recv_time_(Timestamp::MinusInfinity()),
       network_state_predictor_(network_state_predictor),
@@ -228,6 +228,11 @@ void DelayBasedBwe::IncomingPacketFeedback(const PacketResult& packet_feedback,
       packet_feedback.sent_packet.send_time, packet_feedback.receive_time,
       at_time, packet_size.bytes(), &send_delta, &recv_delta, &size_delta);
 
+  if(calculated_deltas){
+    std::cout << "send_delta: " << send_delta.ms<double>() << std::endl;
+    std::cout << "recv_delta: " << recv_delta.ms<double>() << std::endl;
+    // std::cout << "size_delta: " << size_delta << std::endl;
+  }
   delay_detector_for_packet->Update(recv_delta.ms<double>(),
                                     send_delta.ms<double>(),
                                     packet_feedback.sent_packet.send_time.ms(),
@@ -249,6 +254,8 @@ DelayBasedBwe::Result DelayBasedBwe::MaybeUpdateEstimate(
     bool in_alr,
     Timestamp at_time) {
   Result result;
+
+  std::cout << "DelayBasedBwe::MaybeUpdateEstimate" << std::endl;
 
   // Currently overusing the bandwidth.
   if (active_delay_detector_->State() == BandwidthUsage::kBwOverusing) {
@@ -296,6 +303,9 @@ DelayBasedBwe::Result DelayBasedBwe::MaybeUpdateEstimate(
   }
 
   result.delay_detector_state = detector_state;
+  if(result.updated){
+    std::cout << "result.target_bitrate: " << result.target_bitrate.bps() << std::endl;
+  }
   return result;
 }
 
@@ -304,6 +314,7 @@ bool DelayBasedBwe::UpdateEstimate(Timestamp at_time,
                                    BitRate* target_rate) {
   const RateControlInput input(active_delay_detector_->State(), acked_bitrate);
   *target_rate = rate_control_.Update(input, at_time);
+  std::cout << "DelayBasedBwe::UpdateEstimate" << " target_rate: " << target_rate->bps() << std::endl;
   return rate_control_.ValidEstimate();
 }
 

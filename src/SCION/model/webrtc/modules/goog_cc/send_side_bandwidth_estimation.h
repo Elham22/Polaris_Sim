@@ -92,7 +92,7 @@ class RttBasedBackoff {
 
 class SendSideBandwidthEstimation {
  public:
-  SendSideBandwidthEstimation() = delete;
+  // SendSideBandwidthEstimation() = delete;
   // SendSideBandwidthEstimation(const FieldTrialsView* key_value_config,
   //                             RtcEventLog* event_log);
   SendSideBandwidthEstimation();

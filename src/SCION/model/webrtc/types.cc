@@ -32,7 +32,7 @@ namespace ns3 {
   }
 
   TimeDelta DataSize::operator/(const BitRate& rate) const {
-    return TimeDelta(bits_ / static_cast<double>(rate.bps()));
+    return TimeDelta(Time::FromDouble(bits_ / static_cast<double>(rate.bps()), Time::Unit::S));
   }
 
 } // namespace ns3

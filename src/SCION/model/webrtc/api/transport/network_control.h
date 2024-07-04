@@ -15,9 +15,12 @@
 #include <memory>
 
 #include "absl/base/attributes.h"
-#include "api/field_trials_view.h"
+// #include "api/field_trials_view.h"
 // #include "api/rtc_event_log/rtc_event_log.h"
-#include "api/transport/network_types.h"
+// #include "api/transport/network_types.h"
+
+#include "src/SCION/model/webrtc/api/field_trials_view.h"
+#include "src/SCION/model/webrtc/api/transport/network_types.h"
 
 namespace ns3 {
 
@@ -48,7 +51,7 @@ struct NetworkControllerConfig {
   // indicates that the field trial API will be used.
   const FieldTrialsView* key_value_config = nullptr;
   // Optional override of event log.
-  RtcEventLog* event_log = nullptr;
+//   RtcEventLog* event_log = nullptr;
 };
 
 // NetworkControllerInterface is implemented by network controllers. A network

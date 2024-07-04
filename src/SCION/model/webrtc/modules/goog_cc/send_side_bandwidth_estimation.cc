@@ -119,9 +119,11 @@ bool ReadBweLossExperimentParameters(float* low_loss_threshold,
 
 // LinkCapacityTracker::LinkCapacityTracker()
 //     : tracking_rate("rate", TimeDelta::Seconds(10)) {
-//   ParseFieldTrial({&tracking_rate},
-//                   field_trial::FindFullName("WebRTC-Bwe-LinkCapacity"));
+  // ParseFieldTrial({&tracking_rate},
+  //                 field_trial::FindFullName("WebRTC-Bwe-LinkCapacity"));
 // }
+
+LinkCapacityTracker::LinkCapacityTracker() : tracking_rate_(TimeDelta::Seconds(10)) {}
 
 LinkCapacityTracker::~LinkCapacityTracker() {}
 
