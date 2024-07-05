@@ -11,15 +11,16 @@
 // #include "modules/congestion_controller/goog_cc/inter_arrival_delta.h"
 #include "src/SCION/model/webrtc/modules/goog_cc/inter_arrival_delta.h"
 
+#include <iostream>
 #include <algorithm>
 #include <cstddef>
 
-// #include "api/units/time_delta.h"
-// #include "api/units/timestamp.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 // #include "rtc_base/checks.h"
 // #include "rtc_base/logging.h"
 
-namespace ns3 {
+namespace webrtc {
 
 TimeDelta kBurstDeltaThreshold = TimeDelta::Millis(5);
 TimeDelta kMaxBurstDuration = TimeDelta::Millis(100);
@@ -39,9 +40,14 @@ bool InterArrivalDelta::ComputeDeltas(Timestamp send_time,
                                       TimeDelta* arrival_time_delta,
                                       int* packet_size_delta) {
   bool calculated_deltas = false;
+  std::cout << "InterArrivalDelta::ComputeDeltas" << std::endl;
+  // std::cout << "  Arrival time: " << arrival_time.ms() << std::endl;
+  // print address to current_timestamp_group_
+  std::cout << "  Current timestamp group: " << &current_timestamp_group_ << std::endl;
   if (current_timestamp_group_.IsFirstPacket()) {
     // We don't have enough data to update the filter, so we store it until we
     // have two frames of data to process.
+    std::cout << "InterArrivalDelta::ComputeDeltas: current_timestamp_group_.IsFirstPacket()" << std::endl;
     current_timestamp_group_.send_time = send_time;
     current_timestamp_group_.first_send_time = send_time;
     current_timestamp_group_.first_arrival = arrival_time;
@@ -49,8 +55,10 @@ bool InterArrivalDelta::ComputeDeltas(Timestamp send_time,
     // Reordered packet.
     return false;
   } else if (NewTimestampGroup(arrival_time, send_time)) {
+    std::cout << "InterArrivalDelta::ComputeDeltas: NewTimestampGroup" << std::endl;
     // First packet of a later send burst, the previous packets sample is ready.
     if (prev_timestamp_group_.complete_time.IsFinite()) {
+      std::cout << "InterArrivalDelta::ComputeDeltas: prev_timestamp_group_.complete_time.IsFinite()" << std::endl;
       *send_time_delta =
           current_timestamp_group_.send_time - prev_timestamp_group_.send_time;
       *arrival_time_delta = current_timestamp_group_.complete_time -
@@ -101,6 +109,7 @@ bool InterArrivalDelta::ComputeDeltas(Timestamp send_time,
   current_timestamp_group_.size += packet_size;
   current_timestamp_group_.complete_time = arrival_time;
   current_timestamp_group_.last_system_time = system_time;
+  // std::cout << "  Complet time: " << current_timestamp_group_.complete_time.ms() << std::endl;
 
   return calculated_deltas;
 }
@@ -140,4 +149,4 @@ void InterArrivalDelta::Reset() {
   current_timestamp_group_ = SendTimeGroup();
   prev_timestamp_group_ = SendTimeGroup();
 }
-}  // namespace ns3
+}  // namespace webrtc

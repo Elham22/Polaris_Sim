@@ -22,10 +22,10 @@
 // #include "api/network_state_predictor.h"
 // #include "api/rtc_event_log/rtc_event_log.h"
 // #include "api/transport/network_types.h"
-// #include "api/units/data_rate.h"
+#include "api/units/data_rate.h"
 // #include "api/units/data_size.h"
-// #include "api/units/time_delta.h"
-// #include "api/units/timestamp.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 // #include "logging/rtc_event_log/events/rtc_event_bwe_update_delay_based.h"
 // #include "modules/congestion_controller/goog_cc/delay_increase_detector_interface.h"
 // #include "modules/congestion_controller/goog_cc/inter_arrival_delta.h"
@@ -42,7 +42,7 @@
 #include "src/SCION/model/webrtc/modules/goog_cc/trendline_estimator.h"
 #include "src/SCION/model/webrtc/modules/remote_bitrate_estimator/include/bwe_defines.h"
 
-namespace ns3 {
+namespace webrtc {
 namespace {
 TimeDelta kStreamTimeOut = TimeDelta::Seconds(2);
 TimeDelta kSendTimeGroupLength = TimeDelta::Millis(5);
@@ -71,7 +71,7 @@ constexpr char BweSeparateAudioPacketsSettings::kKey[];
 DelayBasedBwe::Result::Result()
     : updated(false),
       probe(false),
-      target_bitrate(BitRate::Zero()),
+      target_bitrate(DataRate::Zero()),
       recovered_from_overuse(false),
       delay_detector_state(BandwidthUsage::kBwNormal) {}
 
@@ -92,7 +92,7 @@ DelayBasedBwe::Result::Result()
 //       last_seen_packet_(Timestamp::MinusInfinity()),
 //       uma_recorded_(false),
 //       rate_control_(*key_value_config, /*send_side=*/true),
-//       prev_bitrate_(BitRate::Zero()),
+//       prev_bitrate_(DataRate::Zero()),
 //       prev_state_(BandwidthUsage::kBwNormal) {
 //   RTC_LOG(LS_INFO)
 //       << "Initialized DelayBasedBwe with separate audio overuse detection"
@@ -100,8 +100,10 @@ DelayBasedBwe::Result::Result()
 // }
 
 DelayBasedBwe::DelayBasedBwe(const FieldTrialsView* key_value_config,
+                             RtcEventLog* event_log,
                              NetworkStatePredictor* network_state_predictor)
-    : key_value_config_(key_value_config),
+    : event_log_(event_log),
+      key_value_config_(key_value_config),
       // separate_audio_(key_value_config),
       audio_packets_since_last_video_(0),
       last_video_packet_recv_time_(Timestamp::MinusInfinity()),
@@ -117,7 +119,7 @@ DelayBasedBwe::DelayBasedBwe(const FieldTrialsView* key_value_config,
       uma_recorded_(false),
       rate_control_(*key_value_config, /*send_side=*/true),
       // rate_control_(),
-      prev_bitrate_(BitRate::Zero()),
+      prev_bitrate_(DataRate::Zero()),
       prev_state_(BandwidthUsage::kBwNormal) {
   // RTC_LOG(LS_INFO)
   //     << "Initialized DelayBasedBwe with separate audio overuse detection"
@@ -128,8 +130,8 @@ DelayBasedBwe::~DelayBasedBwe() {}
 
 DelayBasedBwe::Result DelayBasedBwe::IncomingPacketFeedbackVector(
     const TransportPacketsFeedback& msg,
-    absl::optional<BitRate> acked_bitrate,
-    absl::optional<BitRate> probe_bitrate,
+    absl::optional<DataRate> acked_bitrate,
+    absl::optional<DataRate> probe_bitrate,
     absl::optional<NetworkStateEstimate> network_estimate,
     bool in_alr) {
   // RTC_DCHECK_RUNS_SERIALIZED(&network_race_);
@@ -240,15 +242,15 @@ void DelayBasedBwe::IncomingPacketFeedback(const PacketResult& packet_feedback,
                                     packet_size.bytes(), calculated_deltas);
 }
 
-BitRate DelayBasedBwe::TriggerOveruse(Timestamp at_time,
-                                       absl::optional<BitRate> link_capacity) {
+DataRate DelayBasedBwe::TriggerOveruse(Timestamp at_time,
+                                       absl::optional<DataRate> link_capacity) {
   RateControlInput input(BandwidthUsage::kBwOverusing, link_capacity);
   return rate_control_.Update(input, at_time);
 }
 
 DelayBasedBwe::Result DelayBasedBwe::MaybeUpdateEstimate(
-    absl::optional<BitRate> acked_bitrate,
-    absl::optional<BitRate> probe_bitrate,
+    absl::optional<DataRate> acked_bitrate,
+    absl::optional<DataRate> probe_bitrate,
     absl::optional<NetworkStateEstimate> state_estimate,
     bool recovered_from_overuse,
     bool in_alr,
@@ -289,7 +291,7 @@ DelayBasedBwe::Result DelayBasedBwe::MaybeUpdateEstimate(
   BandwidthUsage detector_state = active_delay_detector_->State();
   if ((result.updated && prev_bitrate_ != result.target_bitrate) ||
       detector_state != prev_state_) {
-    BitRate bitrate = result.updated ? result.target_bitrate : prev_bitrate_;
+    DataRate bitrate = result.updated ? result.target_bitrate : prev_bitrate_;
 
     // BWE_TEST_LOGGING_PLOT(1, "target_bitrate_bps", at_time.ms(), bitrate.bps());
 
@@ -310,8 +312,8 @@ DelayBasedBwe::Result DelayBasedBwe::MaybeUpdateEstimate(
 }
 
 bool DelayBasedBwe::UpdateEstimate(Timestamp at_time,
-                                   absl::optional<BitRate> acked_bitrate,
-                                   BitRate* target_rate) {
+                                   absl::optional<DataRate> acked_bitrate,
+                                   DataRate* target_rate) {
   const RateControlInput input(active_delay_detector_->State(), acked_bitrate);
   *target_rate = rate_control_.Update(input, at_time);
   std::cout << "DelayBasedBwe::UpdateEstimate" << " target_rate: " << target_rate->bps() << std::endl;
@@ -323,7 +325,7 @@ void DelayBasedBwe::OnRttUpdate(TimeDelta avg_rtt) {
 }
 
 bool DelayBasedBwe::LatestEstimate(std::vector<uint32_t>* ssrcs,
-                                   BitRate* bitrate) const {
+                                   DataRate* bitrate) const {
   // Currently accessed from both the process thread (see
   // ModuleRtpRtcpImpl::Process()) and the configuration thread (see
   // Call::GetStats()). Should in the future only be accessed from a single
@@ -338,13 +340,13 @@ bool DelayBasedBwe::LatestEstimate(std::vector<uint32_t>* ssrcs,
   return true;
 }
 
-void DelayBasedBwe::SetStartBitrate(BitRate start_bitrate) {
+void DelayBasedBwe::SetStartBitrate(DataRate start_bitrate) {
   // RTC_LOG(LS_INFO) << "BWE Setting start bitrate to: "
   //                  << ToString(start_bitrate);
   rate_control_.SetStartBitrate(start_bitrate);
 }
 
-void DelayBasedBwe::SetMinBitrate(BitRate min_bitrate) {
+void DelayBasedBwe::SetMinBitrate(DataRate min_bitrate) {
   // Called from both the configuration thread and the network thread. Shouldn't
   // be called from the network thread in the future.
   rate_control_.SetMinBitrate(min_bitrate);
@@ -354,4 +356,4 @@ TimeDelta DelayBasedBwe::GetExpectedBwePeriod() const {
   return rate_control_.GetExpectedBandwidthPeriod();
 }
 
-}  // namespace ns3
+}  // namespace webrtc

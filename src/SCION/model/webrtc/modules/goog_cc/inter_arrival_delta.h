@@ -13,13 +13,13 @@
 
 #include <cstddef>
 
-// #include "api/units/time_delta.h"
-// #include "api/units/timestamp.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 
 // types.h
-#include "src/SCION/model/webrtc/types.h"
+//#include "src/SCION/model/webrtc/types.h"
 
-namespace ns3 {
+namespace webrtc {
 
 // Helper class to compute the inter-arrival time delta and the size delta
 // between two send bursts. This code is branched from
@@ -89,6 +89,6 @@ class InterArrivalDelta {
   SendTimeGroup prev_timestamp_group_;
   int num_consecutive_reordered_packets_;
 };
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_INTER_ARRIVAL_DELTA_H_

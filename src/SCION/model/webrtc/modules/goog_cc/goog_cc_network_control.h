@@ -24,10 +24,10 @@
 // #include "api/transport/field_trial_based_config.h"
 // #include "api/transport/network_control.h"
 // #include "api/transport/network_types.h"
-// #include "api/units/data_rate.h"
+#include "api/units/data_rate.h"
 // #include "api/units/data_size.h"
-// #include "api/units/time_delta.h"
-// #include "api/units/timestamp.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 // #include "modules/congestion_controller/goog_cc/acknowledged_bitrate_estimator_interface.h"
 // #include "modules/congestion_controller/goog_cc/alr_detector.h"
 // #include "modules/congestion_controller/goog_cc/congestion_window_pushback_controller.h"
@@ -55,9 +55,9 @@
 // #include "src/SCION/model/webrtc/rtc_base/experiments/rate_control_settings.h"
 
 // types.h
-#include "src/SCION/model/webrtc/types.h"
+//#include "src/SCION/model/webrtc/types.h"
 
-namespace ns3 {
+namespace webrtc {
 struct GoogCcConfig {
   std::unique_ptr<NetworkStateEstimator> network_state_estimator = nullptr;
 //   std::unique_ptr<NetworkStatePredictor> network_state_predictor = nullptr;
@@ -131,10 +131,10 @@ class GoogCcNetworkController : public NetworkControllerInterface {
 
   absl::optional<NetworkControllerConfig> initial_config_;
 
-  BitRate min_target_rate_ = BitRate::Zero();
-  BitRate min_data_rate_ = BitRate::Zero();
-  BitRate max_data_rate_ = BitRate::PlusInfinity();
-  absl::optional<BitRate> starting_rate_;
+  DataRate min_target_rate_ = DataRate::Zero();
+  DataRate min_data_rate_ = DataRate::Zero();
+  DataRate max_data_rate_ = DataRate::PlusInfinity();
+  absl::optional<DataRate> starting_rate_;
 
   bool first_packet_sent_ = false;
 
@@ -146,23 +146,23 @@ class GoogCcNetworkController : public NetworkControllerInterface {
 
   std::deque<int64_t> feedback_max_rtts_;
 
-  BitRate last_loss_based_target_rate_;
-  BitRate last_pushback_target_rate_;
-  BitRate last_stable_target_rate_;
+  DataRate last_loss_based_target_rate_;
+  DataRate last_pushback_target_rate_;
+  DataRate last_stable_target_rate_;
 //   LossBasedState last_loss_base_state_;
 
   absl::optional<uint8_t> last_estimated_fraction_loss_ = 0;
   TimeDelta last_estimated_round_trip_time_ = TimeDelta::PlusInfinity();
 
   double pacing_factor_;
-  BitRate min_total_allocated_bitrate_;
-  BitRate max_padding_rate_;
+  DataRate min_total_allocated_bitrate_;
+  DataRate max_padding_rate_;
 
   bool previously_in_alr_ = false;
 
   absl::optional<DataSize> current_data_window_;
 };
 
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_GOOG_CC_NETWORK_CONTROL_H_

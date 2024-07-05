@@ -19,10 +19,11 @@
 #include "absl/types/optional.h"
 // #include "api/field_trials_view.h"
 // #include "api/network_state_predictor.h"
-// #include "api/transport/network_types.h"
-// #include "api/units/data_rate.h"
-// #include "api/units/time_delta.h"
-// #include "api/units/timestamp.h"
+#include "api/transport/network_types.h"
+#include "api/units/data_rate.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
+#include "api/rtc_event_log/rtc_event_log.h"
 // #include "modules/congestion_controller/goog_cc/delay_increase_detector_interface.h"
 // #include "modules/congestion_controller/goog_cc/inter_arrival_delta.h"
 // #include "modules/congestion_controller/goog_cc/link_capacity_estimator.h"
@@ -38,10 +39,10 @@
 #include "src/SCION/model/webrtc/modules/remote_bitrate_estimator/inter_arrival.h"
 #include "src/SCION/model/webrtc/modules/goog_cc/inter_arrival_delta.h"
 #include "src/SCION/model/webrtc/api/network_state_predictor.h"
-#include "src/SCION/model/webrtc/api/transport/network_types.h"
-#include "src/SCION/model/webrtc/types.h"
+// #include "src/SCION/model/webrtc/api/transport/network_types.h"
+//#include "src/SCION/model/webrtc/types.h"
 
-namespace ns3 {
+namespace webrtc {
 // class RtcEventLog;
 
 struct BweSeparateAudioPacketsSettings {
@@ -65,14 +66,14 @@ class DelayBasedBwe {
     ~Result() = default;
     bool updated;
     bool probe;
-    BitRate target_bitrate = BitRate(0);
+    DataRate target_bitrate = DataRate::Zero();
     bool recovered_from_overuse;
     BandwidthUsage delay_detector_state;
   };
 
-  // explicit DelayBasedBwe(const FieldTrialsView* key_value_config,
-  //                        RtcEventLog* event_log,
-  //                        NetworkStatePredictor* network_state_predictor);
+  explicit DelayBasedBwe(const FieldTrialsView* key_value_config,
+                         RtcEventLog* event_log,
+                         NetworkStatePredictor* network_state_predictor);
 
   explicit DelayBasedBwe(const FieldTrialsView* key_value_config,
                          NetworkStatePredictor* network_state_predictor);
@@ -85,18 +86,18 @@ class DelayBasedBwe {
 
   Result IncomingPacketFeedbackVector(
       const TransportPacketsFeedback& msg,
-      absl::optional<BitRate> acked_bitrate,
-      absl::optional<BitRate> probe_bitrate,
+      absl::optional<DataRate> acked_bitrate,
+      absl::optional<DataRate> probe_bitrate,
       absl::optional<NetworkStateEstimate> network_estimate,
       bool in_alr);
   void OnRttUpdate(TimeDelta avg_rtt);
-  bool LatestEstimate(std::vector<uint32_t>* ssrcs, BitRate* bitrate) const;
-  void SetStartBitrate(BitRate start_bitrate);
-  void SetMinBitrate(BitRate min_bitrate);
+  bool LatestEstimate(std::vector<uint32_t>* ssrcs, DataRate* bitrate) const;
+  void SetStartBitrate(DataRate start_bitrate);
+  void SetMinBitrate(DataRate min_bitrate);
   TimeDelta GetExpectedBwePeriod() const;
-  BitRate TriggerOveruse(Timestamp at_time,
-                          absl::optional<BitRate> link_capacity);
-  BitRate last_estimate() const { return prev_bitrate_; }
+  DataRate TriggerOveruse(Timestamp at_time,
+                          absl::optional<DataRate> link_capacity);
+  DataRate last_estimate() const { return prev_bitrate_; }
   BandwidthUsage last_state() const { return prev_state_; }
 
  private:
@@ -104,8 +105,8 @@ class DelayBasedBwe {
   void IncomingPacketFeedback(const PacketResult& packet_feedback,
                               Timestamp at_time);
   Result MaybeUpdateEstimate(
-      absl::optional<BitRate> acked_bitrate,
-      absl::optional<BitRate> probe_bitrate,
+      absl::optional<DataRate> acked_bitrate,
+      absl::optional<DataRate> probe_bitrate,
       absl::optional<NetworkStateEstimate> state_estimate,
       bool recovered_from_overuse,
       bool in_alr,
@@ -113,11 +114,11 @@ class DelayBasedBwe {
   // Updates the current remote rate estimate and returns true if a valid
   // estimate exists.
   bool UpdateEstimate(Timestamp at_time,
-                      absl::optional<BitRate> acked_bitrate,
-                      BitRate* target_rate);
+                      absl::optional<DataRate> acked_bitrate,
+                      DataRate* target_rate);
 
   // rtc::RaceChecker network_race_;
-  // RtcEventLog* const event_log_;
+  RtcEventLog* const event_log_;
   const FieldTrialsView* const key_value_config_;
 
   // Alternatively, run two separate overuse detectors for audio and video,
@@ -139,10 +140,10 @@ class DelayBasedBwe {
   Timestamp last_seen_packet_;
   bool uma_recorded_;
   AimdRateControl rate_control_;
-  BitRate prev_bitrate_;
+  DataRate prev_bitrate_;
   BandwidthUsage prev_state_;
 };
 
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_DELAY_BASED_BWE_H_

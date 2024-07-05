@@ -15,21 +15,21 @@
 
 #include "absl/types/optional.h"
 // #include "api/field_trials_view.h"
-// #include "api/transport/network_types.h"
-// #include "api/units/data_rate.h"
-// #include "api/units/timestamp.h"
+#include "api/transport/network_types.h"
+#include "api/units/data_rate.h"
+#include "api/units/timestamp.h"
 // #include "modules/congestion_controller/goog_cc/link_capacity_estimator.h"
 // #include "modules/remote_bitrate_estimator/include/bwe_defines.h"
 // #include "rtc_base/experiments/field_trial_parser.h"
 
 #include "src/SCION/model/webrtc/api/field_trials_view.h"
 #include "src/SCION/model/webrtc/api/network_state_predictor.h"
-#include "src/SCION/model/webrtc/api/transport/network_types.h"
+// #include "src/SCION/model/webrtc/api/transport/network_types.h"
 #include "src/SCION/model/webrtc/modules/goog_cc/link_capacity_estimator.h"
 #include "src/SCION/model/webrtc/modules/remote_bitrate_estimator/include/bwe_defines.h"
-#include "src/SCION/model/webrtc/types.h"
+//#include "src/SCION/model/webrtc/types.h"
 
-namespace ns3 {
+namespace webrtc {
 // A rate control implementation based on additive increases of
 // bitrate when no over-use is detected and multiplicative decreases when
 // over-uses are detected. When we think the available bandwidth has changes or
@@ -46,8 +46,8 @@ class AimdRateControl {
   // either if it has been explicitly set via SetStartBitrate/SetEstimate, or if
   // we have measured a throughput.
   bool ValidEstimate() const;
-  void SetStartBitrate(BitRate start_bitrate);
-  void SetMinBitrate(BitRate min_bitrate);
+  void SetStartBitrate(DataRate start_bitrate);
+  void SetMinBitrate(DataRate min_bitrate);
   TimeDelta GetFeedbackInterval() const;
 
   // Returns true if the bitrate estimate hasn't been changed for more than
@@ -55,15 +55,15 @@ class AimdRateControl {
   // estimate. Should be used to decide if we should reduce the rate further
   // when over-using.
   bool TimeToReduceFurther(Timestamp at_time,
-                           BitRate estimated_throughput) const;
+                           DataRate estimated_throughput) const;
   // As above. To be used if overusing before we have measured a throughput.
   bool InitialTimeToReduceFurther(Timestamp at_time) const;
 
-  BitRate LatestEstimate() const;
+  DataRate LatestEstimate() const;
   void SetRtt(TimeDelta rtt);
-  BitRate Update(const RateControlInput& input, Timestamp at_time);
+  DataRate Update(const RateControlInput& input, Timestamp at_time);
   void SetInApplicationLimitedRegion(bool in_alr);
-  void SetEstimate(BitRate bitrate, Timestamp at_time);
+  void SetEstimate(DataRate bitrate, Timestamp at_time);
   void SetNetworkStateEstimate(
       const absl::optional<NetworkStateEstimate>& estimate);
 
@@ -85,18 +85,18 @@ class AimdRateControl {
   // constant to allow built up queues to drain.
   void ChangeBitrate(const RateControlInput& input, Timestamp at_time);
 
-  BitRate ClampBitrate(BitRate new_bitrate) const;
-  BitRate MultiplicativeRateIncrease(Timestamp at_time,
+  DataRate ClampBitrate(DataRate new_bitrate) const;
+  DataRate MultiplicativeRateIncrease(Timestamp at_time,
                                       Timestamp last_ms,
-                                      BitRate current_bitrate) const;
-  BitRate AdditiveRateIncrease(Timestamp at_time, Timestamp last_time) const;
+                                      DataRate current_bitrate) const;
+  DataRate AdditiveRateIncrease(Timestamp at_time, Timestamp last_time) const;
   void UpdateChangePeriod(Timestamp at_time);
   void ChangeState(const RateControlInput& input, Timestamp at_time);
 
-  BitRate min_configured_bitrate_;
-  BitRate max_configured_bitrate_;
-  BitRate current_bitrate_;
-  BitRate latest_estimated_throughput_;
+  DataRate min_configured_bitrate_;
+  DataRate max_configured_bitrate_;
+  DataRate current_bitrate_;
+  DataRate latest_estimated_throughput_;
   LinkCapacityEstimator link_capacity_;
   absl::optional<NetworkStateEstimate> network_estimate_;
   RateControlState rate_control_state_;
@@ -117,8 +117,8 @@ class AimdRateControl {
   //                                                                    true};
   bool disable_estimate_bounded_increase_;
   bool use_current_estimate_as_min_upper_bound_;
-  absl::optional<BitRate> last_decrease_;
+  absl::optional<DataRate> last_decrease_;
 };
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // MODULES_REMOTE_BITRATE_ESTIMATOR_AIMD_RATE_CONTROL_H_

@@ -10,15 +10,15 @@
 
 #include "include/bwe_defines.h"
 
-namespace ns3 {
+namespace webrtc {
 
 const char kBweTypeHistogram[] = "WebRTC.BWE.Types";
 
 RateControlInput::RateControlInput(
     BandwidthUsage bw_state,
-    const absl::optional<BitRate>& estimated_throughput)
+    const absl::optional<DataRate>& estimated_throughput)
     : bw_state(bw_state), estimated_throughput(estimated_throughput) {}
 
 RateControlInput::~RateControlInput() = default;
 
-}  // namespace ns3
+}  // namespace webrtc

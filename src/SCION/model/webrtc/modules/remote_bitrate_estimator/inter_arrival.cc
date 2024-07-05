@@ -13,7 +13,7 @@
 #include "src/SCION/model/webrtc/modules/include/module_common_types_public.h"
 // #include "rtc_base/logging.h"
 
-namespace ns3 {
+namespace webrtc {
 
 static const int kBurstDeltaThresholdMs = 5;
 static const int kMaxBurstDurationMs = 100;
@@ -155,4 +155,4 @@ void InterArrival::Reset() {
   current_timestamp_group_ = TimestampGroup();
   prev_timestamp_group_ = TimestampGroup();
 }
-}  // namespace ns3
+}  // namespace webrtc

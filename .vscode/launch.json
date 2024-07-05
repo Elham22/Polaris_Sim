@@ -1,0 +1,95 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Waf Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            // "program": "${workspaceFolder}/build/src/SCION/ns3-dev-scion-optimized", // Adjusted path to your executable
+            // python3.11 ./waf --run scion --command-template="gdb --args %s configs/traffic-engineering/simple.yaml"
+            "program": "/usr/bin/python3.11",
+            "args": [
+                "./waf",
+                "--run",
+                "scion",
+                "--command-template=gdb --args %s configs/traffic-engineering/simple.yaml",
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+            ],
+            // "preLaunchTask": "python3.11 ./waf build",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "(gdb) Waf Pipe Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            //"program": "${workspaceFolder}/build/utils/ns3-dev-test-runner-debug",
+            // "program": "${workspaceFolder}/build/scratch/${fileBasenameNoExtension}",
+            "program": "build/src/SCION/ns3-dev-scion-debug",
+            "args": [
+                "configs/traffic-engineering/simple.yaml"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "WEBRTC_SRC_DIR",
+                    "value": "/home/patrick/git/webrtc_checkout/src",
+                }
+            ],
+            "externalConsole": false,
+            "pipeTransport": {
+                "environment": [
+                    {
+                        "name": "WEBRTC_SRC_DIR",
+                        "value": "/home/patrick/git/webrtc_checkout/src",
+                    }
+                ],
+                "debuggerPath": "",
+                "pipeProgram": "${workspaceFolder}/waf",
+                // "pipeProgram": "/usr/bin/python3.11",
+                // "pipeArgs": [
+                // "--run",
+                // "scion",
+                // "--command-template",
+                // "\"${debuggerCommand} --args %s configs/traffic-engineering/simple.yaml\"",
+                // ],               
+                "pipeArgs": [
+                    "--run",
+                    "scion",
+                    "--command-template",
+                    "\"${debuggerCommand} --args %s\"",
+                    // "\"",
+                    // "${debuggerCommand}", // gdb path and --interpreter arg 
+                    // "--args", "%s",
+                    // "\"",
+                ],
+                "quoteArgs": false,
+                "pipeCwd": ""
+            },
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Add debug sources for WebRTC",
+                    "text": "set debug-file-directory ${env:WEBRTC_SRC_DIR}/out/Static/obj",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+    ]
+}

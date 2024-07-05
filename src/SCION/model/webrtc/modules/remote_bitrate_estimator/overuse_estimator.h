@@ -16,9 +16,9 @@
 
 // #include "api/network_state_predictor.h"
 #include "src/SCION/model/webrtc/api/network_state_predictor.h"
-#include "src/SCION/model/webrtc/types.h"
+//#include "src/SCION/model/webrtc/types.h"
 
-namespace ns3 {
+namespace webrtc {
 
 class OveruseEstimator {
  public:
@@ -63,6 +63,6 @@ class OveruseEstimator {
   double var_noise_ = 50.0;
   std::deque<double> ts_delta_hist_;
 };
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // MODULES_REMOTE_BITRATE_ESTIMATOR_OVERUSE_ESTIMATOR_H_

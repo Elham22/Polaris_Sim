@@ -15,18 +15,18 @@
 
 // #include "api/field_trials_view.h"
 // #include "api/transport/network_types.h"
-// #include "api/units/data_rate.h"
-// #include "api/units/time_delta.h"
-// #include "api/units/timestamp.h"
+#include "api/units/data_rate.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 // #include "rtc_base/experiments/field_trial_parser.h"
 
 
 #include "src/core/model/nstime.h"
 // #include "src/network/utils/data-rate.h"
 #include "src/SCION/model/webrtc/api/transport/network_types.h"
-#include "src/SCION/model/webrtc/types.h"
+//#include "src/SCION/model/webrtc/types.h"
 
-namespace ns3 {
+namespace webrtc {
 
 
 struct LossBasedControlConfig {
@@ -83,10 +83,10 @@ struct LossBasedControlConfig {
       TimeDelta loss_window = TimeDelta::Millis(800);
       TimeDelta loss_max_window = TimeDelta::Millis(800);
       TimeDelta acknowledged_rate_max_window = TimeDelta::Millis(800);
-      BitRate increase_offset = BitRate::BitsPerSec(1000);
-      BitRate loss_bandwidth_balance_increase = BitRate::KilobitsPerSec(0.5);
-      BitRate loss_bandwidth_balance_decrease = BitRate::KilobitsPerSec(4);
-      BitRate loss_bandwidth_balance_reset = BitRate::KilobitsPerSec(0.1);
+      DataRate increase_offset = DataRate::BitsPerSec(1000);
+      DataRate loss_bandwidth_balance_increase = DataRate::KilobitsPerSec(0.5);
+      DataRate loss_bandwidth_balance_decrease = DataRate::KilobitsPerSec(4);
+      DataRate loss_bandwidth_balance_reset = DataRate::KilobitsPerSec(0.1);
       double loss_bandwidth_balance_exponent = 0.5;
       bool allow_resets = false;
       TimeDelta decrease_interval = TimeDelta::Millis(300);
@@ -103,13 +103,13 @@ class LossBasedBandwidthEstimation {
   LossBasedBandwidthEstimation();
 
   // Returns the new estimate.
-  BitRate Update(Timestamp at_time,
-                  BitRate min_bitrate,
-                  BitRate wanted_bitrate,
+  DataRate Update(Timestamp at_time,
+                  DataRate min_bitrate,
+                  DataRate wanted_bitrate,
                   TimeDelta last_round_trip_time);
-  void UpdateAcknowledgedBitrate(BitRate acknowledged_bitrate,
+  void UpdateAcknowledgedBitrate(DataRate acknowledged_bitrate,
                                  Timestamp at_time);
-  void Initialize(BitRate bitrate);
+  void Initialize(DataRate bitrate);
   bool Enabled() const { return config_.enabled; }
   // Returns true if LossBasedBandwidthEstimation is enabled and have
   // received loss statistics. Ie, this class require transport feedback.
@@ -119,22 +119,22 @@ class LossBasedBandwidthEstimation {
   }
   void UpdateLossStatistics(const std::vector<PacketResult>& packet_results,
                             Timestamp at_time);
-  BitRate GetEstimate() const { return loss_based_bitrate_; }
+  DataRate GetEstimate() const { return loss_based_bitrate_; }
 
  private:
   friend class GoogCcStatePrinter;
-  void Reset(BitRate bitrate);
+  void Reset(DataRate bitrate);
   double loss_increase_threshold() const;
   double loss_decrease_threshold() const;
   double loss_reset_threshold() const;
 
-  BitRate decreased_bitrate() const;
+  DataRate decreased_bitrate() const;
 
   const LossBasedControlConfig config_;
   double average_loss_;
   double average_loss_max_;
-  BitRate loss_based_bitrate_;
-  BitRate acknowledged_bitrate_max_;
+  DataRate loss_based_bitrate_;
+  DataRate acknowledged_bitrate_max_;
   Timestamp acknowledged_bitrate_last_update_;
   Timestamp time_last_decrease_;
   bool has_decreased_since_last_loss_report_;
@@ -142,6 +142,6 @@ class LossBasedBandwidthEstimation {
   double last_loss_ratio_;
 };
 
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_LOSS_BASED_BANDWIDTH_ESTIMATION_H_

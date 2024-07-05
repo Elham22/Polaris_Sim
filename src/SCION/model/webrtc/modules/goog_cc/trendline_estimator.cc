@@ -12,6 +12,7 @@
 #include "src/SCION/model/webrtc/modules/goog_cc/trendline_estimator.h"
 
 #include <math.h>
+#include <iostream>
 
 #include <algorithm>
 #include <cstddef>
@@ -33,7 +34,7 @@
 // #include "rtc_base/logging.h"
 // #include "rtc_base/numerics/safe_minmax.h"
 
-namespace ns3 {
+namespace webrtc {
 
 namespace {
 
@@ -231,6 +232,7 @@ void TrendlineEstimator::UpdateTrendline(double recv_delta_ms,
                                          int64_t send_time_ms,
                                          int64_t arrival_time_ms,
                                          size_t packet_size) {
+  std::cout << "TrendlineEstimator::UpdateTrendline" << std::endl;
   const double delta_ms = recv_delta_ms - send_delta_ms;
   ++num_of_deltas_;
   num_of_deltas_ = std::min(num_of_deltas_, kDeltaCounterMax);
@@ -280,7 +282,7 @@ void TrendlineEstimator::UpdateTrendline(double recv_delta_ms,
     }
   }
   // BWE_TEST_LOGGING_PLOT(1, "trendline_slope", arrival_time_ms, trend);
-
+  std::cout << "updated trendline, new trend: " << trend << std::endl;
   Detect(trend, send_delta_ms, arrival_time_ms);
 }
 
@@ -307,6 +309,7 @@ BandwidthUsage TrendlineEstimator::State() const {
 void TrendlineEstimator::Detect(double trend, double ts_delta, int64_t now_ms) {
   if (num_of_deltas_ < 2) {
     hypothesis_ = BandwidthUsage::kBwNormal;
+    std::cout << "TrendlineEstimator::Detect Not enough deltas to update hypothesis" << std::endl;
     return;
   }
   const double modified_trend =
@@ -342,6 +345,9 @@ void TrendlineEstimator::Detect(double trend, double ts_delta, int64_t now_ms) {
     hypothesis_ = BandwidthUsage::kBwNormal;
   }
   prev_trend_ = trend;
+
+  std::cout << "updated hypothesis, new hypothesis: " << static_cast<int>(hypothesis_) << std::endl;
+
   UpdateThreshold(modified_trend, now_ms);
 }
 
@@ -366,4 +372,4 @@ void TrendlineEstimator::UpdateThreshold(double modified_trend,
   last_update_ms_ = now_ms;
 }
 
-}  // namespace ns3
+}  // namespace webrtc

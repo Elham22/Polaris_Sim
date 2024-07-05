@@ -12,33 +12,33 @@
 
 #include "absl/types/optional.h"
 
-// #include "src/network/utils/data-rate.h"
-#include "src/SCION/model/webrtc/types.h"
+#include "src/network/utils/data-rate.h"
+//#include "src/SCION/model/webrtc/types.h"
 
-namespace ns3 {
+namespace webrtc {
 class LinkCapacityEstimator
 {
 public:
   LinkCapacityEstimator ();
 
   // In kbps.
-  BitRate UpperBound () const;
+  DataRate UpperBound () const;
 
-  BitRate LowerBound () const;
+  DataRate LowerBound () const;
   void Reset ();
-  void OnOveruseDetected (BitRate acknowledged_rate);
-  void OnProbeRate (BitRate probe_rate);
+  void OnOveruseDetected (DataRate acknowledged_rate);
+  void OnProbeRate (DataRate probe_rate);
   bool has_estimate () const;
-  BitRate estimate () const;
+  DataRate estimate () const;
 
 private:
-  void Update (BitRate capacity_sample, double alpha);
+  void Update (DataRate capacity_sample, double alpha);
 
   double deviation_estimate_kbps () const;
   absl::optional<double> estimate_kbps_;
   double deviation_kbps_ = 0.4;
 };
 
-} // namespace ns3
+} // namespace webrtc
 
 #endif // MODULES_CONGESTION_CONTROLLER_GOOG_CC_LINK_CAPACITY_ESTIMATOR_H_

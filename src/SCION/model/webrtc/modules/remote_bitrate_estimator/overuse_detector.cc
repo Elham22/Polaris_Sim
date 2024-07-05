@@ -20,7 +20,7 @@
 // #include "rtc_base/checks.h"
 // #include "rtc_base/numerics/safe_minmax.h"
 
-namespace ns3 {
+namespace webrtc {
 namespace {
 
 constexpr double kMaxAdaptOffsetMs = 15.0;
@@ -101,4 +101,4 @@ void OveruseDetector::UpdateThreshold(double modified_offset, int64_t now_ms) {
   last_update_ms_ = now_ms;
 }
 
-}  // namespace ns3
+}  // namespace webrtc

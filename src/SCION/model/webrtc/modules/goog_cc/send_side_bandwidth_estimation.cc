@@ -25,9 +25,9 @@
 // #include "api/network_state_predictor.h"
 // #include "api/rtc_event_log/rtc_event_log.h"
 // #include "api/transport/network_types.h"
-// #include "api/units/data_rate.h"
-// #include "api/units/time_delta.h"
-// #include "api/units/timestamp.h"
+#include "api/units/data_rate.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 // #include "logging/rtc_event_log/events/rtc_event_bwe_update_loss_based.h"
 // #include "modules/congestion_controller/goog_cc/loss_based_bwe_v2.h"
 // #include "modules/remote_bitrate_estimator/include/bwe_defines.h"
@@ -39,14 +39,14 @@
 
 #include "src/SCION/model/webrtc/modules/remote_bitrate_estimator/include/bwe_defines.h"
 
-namespace ns3 {
+namespace webrtc {
 namespace {
 TimeDelta kBweIncreaseInterval = TimeDelta::Millis(1000);
 TimeDelta kBweDecreaseInterval = TimeDelta::Millis(300);
 TimeDelta kStartPhase = TimeDelta::Millis(2000);
 TimeDelta kBweConverganceTime = TimeDelta::Millis(20000);
 int kLimitNumPackets = 20;
-BitRate kDefaultMaxBitrate = BitRate::BitsPerSec(1000000000);
+DataRate kDefaultMaxBitrate = DataRate::BitsPerSec(1000000000);
 TimeDelta kLowBitrateLogPeriod = TimeDelta::Millis(10000);
 TimeDelta kRtcEventLogPeriod = TimeDelta::Millis(5000);
 // Expecting that RTCP feedback is sent uniformly within [0.5, 1.5]s intervals.
@@ -54,7 +54,7 @@ TimeDelta kMaxRtcpFeedbackInterval = TimeDelta::Millis(5000);
 
 constexpr float kDefaultLowLossThreshold = 0.02f;
 constexpr float kDefaultHighLossThreshold = 0.1f;
-BitRate kDefaultBitrateThreshold = BitRate::Zero();
+DataRate kDefaultBitrateThreshold = DataRate::Zero();
 
 struct UmaRampUpMetric {
   const char* metric_name;
@@ -129,7 +129,7 @@ LinkCapacityTracker::~LinkCapacityTracker() {}
 
 void LinkCapacityTracker::UpdateDelayBasedEstimate(
     Timestamp at_time,
-    BitRate delay_based_bitrate) {
+    DataRate delay_based_bitrate) {
   if (delay_based_bitrate < last_delay_based_estimate_) {
     capacity_estimate_bps_ =
         std::min(capacity_estimate_bps_, delay_based_bitrate.bps<double>());
@@ -138,17 +138,17 @@ void LinkCapacityTracker::UpdateDelayBasedEstimate(
   last_delay_based_estimate_ = delay_based_bitrate;
 }
 
-void LinkCapacityTracker::OnStartingRate(BitRate start_rate) {
+void LinkCapacityTracker::OnStartingRate(DataRate start_rate) {
   if (last_link_capacity_update_.IsInfinite())
     capacity_estimate_bps_ = start_rate.bps<double>();
 }
 
-void LinkCapacityTracker::OnRateUpdate(absl::optional<BitRate> acknowledged,
-                                       BitRate target,
+void LinkCapacityTracker::OnRateUpdate(absl::optional<DataRate> acknowledged,
+                                       DataRate target,
                                        Timestamp at_time) {
   if (!acknowledged)
     return;
-  BitRate acknowledged_target = std::min(*acknowledged, target);
+  DataRate acknowledged_target = std::min(*acknowledged, target);
   if (acknowledged_target.bps() > capacity_estimate_bps_) {
     TimeDelta delta = at_time - last_link_capacity_update_;
     double alpha = delta.IsFinite() ? exp(-(delta / tracking_rate_)) : 0;
@@ -158,15 +158,15 @@ void LinkCapacityTracker::OnRateUpdate(absl::optional<BitRate> acknowledged,
   last_link_capacity_update_ = at_time;
 }
 
-void LinkCapacityTracker::OnRttBackoff(BitRate backoff_rate,
+void LinkCapacityTracker::OnRttBackoff(DataRate backoff_rate,
                                        Timestamp at_time) {
   capacity_estimate_bps_ =
       std::min(capacity_estimate_bps_, backoff_rate.bps<double>());
   last_link_capacity_update_ = at_time;
 }
 
-BitRate LinkCapacityTracker::estimate() const {
-  return BitRate::BitsPerSec(capacity_estimate_bps_);
+DataRate LinkCapacityTracker::estimate() const {
+  return DataRate::BitsPerSec(capacity_estimate_bps_);
 }
 
 // RttBasedBackoff::RttBasedBackoff(const FieldTrialsView* key_value_config)
@@ -174,7 +174,7 @@ BitRate LinkCapacityTracker::estimate() const {
 //       configured_limit_("limit", TimeDelta::Seconds(3)),
 //       drop_fraction_("fraction", 0.8),
 //       drop_interval_("interval", TimeDelta::Seconds(1)),
-//       bandwidth_floor_("floor", BitRate::KilobitsPerSec(5)),
+//       bandwidth_floor_("floor", DataRate::KilobitsPerSec(5)),
 //       rtt_limit_(TimeDelta::PlusInfinity()),
 //       // By initializing this to plus infinity, we make sure that we never
 //       // trigger rtt backoff unless packet feedback is enabled.
@@ -194,7 +194,7 @@ RttBasedBackoff::RttBasedBackoff()
       configured_limit_(TimeDelta::Seconds(3)),
       drop_fraction_(0.8),
       drop_interval_(TimeDelta::Seconds(1)),
-      bandwidth_floor_(BitRate::KilobitsPerSec(5)),
+      bandwidth_floor_(DataRate::KilobitsPerSec(5)),
       rtt_limit_(TimeDelta::PlusInfinity()),
       last_propagation_rtt_update_(Timestamp::PlusInfinity()),
       last_propagation_rtt_(TimeDelta::Zero()),
@@ -225,8 +225,8 @@ RttBasedBackoff::~RttBasedBackoff() = default;
 //       rtt_backoff_(key_value_config),
 //       lost_packets_since_last_loss_update_(0),
 //       expected_packets_since_last_loss_update_(0),
-//       current_target_(BitRate::Zero()),
-//       last_logged_target_(BitRate::Zero()),
+//       current_target_(DataRate::Zero()),
+//       last_logged_target_(DataRate::Zero()),
 //       min_bitrate_configured_(kCongestionControllerMinBitrate),
 //       max_bitrate_configured_(kDefaultMaxBitrate),
 //       last_low_bitrate_log_(Timestamp::MinusInfinity()),
@@ -236,12 +236,12 @@ RttBasedBackoff::~RttBasedBackoff() = default;
 //       last_fraction_loss_(0),
 //       last_logged_fraction_loss_(0),
 //       last_round_trip_time_(TimeDelta::Zero()),
-//       receiver_limit_(BitRate::PlusInfinity()),
-//       delay_based_limit_(BitRate::PlusInfinity()),
+//       receiver_limit_(DataRate::PlusInfinity()),
+//       delay_based_limit_(DataRate::PlusInfinity()),
 //       time_last_decrease_(Timestamp::MinusInfinity()),
 //       first_report_time_(Timestamp::MinusInfinity()),
 //       initially_lost_packets_(0),
-//       bitrate_at_2_seconds_(BitRate::Zero()),
+//       bitrate_at_2_seconds_(DataRate::Zero()),
 //       uma_update_state_(kNoUpdate),
 //       uma_rtt_state_(kNoUpdate),
 //       rampup_uma_stats_updated_(kNumUmaRampupMetrics, false),
@@ -263,7 +263,7 @@ RttBasedBackoff::~RttBasedBackoff() = default;
 //       RTC_LOG(LS_INFO) << "Enabled BweLossExperiment with parameters "
 //                        << low_loss_threshold_ << ", " << high_loss_threshold_
 //                        << ", " << bitrate_threshold_kbps;
-//       bitrate_threshold_ = BitRate::KilobitsPerSec(bitrate_threshold_kbps);
+//       bitrate_threshold_ = DataRate::KilobitsPerSec(bitrate_threshold_kbps);
 //     }
 //   }
 //   ParseFieldTrial({&disable_receiver_limit_caps_only_},
@@ -278,8 +278,8 @@ SendSideBandwidthEstimation::SendSideBandwidthEstimation()
     : rtt_backoff_(RttBasedBackoff()),
       lost_packets_since_last_loss_update_(0),
       expected_packets_since_last_loss_update_(0),
-      current_target_(BitRate::Zero()),
-      last_logged_target_(BitRate::Zero()),
+      current_target_(DataRate::Zero()),
+      last_logged_target_(DataRate::Zero()),
       min_bitrate_configured_(kCongestionControllerMinBitrate),
       max_bitrate_configured_(kDefaultMaxBitrate),
       last_low_bitrate_log_(Timestamp::MinusInfinity()),
@@ -289,12 +289,12 @@ SendSideBandwidthEstimation::SendSideBandwidthEstimation()
       last_fraction_loss_(0),
       last_logged_fraction_loss_(0),
       last_round_trip_time_(TimeDelta::Zero()),
-      receiver_limit_(BitRate::PlusInfinity()),
-      delay_based_limit_(BitRate::PlusInfinity()),
+      receiver_limit_(DataRate::PlusInfinity()),
+      delay_based_limit_(DataRate::PlusInfinity()),
       time_last_decrease_(Timestamp::MinusInfinity()),
       first_report_time_(Timestamp::MinusInfinity()),
       initially_lost_packets_(0),
-      bitrate_at_2_seconds_(BitRate::Zero()),
+      bitrate_at_2_seconds_(DataRate::Zero()),
       uma_update_state_(kNoUpdate),
       uma_rtt_state_(kNoUpdate),
       rampup_uma_stats_updated_(kNumUmaRampupMetrics, false),
@@ -309,7 +309,7 @@ SendSideBandwidthEstimation::SendSideBandwidthEstimation()
     if (ReadBweLossExperimentParameters(&low_loss_threshold_,
                                         &high_loss_threshold_,
                                         &bitrate_threshold_kbps)) {
-      bitrate_threshold_ = BitRate::KilobitsPerSec(bitrate_threshold_kbps);
+      bitrate_threshold_ = DataRate::KilobitsPerSec(bitrate_threshold_kbps);
     }
   }
 }
@@ -319,7 +319,7 @@ SendSideBandwidthEstimation::~SendSideBandwidthEstimation() {}
 void SendSideBandwidthEstimation::OnRouteChange() {
   lost_packets_since_last_loss_update_ = 0;
   expected_packets_since_last_loss_update_ = 0;
-  current_target_ = BitRate::Zero();
+  current_target_ = DataRate::Zero();
   min_bitrate_configured_ = kCongestionControllerMinBitrate;
   max_bitrate_configured_ = kDefaultMaxBitrate;
   last_low_bitrate_log_ = Timestamp::MinusInfinity();
@@ -329,12 +329,12 @@ void SendSideBandwidthEstimation::OnRouteChange() {
   last_fraction_loss_ = 0;
   last_logged_fraction_loss_ = 0;
   last_round_trip_time_ = TimeDelta::Zero();
-  receiver_limit_ = BitRate::PlusInfinity();
-  delay_based_limit_ = BitRate::PlusInfinity();
+  receiver_limit_ = DataRate::PlusInfinity();
+  delay_based_limit_ = DataRate::PlusInfinity();
   time_last_decrease_ = Timestamp::MinusInfinity();
   first_report_time_ = Timestamp::MinusInfinity();
   initially_lost_packets_ = 0;
-  bitrate_at_2_seconds_ = BitRate::Zero();
+  bitrate_at_2_seconds_ = DataRate::Zero();
   uma_update_state_ = kNoUpdate;
   uma_rtt_state_ = kNoUpdate;
   last_rtc_event_log_ = Timestamp::MinusInfinity();
@@ -346,9 +346,9 @@ void SendSideBandwidthEstimation::OnRouteChange() {
 }
 
 void SendSideBandwidthEstimation::SetBitrates(
-    absl::optional<BitRate> send_bitrate,
-    BitRate min_bitrate,
-    BitRate max_bitrate,
+    absl::optional<DataRate> send_bitrate,
+    DataRate min_bitrate,
+    DataRate max_bitrate,
     Timestamp at_time) {
   SetMinMaxBitrate(min_bitrate, max_bitrate);
   if (send_bitrate) {
@@ -357,22 +357,22 @@ void SendSideBandwidthEstimation::SetBitrates(
   }
 }
 
-void SendSideBandwidthEstimation::SetSendBitrate(BitRate bitrate,
+void SendSideBandwidthEstimation::SetSendBitrate(DataRate bitrate,
                                                  Timestamp at_time) {
-  // RTC_DCHECK_GT(bitrate, BitRate::Zero());
+  // RTC_DCHECK_GT(bitrate, DataRate::Zero());
   // Reset to avoid being capped by the estimate.
-  delay_based_limit_ = BitRate::PlusInfinity();
+  delay_based_limit_ = DataRate::PlusInfinity();
   UpdateTargetBitrate(bitrate, at_time);
   // Clear last sent bitrate history so the new value can be used directly
   // and not capped.
   min_bitrate_history_.clear();
 }
 
-void SendSideBandwidthEstimation::SetMinMaxBitrate(BitRate min_bitrate,
-                                                   BitRate max_bitrate) {
+void SendSideBandwidthEstimation::SetMinMaxBitrate(DataRate min_bitrate,
+                                                   DataRate max_bitrate) {
   min_bitrate_configured_ =
       std::max(min_bitrate, kCongestionControllerMinBitrate);
-  if (max_bitrate > BitRate::Zero() && max_bitrate.IsFinite()) {
+  if (max_bitrate > DataRate::Zero() && max_bitrate.IsFinite()) {
     max_bitrate_configured_ = std::max(min_bitrate_configured_, max_bitrate);
   } else {
     max_bitrate_configured_ = kDefaultMaxBitrate;
@@ -385,8 +385,8 @@ int SendSideBandwidthEstimation::GetMinBitrate() const {
   return min_bitrate_configured_.bps<int>();
 }
 
-BitRate SendSideBandwidthEstimation::target_rate() const {
-  BitRate target = current_target_;
+DataRate SendSideBandwidthEstimation::target_rate() const {
+  DataRate target = current_target_;
   if (!disable_receiver_limit_caps_only_)
     target = std::min(target, receiver_limit_);
   return std::max(min_bitrate_configured_, target);
@@ -401,29 +401,29 @@ bool SendSideBandwidthEstimation::IsRttAboveLimit() const {
   return rtt_backoff_.IsRttAboveLimit();
 }
 
-BitRate SendSideBandwidthEstimation::GetEstimatedLinkCapacity() const {
+DataRate SendSideBandwidthEstimation::GetEstimatedLinkCapacity() const {
   return link_capacity_.estimate();
 }
 
 void SendSideBandwidthEstimation::UpdateReceiverEstimate(Timestamp at_time,
-                                                         BitRate bandwidth) {
+                                                         DataRate bandwidth) {
   // TODO(srte): Ensure caller passes PlusInfinity, not zero, to represent no
   // limitation.
-  receiver_limit_ = bandwidth.IsZero() ? BitRate::PlusInfinity() : bandwidth;
+  receiver_limit_ = bandwidth.IsZero() ? DataRate::PlusInfinity() : bandwidth;
   ApplyTargetLimits(at_time);
 }
 
 void SendSideBandwidthEstimation::UpdateDelayBasedEstimate(Timestamp at_time,
-                                                           BitRate bitrate) {
+                                                           DataRate bitrate) {
   link_capacity_.UpdateDelayBasedEstimate(at_time, bitrate);
   // TODO(srte): Ensure caller passes PlusInfinity, not zero, to represent no
   // limitation.
-  delay_based_limit_ = bitrate.IsZero() ? BitRate::PlusInfinity() : bitrate;
+  delay_based_limit_ = bitrate.IsZero() ? DataRate::PlusInfinity() : bitrate;
   ApplyTargetLimits(at_time);
 }
 
 void SendSideBandwidthEstimation::SetAcknowledgedRate(
-    absl::optional<BitRate> acknowledged_rate,
+    absl::optional<DataRate> acknowledged_rate,
     Timestamp at_time) {
   acknowledged_rate_ = acknowledged_rate;
   if (!acknowledged_rate.has_value()) {
@@ -442,7 +442,7 @@ void SendSideBandwidthEstimation::SetAcknowledgedRate(
 void SendSideBandwidthEstimation::UpdateLossBasedEstimator(
     const TransportPacketsFeedback& report,
     BandwidthUsage delay_detector_state,
-    absl::optional<BitRate> probe_bitrate,
+    absl::optional<DataRate> probe_bitrate,
     bool in_alr) {
   if (LossBasedBandwidthEstimatorV1Enabled()) {
     loss_based_bandwidth_estimator_v1_.UpdateLossStatistics(
@@ -494,8 +494,8 @@ void SendSideBandwidthEstimation::UpdatePacketsLost(int64_t packets_lost,
 
 void SendSideBandwidthEstimation::UpdateUmaStatsPacketsLost(Timestamp at_time,
                                                             int packets_lost) {
-  BitRate bitrate_kbps =
-      BitRate::KilobitsPerSec((current_target_.bps() + 500) / 1000);
+  DataRate bitrate_kbps =
+      DataRate::KilobitsPerSec((current_target_.bps() + 500) / 1000);
   for (size_t i = 0; i < kNumUmaRampupMetrics; ++i) {
     if (!rampup_uma_stats_updated_[i] &&
         bitrate_kbps.kbps() >= kUmaRampupMetrics[i].bitrate_kbps) {
@@ -540,7 +540,7 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
     if (at_time - time_last_decrease_ >= rtt_backoff_.drop_interval_ &&
         current_target_ > rtt_backoff_.bandwidth_floor_) {
       time_last_decrease_ = at_time;
-      BitRate new_bitrate =
+      DataRate new_bitrate =
           std::max(current_target_ * rtt_backoff_.drop_fraction_,
                    rtt_backoff_.bandwidth_floor_);
       link_capacity_.OnRttBackoff(new_bitrate, at_time);
@@ -557,7 +557,7 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
   if (last_fraction_loss_ == 0 && IsInStartPhase(at_time) &&
       // !loss_based_bandwidth_estimator_v2_->ReadyToUseInStartPhase()) {
       true) {
-    BitRate new_bitrate = current_target_;
+    DataRate new_bitrate = current_target_;
     // TODO(srte): We should not allow the new_bitrate to be larger than the
     // receiver limit here.
     if (receiver_limit_.IsFinite())
@@ -589,7 +589,7 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
   }
 
   if (LossBasedBandwidthEstimatorV1ReadyForUse()) {
-    BitRate new_bitrate = loss_based_bandwidth_estimator_v1_.Update(
+    DataRate new_bitrate = loss_based_bandwidth_estimator_v1_.Update(
         at_time, min_bitrate_history_.front().second, delay_based_limit_,
         last_round_trip_time_);
     UpdateTargetBitrate(new_bitrate, at_time);
@@ -622,13 +622,13 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
       //   If instead one would do: current_bitrate_ *= 1.08^(delta time),
       //   it would take over one second since the lower packet loss to achieve
       //   108kbps.
-      BitRate new_bitrate = BitRate::BitsPerSec(
+      DataRate new_bitrate = DataRate::BitsPerSec(
           min_bitrate_history_.front().second.bps() * 1.08 + 0.5);
 
       // Add 1 kbps extra, just to make sure that we do not get stuck
       // (gives a little extra increase at low rates, negligible at higher
       // rates).
-      new_bitrate += BitRate::BitsPerSec(1000);
+      new_bitrate += DataRate::BitsPerSec(1000);
       UpdateTargetBitrate(new_bitrate, at_time);
       return;
     } else if (current_target_ > bitrate_threshold_) {
@@ -645,7 +645,7 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
           // Reduce rate:
           //   newRate = rate * (1 - 0.5*lossRate);
           //   where packetLoss = 256*lossRate;
-          BitRate new_bitrate = BitRate::BitsPerSec(
+          DataRate new_bitrate = DataRate::BitsPerSec(
               (current_target_.bps() *
                static_cast<double>(512 - last_fraction_loss_)) /
               512.0);
@@ -696,14 +696,14 @@ void SendSideBandwidthEstimation::UpdateMinHistory(Timestamp at_time) {
   min_bitrate_history_.push_back(std::make_pair(at_time, current_target_));
 }
 
-BitRate SendSideBandwidthEstimation::GetUpperLimit() const {
-  BitRate upper_limit = delay_based_limit_;
+DataRate SendSideBandwidthEstimation::GetUpperLimit() const {
+  DataRate upper_limit = delay_based_limit_;
   if (disable_receiver_limit_caps_only_)
     upper_limit = std::min(upper_limit, receiver_limit_);
   return std::min(upper_limit, max_bitrate_configured_);
 }
 
-void SendSideBandwidthEstimation::MaybeLogLowBitrateWarning(BitRate bitrate,
+void SendSideBandwidthEstimation::MaybeLogLowBitrateWarning(DataRate bitrate,
                                                             Timestamp at_time) {
   if (at_time - last_low_bitrate_log_ > kLowBitrateLogPeriod) {
     // RTC_LOG(LS_WARNING) << "Estimated available bandwidth " << ToString(bitrate)
@@ -726,7 +726,7 @@ void SendSideBandwidthEstimation::MaybeLogLossBasedEvent(Timestamp at_time) {
   }
 }
 
-void SendSideBandwidthEstimation::UpdateTargetBitrate(BitRate new_bitrate,
+void SendSideBandwidthEstimation::UpdateTargetBitrate(DataRate new_bitrate,
                                                       Timestamp at_time) {
   new_bitrate = std::min(new_bitrate, GetUpperLimit());
   if (new_bitrate < min_bitrate_configured_) {
@@ -770,4 +770,4 @@ bool SendSideBandwidthEstimation::PaceAtLossBasedEstimate() const {
   return false;
 }
 
-}  // namespace ns3
+}  // namespace webrtc

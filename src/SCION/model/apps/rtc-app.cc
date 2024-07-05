@@ -24,6 +24,23 @@
 #include "src/SCION/model/webrtc-cc/cc-units.h"
 #include "src/SCION/model/webrtc-cc/delay-based-estimator.cc"
 #include "src/SCION/model/webrtc-cc/loss-based-estimator.cc"
+// #define WEBRTC_POSIX
+// #define WEBRTC_LINUX
+// #define WEBRTC_LIBRARY_IMPL
+// #define ABSL_MUST_USE_RESULT
+
+#include "src/SCION/model/webrtc/modules/goog_cc/goog_cc_network_control.h"
+// #include "modules/congestion_controller/goog_cc/goog_cc_network_control.h"
+// #undef API_TRANSPORT_NETWORK_TYPES_H_
+// #undef API_NETWORK_STATE_PREDICTOR_H_
+#include "api/environment/environment_factory.h"
+#include "api/transport/network_types.h"
+#include "api/transport/network_control.h"
+// #include "api/units/data_rate.h"
+// #include "api/units/data_size.h"
+#include "api/units/timestamp.h"
+#include "api/transport/goog_cc_factory.h"
+
 #include <iomanip>
 
 namespace ns3 {
@@ -43,6 +60,8 @@ struct PathStatistics
   double bottleneck_no_flows = 0; // number of flows at the bottleneck link
   double loss = 0; // estimated loss ratio
 
+  std::vector<webrtc::SentPacket> in_flight_packets;
+
   Time probed_last = Seconds (0); // time the last probing was initiated
   app_packet_id_t probe_seq_no = 0; // probe packet seq_no
 };
@@ -52,7 +71,7 @@ struct RTCAppState
 {
   Time timestamp;
   double sendrate = 0;
-  ControllerStateSnapshot controller_state;
+  // ControllerStateSnapshot controller_state;
   double A_s = 0;
   double A_r = 0;
   double fair_share = 0;
@@ -95,6 +114,9 @@ protected:
   CongestionControlPhase phase;
   DelayBasedController delay_based_estimator;
   LossBasedEstimator loss_based_estimator;
+
+  // webrtc::NetworkControllerInterface *network_controller;
+  std::unique_ptr<webrtc::NetworkControllerInterface> network_controller;
 
   double A_r = 0; // send rate estimate by the receiver side loss based controller
   double A_s = 0; // send rate estimate by the sender side loss based controller
@@ -152,26 +174,60 @@ public:
         path_infos.push_back (path_info);
       }
 
+    // webrtc::DataRate initial_rate = webrtc::DataRate::KilobitsPerSec(300);
+    // std::cout << "Initial rate: " << initial_rate.bps() << std::endl;
+
     // During startup, we just use the loss based estimate
     phase = CongestionControlPhase::STARTUP;
     loss_based_estimator.SetRate (CC_INITIAL_SEND_RATE);
 
+    // network_controller = new webrtc::GoogCcNetworkController (webrtc::NetworkControllerConfig (),
+    //                                                   webrtc::GoogCcConfig{
+    //                                                       .network_state_estimator = nullptr,
+    //                                                       .feedback_only = false,
+    //                                                   });
+
+    // using namespace webrtc;
+    webrtc::GoogCcFactoryConfig factory_config;
+    factory_config.feedback_only = false;
+    factory_config.network_state_estimator_factory = nullptr;
+
+    webrtc::GoogCcNetworkControllerFactory factory = webrtc::GoogCcNetworkControllerFactory (std::move(factory_config));
+    webrtc::Environment default_env = webrtc::EnvironmentFactory ().Create ();
+    webrtc::NetworkControllerConfig config(default_env);
+
+    config.constraints.at_time = webrtc::Timestamp::Millis (Simulator::Now ().GetMilliSeconds ());
+
+    network_controller = factory.Create (config);
+
+    // network_controller = new webrtc::GoogCcNetworkController (
+    //     webrtc::NetworkControllerConfig (), webrtc::GoogCcConfig{
+    //                                             .network_state_estimator = nullptr,
+    //                                             .feedback_only = false,
+    //                                         });
+
     // Choose a random path to start with
     active_path = rand () % num_paths;
-    active_path = 0; // TODO: For testing
+    active_path = 1 -1; // TODO: For testing
 
-    Log ("Initialized RTCApp " + app_id);
-    Log ("  Runtime config: " + runtime_config, false);
-    Log ("  Active path: " + active_path, false);
-    Log ("  Logging enabled: " + cfgLogging, false);
-    Log ("  Loss controller enabled: " + cfgLossBwe, false);
-    Log ("  Delay controller enabled: " + cfgDelayBwe, false);
-    Log ("  Path switching enabled: " + cfgPathSwitching, false);
+    Log ("Initialized RTCApp " + std::to_string (app_id));
+    Log ("  Runtime config: " + std::to_string (runtime_config), false);
+    Log ("  Active path: " + std::to_string (active_path), false);
+    Log ("  Logging enabled: " + std::to_string (cfgLogging), false);
+    Log ("  Loss controller enabled: " + std::to_string (cfgLossBwe), false);
+    Log ("  Delay controller enabled: " + std::to_string (cfgDelayBwe), false);
+    Log ("  Path switching enabled: " + std::to_string (cfgPathSwitching), false);
   }
 
   void
   StartAppTraffic ()
   {
+    // TODO
+    // network_controller->OnNetworkAvailability (NetworkAvailability{
+    //     .network_available = true,
+    //     .at_time = Simulator::Now (),
+    // });
+
     // Start sending probes and video frames after a random delay, to avoid synchronization
     Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &RTCApp::SendVideoFrame, this);
     Simulator::Schedule (MilliSeconds (2000) + RandomDelay (1500), &RTCApp::SendProbes, this);
@@ -195,7 +251,7 @@ public:
     state.sendrate = sendrate;
     state.latency = path_info.latency;
     state.loss = loss_based_estimator.GetLoss ();
-    state.controller_state = delay_based_estimator.GetStateSnapshot ();
+    // state.controller_state = delay_based_estimator.GetStateSnapshot ();
     state.A_s = A_s;
     state.A_r = A_r;
     state.fair_share = path_info.fair_share;
@@ -384,7 +440,7 @@ public:
 
     if (path_id != active_path)
       {
-        Log ("Receiving response on inactive (old) path: " + path_id);
+        Log ("Receiving response on inactive (old) path: " + std::to_string (path_id));
 
         // Don't process responses on inactive paths
         delete report;
@@ -415,16 +471,103 @@ public:
       }
     path_infos[path_id].loss = app_resp.loss;
 
-    for (auto packet : report->packets)
-      {
-        delay_based_estimator.FeedPacketTrendLine (&packet);
-      }
-
     loss_based_estimator.FeedReport (report);
+    delay_based_estimator.FeedReport (report);
 
     path_infos[path_id].loss = loss_based_estimator.GetLoss ();
 
-    UpdateBWE ();
+    // if report empty
+    if (report->packets.empty ())
+      {
+        Log ("WARN: Empty report received");
+        delete report;
+        return;
+      }
+
+    // Re-construct a valid TransportPacketsFeedback
+    std::vector<webrtc::PacketResult> packet_feedbacks;
+
+    std::sort (report->packets.begin (), report->packets.end (),
+               [] (auto a, auto b) { return a.seq_no < b.seq_no; });
+
+    // highest seq no
+    uint32_t highest_seq_no = report->packets.back ().seq_no;
+
+    for (webrtc::SentPacket packet : path_infos[path_id].in_flight_packets)
+      {
+        if (packet.sequence_number <= highest_seq_no)
+          {
+            webrtc::PacketResult packet_result;
+            packet_result.sent_packet = packet;
+
+            // Find the corresponding packet in the report
+            auto it = std::find_if (report->packets.begin (), report->packets.end (),
+                                    [packet] (PacketRecord report_packet) {
+                                      return report_packet.seq_no == packet.sequence_number;
+                                    });
+
+            if (it != report->packets.end ())
+              {
+                // packet_result.receive_time = Timestamp (it->time_received);
+                packet_result.receive_time =
+                    webrtc::Timestamp::Millis (it->time_received.GetMilliSeconds ());
+              }
+              else{ 
+                // continue;
+              }
+
+            packet_feedbacks.push_back (packet_result);
+          }
+      }
+
+    // Clean up in-flight packets
+    path_infos[path_id].in_flight_packets.erase (
+        std::remove_if (path_infos[path_id].in_flight_packets.begin (),
+                        path_infos[path_id].in_flight_packets.end (),
+                        [highest_seq_no] (webrtc::SentPacket packet) {
+                          return packet.sequence_number <= highest_seq_no;
+                        }),
+        path_infos[path_id].in_flight_packets.end ());
+
+    // Use the WebRTC network controller
+    webrtc::TransportPacketsFeedback feedback;
+    feedback.feedback_time = webrtc::Timestamp::Millis (Simulator::Now ().GetMilliSeconds ());
+    feedback.packet_feedbacks = packet_feedbacks;
+
+    // TODO: data_in_flight ?
+
+    webrtc::NetworkControlUpdate update = network_controller->OnTransportPacketsFeedback (feedback);
+
+    if (update.has_updates ())
+      {
+        Log ("Received network control update");
+        // update.congestion_window
+      }
+    if (update.target_rate.has_value ())
+      {
+        //  std::to_string (update.target_rate.value ().target_rate));
+        webrtc::TargetTransferRate target_rate = update.target_rate.value ();
+        sendrate = target_rate.target_rate.bps () / 8;
+        Log ("Received target rate update: " + std::to_string (sendrate));
+
+        // cast network controller to Googccnetworkcontroller
+        webrtc::GoogCcNetworkController *goog_cc_network_controller = dynamic_cast<webrtc::GoogCcNetworkController *>(network_controller.get());
+        update = goog_cc_network_controller->GetNetworkState(webrtc::Timestamp::Millis (Simulator::Now ().GetMilliSeconds ()));
+        if (update.target_rate.has_value ())
+          {
+            Log ("Another target rate update: ");
+            if(target_rate.target_rate != update.target_rate.value ().target_rate)
+              {
+                Log ("Different target rate updatee: ");
+
+                target_rate = update.target_rate.value ();
+                sendrate = target_rate.target_rate.bps () / 8;
+              }
+          }
+      }
+
+    // CheckPhase ();
+    // UpdateBWE ();
     TrackState ();
 
     delete report;
@@ -433,6 +576,11 @@ public:
   void
   UpdateBWE ()
   {
+
+    A_r = delay_based_estimator.GetRate ();
+    sendrate = A_r;
+    return;
+
     A_s = loss_based_estimator.GetRate ();
     Log ("Sender estimate: " + std::to_string (A_s));
 
@@ -722,7 +870,7 @@ public:
   }
 
   void
-  SendPacket (double packetSize, std::vector<const PathSegment *> path)
+  SendPacket (double payload_size, std::vector<const PathSegment *> path)
   {
     AppData app_data;
     app_data.app_id = app_id;
@@ -732,9 +880,21 @@ public:
     app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
     Payload payload = app_data;
     PayloadType payload_type = PayloadType::APPLICATION_DATA;
-    host->SendAppPacket (this, payload, payload_type, packetSize * scale + sizeof (AppData), path);
+    auto packet_size = payload_size + sizeof (AppData);
+    host->SendAppPacket (this, payload, payload_type, packet_size, path);
     Log ("Sending packet with frame_no " + std::to_string (frame_no) + " and seq_no " +
          std::to_string (app_data.seq_no) + " on path " + std::to_string (active_path));
+
+    webrtc::SentPacket sent_packet;
+    sent_packet.sequence_number = app_data.seq_no;
+    sent_packet.send_time = webrtc::Timestamp::Millis (Simulator::Now ().GetMilliSeconds ());
+    sent_packet.size = webrtc::DataSize::Bytes (packet_size);
+
+    // TODO are these fields necessary?
+    // sent_packet.prior_unacked_data
+    // sent_packet.data_in_flight
+
+    path_infos[active_path].in_flight_packets.push_back (sent_packet);
   }
 
   void
@@ -784,14 +944,14 @@ public:
         j_state["fair_share"] = state.fair_share / 1e6;
         j_state["A_s"] = state.A_s / 1e6;
         j_state["A_r"] = state.A_r / 1e6;
-        j_state["gradient"] = state.controller_state.m;
-        j_state["threshold_hi"] = state.controller_state.threshold_hi;
-        j_state["threshold_lo"] = 0; // TODO
-        j_state["gcc_state"] = state.controller_state.state;
-        j_state["gcc_signal"] = state.controller_state.signal;
-        j_state["kalman_gain"] = state.controller_state.kalman_gain;
-        j_state["variance"] = state.controller_state.variance;
-        j_state["error"] = state.controller_state.error;
+        // j_state["gradient"] = state.controller_state.m;
+        // j_state["threshold_hi"] = state.controller_state.threshold_hi;
+        // j_state["threshold_lo"] = 0; // TODO
+        // j_state["gcc_state"] = state.controller_state.state;
+        // j_state["gcc_signal"] = state.controller_state.signal;
+        // j_state["kalman_gain"] = state.controller_state.kalman_gain;
+        // j_state["variance"] = state.controller_state.variance;
+        // j_state["error"] = state.controller_state.error;
 
         j_states.push_back (j_state);
       }

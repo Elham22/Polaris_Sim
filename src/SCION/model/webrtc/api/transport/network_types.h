@@ -15,15 +15,15 @@
 #include <vector>
 
 #include "absl/types/optional.h"
-// #include "api/units/data_rate.h"
+#include "api/units/data_rate.h"
 // #include "api/units/data_size.h"
-// #include "api/units/time_delta.h"
-// #include "api/units/timestamp.h"
+#include "api/units/time_delta.h"
+#include "api/units/timestamp.h"
 
 // #include "src/network/utils/data-rate.h"
-#include "src/SCION/model/webrtc/types.h"
+//#include "src/SCION/model/webrtc/types.h"
 
-namespace ns3 {
+namespace webrtc {
 
 // Configuration
 
@@ -32,12 +32,12 @@ namespace ns3 {
 // struct.
 struct BitrateAllocationLimits {
   // The total minimum send bitrate required by all sending streams.
-  BitRate min_allocatable_rate = BitRate::Zero();
+  DataRate min_allocatable_rate = DataRate::Zero();
   // The total maximum allocatable bitrate for all currently available streams.
-  BitRate max_allocatable_rate = BitRate::Zero();
+  DataRate max_allocatable_rate = DataRate::Zero();
   // The max bitrate to use for padding. The sum of the per-stream max padding
   // rate.
-  BitRate max_padding_rate = BitRate::Zero();
+  DataRate max_padding_rate = DataRate::Zero();
 };
 
 // Use StreamsConfig for information about streams that is required for specific
@@ -52,9 +52,9 @@ struct StreamsConfig {
   absl::optional<double> pacing_factor;
 
   // TODO(srte): Use BitrateAllocationLimits here.
-  absl::optional<BitRate> min_total_allocated_bitrate;
-  absl::optional<BitRate> max_padding_rate;
-  absl::optional<BitRate> max_total_allocated_bitrate;
+  absl::optional<DataRate> min_total_allocated_bitrate;
+  absl::optional<DataRate> max_padding_rate;
+  absl::optional<DataRate> max_total_allocated_bitrate;
 };
 
 struct TargetRateConstraints {
@@ -62,11 +62,11 @@ struct TargetRateConstraints {
   TargetRateConstraints(const TargetRateConstraints&);
   ~TargetRateConstraints();
   Timestamp at_time = Timestamp::PlusInfinity();
-  absl::optional<BitRate> min_data_rate;
-  absl::optional<BitRate> max_data_rate;
+  absl::optional<DataRate> min_data_rate;
+  absl::optional<DataRate> max_data_rate;
   // The initial bandwidth estimate to base target rate on. This should be used
   // as the basis for initial OnTargetTransferRate and OnPacerConfig callbacks.
-  absl::optional<BitRate> starting_rate;
+  absl::optional<DataRate> starting_rate;
 };
 
 // Send side information
@@ -96,7 +96,7 @@ struct PacedPacketInfo {
 
   // TODO(srte): Move probing info to a separate, optional struct.
   static constexpr int kNotAProbe = -1;
-  BitRate send_bitrate = BitRate::BitsPerSec(0);
+  DataRate send_bitrate = DataRate::BitsPerSec(0);
   int probe_cluster_id = kNotAProbe;
   int probe_cluster_min_probes = -1;
   int probe_cluster_min_bytes = -1;
@@ -135,7 +135,7 @@ struct ReceivedPacket {
 
 struct RemoteBitrateReport {
   Timestamp receive_time = Timestamp::PlusInfinity();
-  BitRate bandwidth = BitRate::Infinity();
+  DataRate bandwidth = DataRate::Infinity();
 };
 
 struct RoundTripTimeUpdate {
@@ -193,7 +193,7 @@ struct TransportPacketsFeedback {
 struct NetworkEstimate {
   Timestamp at_time = Timestamp::PlusInfinity();
   // Deprecated, use TargetTransferRate::target_rate instead.
-  BitRate bandwidth = BitRate::Infinity();
+  DataRate bandwidth = DataRate::Infinity();
   TimeDelta round_trip_time = TimeDelta::PlusInfinity();
   TimeDelta bwe_period = TimeDelta::PlusInfinity();
 
@@ -209,13 +209,13 @@ struct PacerConfig {
   TimeDelta time_window = TimeDelta::PlusInfinity();
   // Pacer should send at least pad_window data over time_window duration.
   DataSize pad_window = DataSize::Zero();
-  BitRate data_rate() const { return data_window / time_window; }
-  BitRate pad_rate() const { return pad_window / time_window; }
+  DataRate data_rate() const { return data_window / time_window; }
+  DataRate pad_rate() const { return pad_window / time_window; }
 };
 
 struct ProbeClusterConfig {
   Timestamp at_time = Timestamp::PlusInfinity();
-  BitRate target_data_rate = BitRate::Zero();
+  DataRate target_data_rate = DataRate::Zero();
   TimeDelta target_duration = TimeDelta::Zero();
   int32_t target_probe_count = 0;
   int32_t id = 0;
@@ -225,8 +225,8 @@ struct TargetTransferRate {
   Timestamp at_time = Timestamp::PlusInfinity();
   // The estimate on which the target rate is based on.
   NetworkEstimate network_estimate;
-  BitRate target_rate = BitRate::Zero();
-  BitRate stable_target_rate = BitRate::Zero();
+  DataRate target_rate = DataRate::Zero();
+  DataRate stable_target_rate = DataRate::Zero();
   double cwnd_reduce_ratio = 0;
 };
 
@@ -264,11 +264,11 @@ struct NetworkStateEstimate {
   Timestamp last_send_time = Timestamp::MinusInfinity();
 
   // Total estimated link capacity.
-  BitRate link_capacity = BitRate::MinusInfinity();
+  DataRate link_capacity = DataRate::MinusInfinity();
   // Used as a safe measure of available capacity.
-  BitRate link_capacity_lower = BitRate::MinusInfinity();
+  DataRate link_capacity_lower = DataRate::MinusInfinity();
   // Used as limit for increasing bitrate.
-  BitRate link_capacity_upper = BitRate::MinusInfinity();
+  DataRate link_capacity_upper = DataRate::MinusInfinity();
 
   TimeDelta pre_link_buffer_delay = TimeDelta::MinusInfinity();
   TimeDelta post_link_buffer_delay = TimeDelta::MinusInfinity();
@@ -282,10 +282,10 @@ struct NetworkStateEstimate {
   Timestamp last_feed_time = Timestamp::MinusInfinity();
   double cross_delay_rate = NAN;
   double spike_delay_rate = NAN;
-  BitRate link_capacity_std_dev = BitRate::MinusInfinity();
-  BitRate link_capacity_min = BitRate::MinusInfinity();
+  DataRate link_capacity_std_dev = DataRate::MinusInfinity();
+  DataRate link_capacity_min = DataRate::MinusInfinity();
   double cross_traffic_ratio = NAN;
 };
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // API_TRANSPORT_NETWORK_TYPES_H_

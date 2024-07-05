@@ -24,7 +24,7 @@
 #include "src/SCION/model/webrtc/api/network_state_predictor.h"
 #include "src/SCION/model/webrtc/modules/goog_cc/delay_increase_detector_interface.h"
 
-namespace ns3 {
+namespace webrtc {
 
 struct TrendlineEstimatorSettings {
   static constexpr char kKey[] = "WebRTC-Bwe-TrendlineEstimatorSettings";
@@ -125,6 +125,6 @@ class TrendlineEstimator : public DelayIncreaseDetectorInterface {
   BandwidthUsage hypothesis_predicted_;
   NetworkStatePredictor* network_state_predictor_;
 };
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // MODULES_CONGESTION_CONTROLLER_GOOG_CC_TRENDLINE_ESTIMATOR_H_

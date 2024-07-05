@@ -16,7 +16,7 @@
 #include "absl/strings/string_view.h"
 // #include "rtc_base/system/rtc_export.h"
 
-namespace ns3 {
+namespace webrtc {
 
 // An interface that provides the means to access field trials.
 //
@@ -42,6 +42,6 @@ class FieldTrialsView {
   }
 };
 
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // API_FIELD_TRIALS_VIEW_H_

@@ -19,7 +19,7 @@
 // #include "modules/remote_bitrate_estimator/test/bwe_test_logging.h"
 // #include "rtc_base/logging.h"
 
-namespace ns3 {
+namespace webrtc {
 namespace {
 
 constexpr int kMinFramePeriodHistoryLength = 60;
@@ -146,4 +146,4 @@ void OveruseEstimator::UpdateNoiseEstimate(double residual,
     var_noise_ = 1;
   }
 }
-}  // namespace ns3
+}  // namespace webrtc

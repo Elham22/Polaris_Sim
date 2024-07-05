@@ -14,7 +14,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-namespace ns3 {
+namespace webrtc {
 
 // Helper class to compute the inter-arrival time delta and the size delta
 // between two timestamp groups. A timestamp is a 32 bit unsigned number with
@@ -88,6 +88,6 @@ class InterArrival {
   double timestamp_to_ms_coeff_;
   int num_consecutive_reordered_packets_;
 };
-}  // namespace ns3
+}  // namespace webrtc
 
 #endif  // MODULES_REMOTE_BITRATE_ESTIMATOR_INTER_ARRIVAL_H_
