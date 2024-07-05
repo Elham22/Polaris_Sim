@@ -22,7 +22,9 @@
 #define WEBRTC_CC_LOSS_BASED_ESTIMATOR_H
 
 #include <algorithm>
+#include <vector>
 #include "src/core/model/simulator.h"
+#include "src/SCION/model/webrtc-cc/cc-units.h"
 #include "src/SCION/model/webrtc-cc/types.h"
 
 namespace ns3 {
@@ -131,18 +133,10 @@ protected:
     double new_estimate = rate_estimate;
     if (loss < LOSS_TRESHOLD_LOW)
       {
-        // In startup phase, increase rate by up to CC_MULTI_INCREASE per round trip time
-        if (phase == CongestionControlPhase::STARTUP)
-          {
-            eta = std::pow (CC_MULTI_INCREASE,
-                            std::min (time_since_last_update / round_trip_time.GetSeconds (), 1.0));
-            new_estimate = eta * rate_estimate;
-            new_estimate = eta * rate_estimate + CC_ADDITIVE_TERM;
-          }
-        else // Otherwise, do additive increase
-          {
-            new_estimate = rate_estimate + CC_ADDITIVE_TERM;
-          }
+        eta = std::pow (CC_MULTI_INCREASE,
+                        std::min (time_since_last_update / round_trip_time.GetSeconds (), 1.0));
+        new_estimate = eta * rate_estimate;
+        // new_estimate = eta * rate_estimate + CC_ADDITIVE_TERM;
       }
     else if (loss > LOSS_TRESHOLD_HIGH)
       {

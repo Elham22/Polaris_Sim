@@ -299,11 +299,11 @@ protected:
     //
     // Explicitly create the nodes required by the topology (shown above).
     //
-    NS_LOG_INFO ("Create nodes.");
+    // NS_LOG_INFO ("Create nodes.");
     NodeContainer nodes;
     nodes.Create (2);
 
-    NS_LOG_INFO ("Create channels.");
+    // NS_LOG_INFO ("Create channels.");
 
     //
     // Explicitly create the point-to-point link required by the topology (shown above).
@@ -324,12 +324,12 @@ protected:
     //
     // We've got the "hardware" in place.  Now we need to add IP addresses.
     //
-    NS_LOG_INFO ("Assign IP Addresses.");
+    // NS_LOG_INFO ("Assign IP Addresses.");
     Ipv4AddressHelper ipv4;
     ipv4.SetBase ("10.1.1.0", "255.255.255.0");
     Ipv4InterfaceContainer i = ipv4.Assign (devices);
 
-    NS_LOG_INFO ("Create Applications.");
+    // NS_LOG_INFO ("Create Applications.");
 
     //
     // Create a BulkSendApplication and install it on node 0

@@ -23,10 +23,12 @@
 
 #include <deque>
 #include "src/core/model/simulator.h"
+#include "src/SCION/model/webrtc-cc/cc-units.h"
 #include "src/SCION/model/webrtc-cc/types.h"
 #include "src/SCION/model/scion-packet.h"
-#include "src/SCION/model/apps/controller-state.h"
 #include "src/SCION/model/externs.h"
+#include "src/SCION/model/webrtc/api/network_state_predictor.h"
+#include "src/SCION/model/webrtc/modules/remote_bitrate_estimator/aimd_rate_control.h"
 
 namespace ns3 {
 
@@ -73,24 +75,24 @@ protected:
       0.85; // Factor to decrease rate per second during multiplicative decrease
 
   // Time window accross which to measure incoming traffic rate
-  const Time receive_rate_window = MilliSeconds (500);
+  const Time receive_rate_window = MilliSeconds (150);
 
   // State variables
-  DetectorSignal signal = DetectorSignal::NORMAL;
+  webrtc::BandwidthUsage signal = webrtc::BandwidthUsage::kBwNormal;
   ControllerState state = ControllerState::INCREASE;
   Time overuse_detected_since = Seconds (0);
   bool overuse_detected = false;
 
   // Initial values
-  double adaptive_treshold = del_var_th_0;
-  double overuse_treshold = adaptive_treshold;
-  double underuse_treshold = -adaptive_treshold;
+  double adaptive_threshold = del_var_th_0;
+  double overuse_threshold = 0.10;
+  double underuse_threshold = -0.10;
   double e = e_0; // System error covariance
   double d_m = 0; // Measured one way delay gradient
   double m = 0; // Estimate of the one way delay gradient
   double z = 0; // Residual
   double kalman_gain = 0; // Kalman gain
-  double treshold_gain = 0; // Treshold gain
+  double threshold_gain = 0; // threshold gain
   double measurement_noise_variance = 0; // Variance of the one way delay gradient
 
   // Record information about frames to compute inter arrival times
@@ -107,10 +109,11 @@ protected:
   std::map<Time, u_int16_t> received_bytes;
   double receive_rate; // Rate of traffic arriving in the last receive_rate_window, in Bytes/s
 
+  webrtc::AimdRateControl rate_control;
   double A_r = 0; // Rate estimate computed by the controller, in Bytes/s
 
   Time last_rate_update = Seconds (0);
-  int64_t last_treshold_update_ms = -1;
+  int64_t last_threshold_update_ms = -1;
 
   CongestionControlPhase phase = CongestionControlPhase::STARTUP;
   Time round_trip_time = CC_INITIAL_RTT;
@@ -174,7 +177,7 @@ protected:
   }
 
   /**
-   * Update the gradient estimate along with the adaptive treshold and Kalman gain
+   * Update the gradient estimate along with the adaptive threshold and Kalman gain
   */
   void
   UpdateGradientEstimate ()
@@ -220,43 +223,70 @@ protected:
     // kalman_gain = std::min (0.90, kalman_gain); // TODO: remove this line (for testing only)
     m = (1 - kalman_gain) * m_prev + kalman_gain * d_m;
 
-    // Update the treshold gain
+    // Update the threshold gain
     // kγ (t_i ) = k_d if |m(t_i )| < γ(t_i−1 )
     // kγ (t_i ) = k_u otherwise
-    if (std::abs (m) < adaptive_treshold)
+    if (std::abs (m) < adaptive_threshold)
       {
-        treshold_gain = K_d;
+        threshold_gain = K_d;
       }
     else
       {
-        treshold_gain = K_u;
+        threshold_gain = K_u;
       }
 
     // From the draft:
     // del_var_th(i) SHOULD NOT be updated if this condition holds:
     //  |m(i)| - del_var_th(i) > 15
-    // if (std::abs (m) - adaptive_treshold > 15)
+    // if (std::abs (m) - adaptive_threshold > 15)
     //   {
     //     return;
     //   }
 
-    // Update the adaptive treshold
+    // Update the adaptive threshold
     // γ(t_i ) = γ(t_i−1 ) + ∆T · kγ (t_i )(|m(t_i )| − γ(t_i−1 ))
     // ∆T = t_i − t_i−1
     double delta_t =
         (frame_current->last_pkt_rcv_time - frame_previous->last_pkt_rcv_time).GetMilliSeconds ();
-    adaptive_treshold =
-        adaptive_treshold + delta_t * treshold_gain * (std::abs (m) - adaptive_treshold);
+    adaptive_threshold =
+        adaptive_threshold + delta_t * threshold_gain * (std::abs (m) - adaptive_threshold);
 
-    // adaptive_treshold = 0.2; // TODO: still deteriorates if treshold is dynamic
+    // adaptive_threshold = 0.2; // TODO: still deteriorates if threshold is dynamic
     // From the draft:
     // It is also RECOMMENDED to clamp del_var_th(i) to the range [6, 600],
     // since a too small del_var_th(i) can cause the detector to become overly
     // sensitive.
-    // adaptive_treshold = std::max (6.0, std::min (adaptive_treshold, 600.0));
+    // adaptive_threshold = std::max (6.0, std::min (adaptive_threshold, 600.0));
 
-    overuse_treshold = adaptive_treshold;
-    underuse_treshold = -adaptive_treshold;
+    overuse_threshold = adaptive_threshold;
+    underuse_threshold = -adaptive_threshold;
+  }
+
+  void
+  UpdateAdaptivethreshold ()
+  {
+    int64_t now_ms = Simulator::Now ().GetMilliSeconds ();
+    if (last_threshold_update_ms == -1)
+      {
+        last_threshold_update_ms = now_ms;
+      }
+
+    // if (fabs(modified_trend) > threshold_ + kMaxAdaptOffsetMs) {
+    //   // Avoid adapting the threshold to big latency spikes, caused e.g.,
+    //   // by a sudden capacity drop.
+    //   last_threshold_update = Simulator::Now();
+    //   return;
+
+    double k_up_ = 0.0087;
+    double k_down_ = 0.039;
+
+    const double k = fabs (m) < overuse_threshold ? k_down_ : k_up_;
+    const int64_t kMaxTimeDeltaMs = 100;
+    int64_t time_delta_ms = std::min (now_ms - last_threshold_update_ms, kMaxTimeDeltaMs);
+    overuse_threshold += k * (fabs (m) - overuse_threshold) * time_delta_ms;
+    overuse_threshold = std::max (0.05, std::min (overuse_threshold, 600.0));
+    // overuse_threshold = std::max(6.0, std::min(overuse_threshold, 600.0));
+    last_threshold_update_ms = now_ms;
   }
 
   /**
@@ -286,19 +316,19 @@ protected:
   }
 
   /**
-   * Update the signal based on the current gradient estimate and treshold
+   * Update the signal based on the current gradient estimate and threshold
   */
   void
   UpdateSignal ()
   {
-    if (m > overuse_treshold)
+    if (m > overuse_threshold)
       {
         // Only signal overuse if we have been above the threshold for a certain time
         if (overuse_detected)
           {
             if (Simulator::Now () - overuse_detected_since > MilliSeconds (overuse_time_th))
               {
-                signal = DetectorSignal::OVERUSE;
+                signal = webrtc::BandwidthUsage::kBwOverusing;
                 phase = CongestionControlPhase::CONGESTION_AVOIDANCE;
               }
             else
@@ -310,18 +340,18 @@ protected:
           {
             overuse_detected = true;
             overuse_detected_since = Simulator::Now ();
-            signal = DetectorSignal::NORMAL;
+            signal = webrtc::BandwidthUsage::kBwNormal;
           }
       }
-    else if (m < underuse_treshold)
+    else if (m < underuse_threshold)
       {
         overuse_detected = false;
-        signal = DetectorSignal::UNDERUSE;
+        signal = webrtc::BandwidthUsage::kBwUnderusing;
       }
-    else // underuse_treshold <= m <= overuse_treshold
+    else // underuse_threshold <= m <= overuse_threshold
       {
         overuse_detected = false;
-        signal = DetectorSignal::NORMAL;
+        signal = webrtc::BandwidthUsage::kBwNormal;
       }
   }
 
@@ -336,7 +366,7 @@ protected:
       case ControllerState::DECREASE:
         switch (signal)
           {
-          case DetectorSignal::OVERUSE:
+          case webrtc::BandwidthUsage::kBwOverusing:
             // Delay still increasing, so keep lowering rate
             break;
           default: // NORMAL or UNDERUSE
@@ -348,32 +378,36 @@ protected:
       case ControllerState::HOLD:
         switch (signal)
           {
-          case DetectorSignal::OVERUSE:
+          case webrtc::BandwidthUsage::kBwOverusing:
             // Queue is filling up, so decrease rate
             state = ControllerState::DECREASE;
             break;
-          case DetectorSignal::NORMAL:
+          case webrtc::BandwidthUsage::kBwNormal:
             // Queue is drained, can start increasing again
             state = ControllerState::INCREASE;
             break;
-          case DetectorSignal::UNDERUSE:
+          case webrtc::BandwidthUsage::kBwUnderusing:
             // Queue is draining, keep rate steady
+            break;
+          default:
             break;
           }
         break;
       case ControllerState::INCREASE:
         switch (signal)
           {
-          case DetectorSignal::OVERUSE:
+          case webrtc::BandwidthUsage::kBwOverusing:
             // Queue is filling up, so decrease rate
             state = ControllerState::DECREASE;
             break;
-          case DetectorSignal::NORMAL:
+          case webrtc::BandwidthUsage::kBwNormal:
             // Delay steady, can keep increasing
             break;
-          case DetectorSignal::UNDERUSE:
+          case webrtc::BandwidthUsage::kBwUnderusing:
             // Queue is draining, keep rate steady
             state = ControllerState::HOLD;
+            break;
+          default:
             break;
           }
         break;
@@ -386,45 +420,56 @@ protected:
   void
   UpdateRate ()
   {
+    // rate_control.Update (signal, BitRate (receive_rate * 8), Simulator::Now ());
+
+    A_r = rate_control.LatestEstimate ().bytes_per_sec();
+
+    std::cout << "Updated rate control with state: " << static_cast<int> (signal)
+              << " and rate: " << receive_rate << " and the new estimate is " << A_r << std::endl;
+    return;
+
     double time_since_last_update = (Simulator::Now () - last_rate_update).GetSeconds ();
+
+    auto rtt_interval = round_trip_time.GetSeconds () + 0.1;
+    if (time_since_last_update < rtt_interval)
+      {
+        return;
+      }
+
     double eta;
     switch (state)
       {
       case ControllerState::DECREASE:
-        // Decrease rate by at most 15% per second
-        eta = std::pow (DECREASE_FACTOR_MULT, std::min (time_since_last_update, 1.0));
-
         // If the received rate is very high it can actually be that the new
         // rate is higher than the the previous one
-        A_r = std::min (A_r, eta * receive_rate);
+        A_r = std::min (A_r, 0.85 * receive_rate);
+        std::cout << "DEBUG decrase: " << A_r << " < " << 0.85 * receive_rate << std::endl;
         break;
       case ControllerState::HOLD:
         break;
       case ControllerState::INCREASE:
-
-        // // Increase rate by at most 8% per second
-        // eta = std::pow (INCREASE_FACTOR_MULT,
-        //                 std::min (double, 1.0));
-        // A_r = eta * A_r + 1e4;
-
         // In startup phase, increase rate by up to CC_MULTI_INCREASE per round trip time
-        if (phase == CongestionControlPhase::STARTUP)
+        // if (phase == CongestionControlPhase::STARTUP)
+        if (true)
           {
             eta = std::pow (CC_MULTI_INCREASE,
                             std::min (time_since_last_update / round_trip_time.GetSeconds (), 1.0));
-            A_r = eta * A_r + CC_ADDITIVE_TERM;
+            // eta = std::pow(1.08, std::min(time_since_last_update, 1.0));
+            A_r = eta * A_r; // + CC_ADDITIVE_TERM;
+            // // If the receive rate is somehow still higher than our estimate, use
+            // // this as our new estimate. This can happen during startup phase.
+            A_r = std::max (A_r, receive_rate);
           }
         else // Otherwise, do additive increase
           {
-            A_r = A_r + CC_ADDITIVE_TERM;
+            eta = 1460 / 2 * time_since_last_update / rtt_interval;
+            A_r = A_r + eta;
+            // A_r = A_r * 1.02 + 5 * CC_ADDITIVE_TERM; // TODO: completely arbitrary right now
           }
 
         // Cap at 1.5x the receive_rate, to prevent increasing too quickly
         A_r = std::min (A_r, 1.5 * receive_rate);
 
-        // If the receive rate is somehow still higher than our estimate, use
-        // this as our new estimate. This can happen during startup phase.
-        A_r = std::max (A_r, receive_rate);
         break;
       }
     last_rate_update = Simulator::Now ();
@@ -452,6 +497,13 @@ protected:
     m = numerator / denominator;
   }
 
+  void
+  Updatethresholds ()
+  {
+    overuse_threshold = adaptive_threshold;
+    underuse_threshold = -adaptive_threshold;
+  }
+
   std::string
   GetLogPrefix ()
   {
@@ -459,6 +511,13 @@ protected:
   }
 
 public:
+  DelayBasedController ()
+  {
+    // Initialize the rate control
+    rate_control.SetStartBitrate (webrtc::DataRate::BytesPerSec (CC_INITIAL_SEND_RATE ));
+    rate_control.SetMinBitrate (webrtc::DataRate::KilobitsPerSec(CC_INITIAL_SEND_RATE / 4));
+  };
+
   /**
    * @return Current recommended send rate computed by the controller
   */
@@ -490,27 +549,6 @@ public:
   }
 
   /**
-   * Get a snapshot of the controllers state at the current time
-  */
-  ControllerStateSnapshot
-  GetStateSnapshot ()
-  {
-    return ControllerStateSnapshot{
-        .signal = signal,
-        .state = state,
-        .A_r = A_r,
-        .kalman_gain = kalman_gain,
-        .treshold_hi = overuse_treshold,
-        .treshold_lo = underuse_treshold,
-        .m = m,
-        .d_m = d_m,
-        .z = z,
-        .variance = measurement_noise_variance,
-        .error = e,
-    };
-  }
-
-  /**
    * Feed a PacketRecord into the controller and compute trendline slope
    *
    * The trendline and slope are computed once enough packet data is recorded.
@@ -521,30 +559,52 @@ public:
   FeedPacketTrendLine (PacketRecord *packet)
   {
     received_bytes[packet->time_received] = packet->size;
-    UpdateReceiveRate ();
+    // UpdateReceiveRate ();
 
-    // HACK: Set initial tresholds, we need a constructor...
-    if (trend_history.empty ())
-      {
-        overuse_treshold = 0.02;
-        underuse_treshold = 0.0;
-      }
+    // HACK: Set initial thresholds, we need a constructor...
+    // if (trend_history.empty ())
+    //   {
+    //     overuse_threshold = 0.10;
+    //     underuse_threshold = 0.0;
+    //   }
 
     auto latency_ms = (packet->time_received - packet->time_sent).GetMilliSeconds ();
 
     trend_history.push_back (latency_ms);
 
-    if (trend_history.size () > trend_packets)
-      {
-        trend_history.pop_front ();
-      }
+    // if (trend_history.size () > trend_packets)
+    //   {
+    //     trend_history.pop_front ();
+    //   }
 
-    if (trend_history.size () == trend_packets)
+    // if (trend_history.size () == trend_packets)
+    //   {
+    //     ComputeTrendlineSlope ();
+    //     UpdateSignal ();
+    //     UpdateStateMachine ();
+    //     UpdateRate ();
+    //   }
+
+    // UpdateAdaptivethreshold ();
+  }
+
+  void
+  FeedReport (PacketsReport *report)
+  {
+    trend_history.clear ();
+    for (auto packet : report->packets)
+      {
+        FeedPacketTrendLine (&packet);
+      }
+    UpdateReceiveRate ();
+    // if (trend_history.size () == trend_packets)
+    if (trend_history.size () > 1)
       {
         ComputeTrendlineSlope ();
         UpdateSignal ();
         UpdateStateMachine ();
         UpdateRate ();
+        UpdateAdaptivethreshold ();
       }
   }
 

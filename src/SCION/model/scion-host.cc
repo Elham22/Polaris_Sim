@@ -578,9 +578,9 @@ ScionHost::SendAppPacket (App *app, Payload payload, PayloadType payload_type, u
 void
 ScionHost::ReceiveAppData (ScionPacket *packet, AppData *data)
 {
-  std::cout << GetLogPrefix () << "Receiving app data packet from " << data->app_id << " via path "
-            << data->path_id << ", frame_no: " << data->frame_no << ", seq_no: " << data->seq_no
-            << ", size: " << packet->size << std::endl;
+  // std::cout << GetLogPrefix () << "Receiving app data packet from " << data->app_id << " via path "
+  //           << data->path_id << ", frame_no: " << data->frame_no << ", seq_no: " << data->seq_no
+  //           << ", size: " << packet->size << std::endl;
 
   // If there is a ip_packet encapsulated in the app_data, we need retrieve the
   // corresponding TCP application and inject the packet to its layer 4
@@ -677,7 +677,7 @@ ScionHost::CheckConnectionTimeout (app_connection_key_t key)
       return;
     }
 
-  Simulator::Schedule (connection_timeout - time_since_last_update,
+  Simulator::Schedule (connection_timeout,
                        &ScionHost::CheckConnectionTimeout, this, key);
 }
 

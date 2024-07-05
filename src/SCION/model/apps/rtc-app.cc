@@ -21,6 +21,7 @@
 #include "src/SCION/model/scion-core-as.h"
 #include "src/SCION/model/apps/app.h"
 #include "src/SCION/model/webrtc-cc/types.h"
+#include "src/SCION/model/webrtc-cc/cc-units.h"
 #include "src/SCION/model/webrtc-cc/delay-based-estimator.cc"
 #include "src/SCION/model/webrtc-cc/loss-based-estimator.cc"
 #include <iomanip>

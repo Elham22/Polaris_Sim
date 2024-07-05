@@ -27,7 +27,13 @@
 namespace ns3 {
 
 enum class ControllerState { DECREASE, HOLD, INCREASE };
-// const char *BandwidthUsageToString (BandwidthUsage usage);
+
+enum class BandwidthUsage {
+  kBwNormal = 0,
+  kBwUnderusing = 1,
+  kBwOverusing = 2,
+};
+const char *BandwidthUsageToString (BandwidthUsage usage);
 
 /**
  * Congestion control related constants

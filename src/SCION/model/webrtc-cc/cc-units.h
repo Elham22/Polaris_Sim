@@ -18,8 +18,8 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#ifndef WEBRTC_TYPES_H
-#define WEBRTC_TYPES_H
+#ifndef WEBRTC_UNITS_H
+#define WEBRTC_UNITS_H
 
 #include "src/core/model/simulator.h"
 #include <vector>
@@ -289,4 +289,4 @@ public:
 
 } // namespace ns3
 
-#endif // WEBRTC_TYPES_H
+#endif // WEBRTC_UNITS_H

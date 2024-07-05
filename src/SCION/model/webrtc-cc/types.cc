@@ -18,23 +18,23 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#include "src/SCION/model/webrtc/types.h"
+#include "src/SCION/model/webrtc-cc/types.h"
 #include <vector>
 
 namespace ns3 {
-// const char *
-// BandwidthUsageToString (BandwidthUsage usage)
-// {
-//   switch (usage)
-//     {
-//     case BandwidthUsage::kBwNormal:
-//       return "kBwNormal";
-//     case BandwidthUsage::kBwUnderusing:
-//       return "kBwUnderusing";
-//     case BandwidthUsage::kBwOverusing:
-//       return "kBwOverusing";
-//     }
-//   return "Unknown";
-// }
+const char *
+BandwidthUsageToString (BandwidthUsage usage)
+{
+  switch (usage)
+    {
+    case BandwidthUsage::kBwNormal:
+      return "kBwNormal";
+    case BandwidthUsage::kBwUnderusing:
+      return "kBwUnderusing";
+    case BandwidthUsage::kBwOverusing:
+      return "kBwOverusing";
+    }
+  return "Unknown";
+}
 
 } // namespace ns3

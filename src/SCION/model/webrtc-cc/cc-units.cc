@@ -18,31 +18,21 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#ifndef SCION_SIMULATOR_CONTROLLER_STATE_H
-#define SCION_SIMULATOR_CONTROLLER_STATE_H
 
-#include "src/SCION/model/webrtc-cc/types.h"
+#include "src/SCION/model/webrtc-cc/cc-units.h"
 
 namespace ns3 {
 
-/**
- * Struct to hold the state of the controller at a certain point in time for visualization
-*/
-struct ControllerStateSnapshot
-{
-  BandwidthUsage signal;
-  ControllerState state;
-  double A_r;
-  double kalman_gain;
-  double threshold_hi;
-  double threshold_lo;
-  double m;
-  double d_m;
-  double z;
-  double variance;
-  double error;
-};
+  DataSize BitRate::operator*(const TimeDelta& delta) const {
+    return DataSize(bps_ * delta.seconds());
+  }
+
+  BitRate DataSize::operator/(const TimeDelta& delta) const {
+    return BitRate(bits_ / delta.seconds());
+  }
+
+  TimeDelta DataSize::operator/(const BitRate& rate) const {
+    return TimeDelta(Time::FromDouble(bits_ / static_cast<double>(rate.bps()), Time::Unit::S));
+  }
 
 } // namespace ns3
-
-#endif // SCION_SIMULATOR_CONTROLLER_STATE_H
