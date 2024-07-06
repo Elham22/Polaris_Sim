@@ -564,6 +564,11 @@ public:
                 sendrate = target_rate.target_rate.bps () / 8;
               }
           }
+
+        if (sendrate > 1'200'000) {
+          std::cout << "sendrate too big: " << sendrate << ", clamping to 0.8MB/s" << std::endl;
+          sendrate = 800'000;
+        }
       }
 
     // CheckPhase ();
