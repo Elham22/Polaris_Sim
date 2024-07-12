@@ -27,8 +27,10 @@
 #include "src/SCION/model/webrtc-cc/types.h"
 #include "src/SCION/model/scion-packet.h"
 #include "src/SCION/model/externs.h"
-#include "src/SCION/model/webrtc/api/network_state_predictor.h"
-#include "src/SCION/model/webrtc/modules/remote_bitrate_estimator/aimd_rate_control.h"
+#include "api/network_state_predictor.h"
+// #include "modules/remote_bitrate_estimator/aimd_rate_control.h"
+// #include "src/SCION/model/webrtc/api/network_state_predictor.h"
+// #include "src/SCION/model/webrtc/modules/remote_bitrate_estimator/aimd_rate_control.h"
 
 namespace ns3 {
 
@@ -109,7 +111,7 @@ protected:
   std::map<Time, u_int16_t> received_bytes;
   double receive_rate; // Rate of traffic arriving in the last receive_rate_window, in Bytes/s
 
-  webrtc::AimdRateControl rate_control;
+//   webrtc::AimdRateControl rate_control;
   double A_r = 0; // Rate estimate computed by the controller, in Bytes/s
 
   Time last_rate_update = Seconds (0);
@@ -422,7 +424,7 @@ protected:
   {
     // rate_control.Update (signal, BitRate (receive_rate * 8), Simulator::Now ());
 
-    A_r = rate_control.LatestEstimate ().bytes_per_sec();
+    // A_r = rate_control.LatestEstimate ().bytes_per_sec();
 
     std::cout << "Updated rate control with state: " << static_cast<int> (signal)
               << " and rate: " << receive_rate << " and the new estimate is " << A_r << std::endl;
@@ -514,8 +516,8 @@ public:
   DelayBasedController ()
   {
     // Initialize the rate control
-    rate_control.SetStartBitrate (webrtc::DataRate::BytesPerSec (CC_INITIAL_SEND_RATE ));
-    rate_control.SetMinBitrate (webrtc::DataRate::KilobitsPerSec(CC_INITIAL_SEND_RATE / 4));
+    // rate_control.SetStartBitrate (webrtc::DataRate::BytesPerSec (CC_INITIAL_SEND_RATE ));
+    // rate_control.SetMinBitrate (webrtc::DataRate::KilobitsPerSec(CC_INITIAL_SEND_RATE / 4));
   };
 
   /**

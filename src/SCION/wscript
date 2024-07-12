@@ -22,6 +22,7 @@ def configure(conf):
     "-Wno-unused-const-variable",
     # "-Wno-unused-private-field",
     # "-Wno-template-id-cdtor",
+    "-Wno-tautological-bitwise-compare",
     "-Wno-deprecated-declarations",
     "-Wno-unused-variable",
     "-fno-permissive",

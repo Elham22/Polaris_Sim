@@ -24,20 +24,11 @@
 #include "src/SCION/model/webrtc-cc/cc-units.h"
 #include "src/SCION/model/webrtc-cc/delay-based-estimator.cc"
 #include "src/SCION/model/webrtc-cc/loss-based-estimator.cc"
-// #define WEBRTC_POSIX
-// #define WEBRTC_LINUX
-// #define WEBRTC_LIBRARY_IMPL
-// #define ABSL_MUST_USE_RESULT
 
-#include "src/SCION/model/webrtc/modules/goog_cc/goog_cc_network_control.h"
-// #include "modules/congestion_controller/goog_cc/goog_cc_network_control.h"
-// #undef API_TRANSPORT_NETWORK_TYPES_H_
-// #undef API_NETWORK_STATE_PREDICTOR_H_
+#include "modules/congestion_controller/goog_cc/goog_cc_network_control.h"
 #include "api/environment/environment_factory.h"
 #include "api/transport/network_types.h"
 #include "api/transport/network_control.h"
-// #include "api/units/data_rate.h"
-// #include "api/units/data_size.h"
 #include "api/units/timestamp.h"
 #include "api/transport/goog_cc_factory.h"
 
@@ -103,6 +94,7 @@ protected:
   std::vector<PathStatistics> path_infos;
 
   std::map<app_packet_id_t, AppProbe> in_flight_probes;
+  double in_flight_bytes = 0;
 
   std::vector<double> bitrates{10 * 0.7e6, 10 * 1.5e6, 10 * 5e6};
   uint32_t selected_bitrate = 0;
@@ -120,7 +112,7 @@ protected:
 
   double A_r = 0; // send rate estimate by the receiver side loss based controller
   double A_s = 0; // send rate estimate by the sender side loss based controller
-  double sendrate = CC_INITIAL_SEND_RATE; // in Bytes per second
+  double sendrate = 300'000 / 8; // 300 Kbps
 
   double steering_threshold_u = 20;
   double steering_threshold_l = 0;
@@ -189,14 +181,15 @@ public:
 
     // using namespace webrtc;
     webrtc::GoogCcFactoryConfig factory_config;
-    factory_config.feedback_only = false;
+    factory_config.feedback_only = true;
     factory_config.network_state_estimator_factory = nullptr;
 
-    webrtc::GoogCcNetworkControllerFactory factory = webrtc::GoogCcNetworkControllerFactory (std::move(factory_config));
+    webrtc::GoogCcNetworkControllerFactory factory =
+        webrtc::GoogCcNetworkControllerFactory (std::move (factory_config));
     webrtc::Environment default_env = webrtc::EnvironmentFactory ().Create ();
-    webrtc::NetworkControllerConfig config(default_env);
+    webrtc::NetworkControllerConfig config (default_env);
 
-    config.constraints.at_time = webrtc::Timestamp::Millis (Simulator::Now ().GetMilliSeconds ());
+    config.constraints.at_time = TimestampNow ();
 
     network_controller = factory.Create (config);
 
@@ -208,7 +201,7 @@ public:
 
     // Choose a random path to start with
     active_path = rand () % num_paths;
-    active_path = 1 -1; // TODO: For testing
+    active_path = 0; // TODO: For testing
 
     Log ("Initialized RTCApp " + std::to_string (app_id));
     Log ("  Runtime config: " + std::to_string (runtime_config), false);
@@ -229,8 +222,11 @@ public:
     // });
 
     // Start sending probes and video frames after a random delay, to avoid synchronization
-    Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &RTCApp::SendVideoFrame, this);
-    Simulator::Schedule (MilliSeconds (2000) + RandomDelay (1500), &RTCApp::SendProbes, this);
+    // Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &RTCApp::SendVideoFrame, this);
+    // Simulator::Schedule (MilliSeconds (2000) + RandomDelay (1500), &RTCApp::SendProbes, this);
+
+    SendVideoFrame ();
+    SendProbes ();
   }
 
   void
@@ -512,7 +508,8 @@ public:
                 packet_result.receive_time =
                     webrtc::Timestamp::Millis (it->time_received.GetMilliSeconds ());
               }
-              else{ 
+            else
+              {
                 // continue;
               }
 
@@ -520,23 +517,31 @@ public:
           }
       }
 
-    // Clean up in-flight packets
+    // Clean up in-flight packets for which packet.sequence_number <= highest_seq_no
+    // and also remove their size from in_flight_bytes
     path_infos[path_id].in_flight_packets.erase (
         std::remove_if (path_infos[path_id].in_flight_packets.begin (),
                         path_infos[path_id].in_flight_packets.end (),
-                        [highest_seq_no] (webrtc::SentPacket packet) {
-                          return packet.sequence_number <= highest_seq_no;
+                        [this, highest_seq_no] (webrtc::SentPacket packet) {
+                          if (packet.sequence_number <= highest_seq_no)
+                            {
+                              in_flight_bytes -= packet.size.bytes ();
+                              return true;
+                            }
+                          return false;
                         }),
         path_infos[path_id].in_flight_packets.end ());
 
     // Use the WebRTC network controller
     webrtc::TransportPacketsFeedback feedback;
-    feedback.feedback_time = webrtc::Timestamp::Millis (Simulator::Now ().GetMilliSeconds ());
-    feedback.packet_feedbacks = packet_feedbacks;
+    feedback.feedback_time = TimestampNow ();
+    feedback.packet_feedbacks = std::move (packet_feedbacks);
 
-    // TODO: data_in_flight ?
+    // TODO: is this correct?
+    feedback.data_in_flight = webrtc::DataSize::Bytes (in_flight_bytes);
 
-    webrtc::NetworkControlUpdate update = network_controller->OnTransportPacketsFeedback (feedback);
+    webrtc::NetworkControlUpdate update =
+        network_controller->OnTransportPacketsFeedback (std::move (feedback));
 
     if (update.has_updates ())
       {
@@ -551,29 +556,30 @@ public:
         Log ("Received target rate update: " + std::to_string (sendrate));
 
         // cast network controller to Googccnetworkcontroller
-        webrtc::GoogCcNetworkController *goog_cc_network_controller = dynamic_cast<webrtc::GoogCcNetworkController *>(network_controller.get());
-        update = goog_cc_network_controller->GetNetworkState(webrtc::Timestamp::Millis (Simulator::Now ().GetMilliSeconds ()));
+        webrtc::GoogCcNetworkController *goog_cc_network_controller =
+            dynamic_cast<webrtc::GoogCcNetworkController *> (network_controller.get ());
+        update = goog_cc_network_controller->GetNetworkState (TimestampNow ());
         if (update.target_rate.has_value ())
           {
-            Log ("Another target rate update: ");
-            if(target_rate.target_rate != update.target_rate.value ().target_rate)
+            Log ("Another target rate update:  ");
+            if (target_rate.target_rate != update.target_rate.value ().target_rate)
               {
-                Log ("Different target rate updatee: ");
+                Log ("Different target rate update: ");
 
                 target_rate = update.target_rate.value ();
                 sendrate = target_rate.target_rate.bps () / 8;
               }
           }
-
-        if (sendrate > 1'200'000) {
-          std::cout << "sendrate too big: " << sendrate << ", clamping to 0.8MB/s" << std::endl;
-          sendrate = 800'000;
-        }
       }
 
     // CheckPhase ();
     // UpdateBWE ();
     TrackState ();
+
+    if (cfgPathSwitching)
+      {
+        CheckPathSwitch ();
+      }
 
     delete report;
   }
@@ -712,13 +718,13 @@ public:
   {
     // If the loss is very low, don't bother switching paths as we're still upping the send rate
     // if (path_infos[active_path].loss < 0.2)
-    if (!delay_based_estimator.CongestionDetected ())
-      {
-        return;
-      }
+    // if (!delay_based_estimator.CongestionDetected ())
+    //   {
+    //     return;
+    //   }
 
-    // If we switched paths only recently, and the loss is still tolerable, don't switch
-    if (path_infos[active_path].loss < 0.5 && Simulator::Now () - last_path_change < Seconds (0.5))
+    // Don't switch paths too often
+    if (Simulator::Now () - last_path_change < Seconds (10))
       {
         return;
       }
@@ -775,6 +781,21 @@ public:
     loss_based_estimator.Reset ();
     delay_based_estimator.SetPhase (CongestionControlPhase::STARTUP);
     last_path_change = Simulator::Now ();
+
+    double new_rate = path_infos[new_path].fair_share;
+
+    webrtc::TargetRateConstraints new_constraints;
+    new_constraints.at_time = TimestampNow ();
+    new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (new_rate);
+    // contraints.min_data_rate
+    // contraints.max_data_rate
+
+    webrtc::NetworkRouteChange route_change;
+    route_change.at_time = TimestampNow ();
+    // route_change.target_rate = webrtc::DataRate::BytesPerSec (path_infos[new_path].fair_share);
+    route_change.constraints = new_constraints;
+
+    network_controller->OnNetworkRouteChange (route_change);
   }
 
   void
@@ -890,16 +911,25 @@ public:
     Log ("Sending packet with frame_no " + std::to_string (frame_no) + " and seq_no " +
          std::to_string (app_data.seq_no) + " on path " + std::to_string (active_path));
 
+    in_flight_bytes += packet_size;
+
     webrtc::SentPacket sent_packet;
     sent_packet.sequence_number = app_data.seq_no;
-    sent_packet.send_time = webrtc::Timestamp::Millis (Simulator::Now ().GetMilliSeconds ());
+    sent_packet.send_time = TimestampNow ();
     sent_packet.size = webrtc::DataSize::Bytes (packet_size);
 
-    // TODO are these fields necessary?
+    // TODO are these fields necessary? How to use them?
     // sent_packet.prior_unacked_data
-    // sent_packet.data_in_flight
+    sent_packet.data_in_flight = webrtc::DataSize::Bytes (in_flight_bytes);
 
     path_infos[active_path].in_flight_packets.push_back (sent_packet);
+    (void) network_controller->OnSentPacket (sent_packet);
+  }
+
+  webrtc::Timestamp
+  TimestampNow ()
+  {
+    return webrtc::Timestamp::Micros (Simulator::Now ().GetMicroSeconds ());
   }
 
   void

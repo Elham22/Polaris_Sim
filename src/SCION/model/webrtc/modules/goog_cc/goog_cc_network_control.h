@@ -27,21 +27,15 @@
 #include "api/units/time_delta.h"
 #include "api/units/timestamp.h"
 #include "modules/congestion_controller/goog_cc/acknowledged_bitrate_estimator_interface.h"
-// #include "modules/congestion_controller/goog_cc/alr_detector.h"
-// #include "modules/congestion_controller/goog_cc/congestion_window_pushback_controller.h"
-// #include "modules/congestion_controller/goog_cc/delay_based_bwe.h"
-// #include "modules/congestion_controller/goog_cc/loss_based_bwe_v2.h"
-// #include "modules/congestion_controller/goog_cc/probe_bitrate_estimator.h"
-// #include "modules/congestion_controller/goog_cc/probe_controller.h"
-// #include "modules/congestion_controller/goog_cc/send_side_bandwidth_estimation.h"
+#include "modules/congestion_controller/goog_cc/alr_detector.h"
+#include "modules/congestion_controller/goog_cc/congestion_window_pushback_controller.h"
+#include "modules/congestion_controller/goog_cc/delay_based_bwe.h"
+#include "modules/congestion_controller/goog_cc/loss_based_bwe_v2.h"
+#include "modules/congestion_controller/goog_cc/probe_bitrate_estimator.h"
+#include "modules/congestion_controller/goog_cc/probe_controller.h"
+#include "modules/congestion_controller/goog_cc/send_side_bandwidth_estimation.h"
 #include "rtc_base/experiments/field_trial_parser.h"
 #include "rtc_base/experiments/rate_control_settings.h"
-
-#include "src/SCION/model/webrtc/api/network_state_predictor.h"
-#include "src/SCION/model/webrtc/api/transport/network_control.h"
-#include "src/SCION/model/webrtc/api/transport/network_types.h"
-#include "src/SCION/model/webrtc/modules/goog_cc/delay_based_bwe.h"
-#include "src/SCION/model/webrtc/modules/goog_cc/send_side_bandwidth_estimation.h"
 
 namespace webrtc {
 struct GoogCcConfig {
@@ -102,13 +96,13 @@ class GoogCcNetworkController : public NetworkControllerInterface {
   const bool pace_at_max_of_bwe_and_lower_link_capacity_;
   const bool limit_pacingfactor_by_upper_link_capacity_estimate_;
 
-  // const std::unique_ptr<ProbeController> probe_controller_;
-  // const std::unique_ptr<CongestionWindowPushbackController>
-  //     congestion_window_pushback_controller_;
+  const std::unique_ptr<ProbeController> probe_controller_;
+  const std::unique_ptr<CongestionWindowPushbackController>
+      congestion_window_pushback_controller_;
 
   std::unique_ptr<SendSideBandwidthEstimation> bandwidth_estimation_;
-  // std::unique_ptr<AlrDetector> alr_detector_;
-  // std::unique_ptr<ProbeBitrateEstimator> probe_bitrate_estimator_;
+  std::unique_ptr<AlrDetector> alr_detector_;
+  std::unique_ptr<ProbeBitrateEstimator> probe_bitrate_estimator_;
   std::unique_ptr<NetworkStateEstimator> network_estimator_;
   std::unique_ptr<NetworkStatePredictor> network_state_predictor_;
   std::unique_ptr<DelayBasedBwe> delay_based_bwe_;
@@ -135,7 +129,7 @@ class GoogCcNetworkController : public NetworkControllerInterface {
   DataRate last_loss_based_target_rate_;
   DataRate last_pushback_target_rate_;
   DataRate last_stable_target_rate_;
-  // LossBasedState last_loss_base_state_;
+  LossBasedState last_loss_base_state_;
 
   absl::optional<uint8_t> last_estimated_fraction_loss_ = 0;
   TimeDelta last_estimated_round_trip_time_ = TimeDelta::PlusInfinity();

@@ -16,8 +16,9 @@ gclient sync
 
 # Gen build files
 cd src
+git checkout 5e49544a76ad38e5f000cdf8b20a25278fb78475 # branch-heads/6576
 gn gen out/Static
-gn args out/Static
+gn args out/Static # See below for args
 
 # Build
 ninja -C out/Static
