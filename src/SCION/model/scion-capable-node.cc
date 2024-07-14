@@ -186,12 +186,12 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
           // TODO: this could pose a problem when probe goes through link where probing app has an active flow (paths share links)
           auto available_fair_share = total_bw / (no_flows.at (local_if) + 1.0);
           // std::cout << "host fair share: " << total_bw << " / " << no_flows.at (local_if) + 1.0 << " = " << available_fair_share << std::endl;
-          if (available_fair_share < probe->min_fair_share)
+          if (available_fair_share < probe->bottleneck_share)
             {
-              probe->min_fair_share = available_fair_share;
-              probe->min_fair_share_hop =
+              probe->bottleneck_share = available_fair_share;
+              probe->bottleneck_hop =
                   packet->path.at (packet->curr_inf)->hops.at (packet->cur_hopf);
-              probe->min_fair_share_no_flows = no_flows.at (local_if) + 1;
+              probe->bottleneck_share_no_flows = no_flows.at (local_if) + 1;
             }
           uint64_t queuing_delay = transmission_queues_lengths.at (local_if) /
                                    transmission_delays.at (local_if).ToInteger (Time::Unit::PS);

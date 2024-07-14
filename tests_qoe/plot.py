@@ -85,15 +85,15 @@ def plotAppResults(apps: list[dict]):
             plt.plot(app['time'], app['A_s'], label="A_s")
         if 'A_r' in app:
             plt.plot(app['time'], app['A_r'], label="A_r")
-        plt.plot(app['time'], app['fair_share'], label="fair share",
+        plt.plot(app['time'], app['bottleneck_share'], label="fair share",
                  linewidth=0.5, color='black')
     else:
         # Plot the sending rate for all applications
         for app in apps:
             plt.plot(app['time'], app['sendrate'], label=app['name'])
-        # ..but the fair_share only for the selected application
+        # ..but the bottleneck_share only for the selected application
         app = apps[detail_app]
-        plt.plot(app['time'], app['fair_share'],
+        plt.plot(app['time'], app['bottleneck_share'],
                  label=f"{detail_app}: fair share", linewidth=0.5, color='black')
     plt.legend()
     plt.ylabel("Send rate [MB/s]")

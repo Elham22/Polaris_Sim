@@ -89,7 +89,7 @@ public:
   virtual void ReceiveAppResponse (AppResp app_resp);
   virtual void PrintResults ();
   virtual void PrintPathInfo ();
-  virtual void HandleSCMP (ScmpReqOrResp scmp);
+  virtual void ReceiveScmp (ScmpReqOrResp scmp);
 
 protected:
   uint32_t m_pktSize = 1460; // Size of packets

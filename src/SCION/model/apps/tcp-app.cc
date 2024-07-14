@@ -354,7 +354,7 @@ protected:
   }
 
   void
-  TrackState ()
+  RecordState ()
   {
     if (stopped)
       {
@@ -580,7 +580,7 @@ public:
   ReceiveAppResponse (AppResp app_resp)
   {
     last_report = app_resp;
-    TrackState ();
+    RecordState ();
   }
 
   void

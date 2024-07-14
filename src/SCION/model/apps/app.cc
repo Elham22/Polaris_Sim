@@ -342,7 +342,7 @@ App::PrintPathInfo ()
 }
 
 void
-App::HandleSCMP (ScmpReqOrResp scmp)
+App::ReceiveScmp (ScmpReqOrResp scmp)
 {
   // Implement in subclass
 }
