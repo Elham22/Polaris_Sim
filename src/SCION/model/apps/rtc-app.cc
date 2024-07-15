@@ -77,6 +77,14 @@ RTCApp::RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
   // Choose a random path to start with
   // active_path = rand () % num_paths;
   active_path = 0; // TODO: For testing
+  // for (int i = 1; i < all_paths.size (); i++)
+  //   {
+  //     if (all_paths[i].size () < all_paths[active_path].size ())
+  //       {
+  //         active_path = i;
+  //       }
+  //   }
+  // cfgPathSwitching = false; // TODO: For testing
 
   Log ("Initialized RTCApp " + std::to_string (app_id));
   Log ("  Runtime config: " + std::to_string (runtime_config), false);
