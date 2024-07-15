@@ -21,4 +21,20 @@
 #include "scion-packet.h"
 
 namespace ns3 {
+
+uint16_t
+ScionPacketHeaderSize (const std::vector<const PathSegment *> &path)
+{
+  uint16_t header_bytes = 14 + 12 + 24; // MAC + Common Header + Address Header
+  if (path.size () > 0)
+    {
+      header_bytes += 4 + path.size () * 8; // Path Meta Hdr + Info fields
+      for (auto const &path_seg : path)
+        {
+          header_bytes += path_seg->hops.size () * 12; // Hop Fields
+        }
+    }
+  return header_bytes;
 }
+
+} // namespace ns3

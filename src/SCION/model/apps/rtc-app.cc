@@ -260,40 +260,38 @@ RTCApp::SendVideoFrame ()
       return;
     }
 
-  auto frame_bytes = sendrate / fps;
+  // sendrate / fps == (payload_data + header_overhead) * no_pkts
 
-  // Check if frame_bytes is finite
-  if (!std::isfinite (frame_bytes))
-    {
-      NS_FATAL_ERROR ("Frame size is not finite");
-    }
+  auto available_bytes = sendrate / fps;
 
-  Log ("Sending frame " + std::to_string (frame_no) + " with " + std::to_string (frame_bytes) +
+  uint16_t scion_header_bytes = ScionPacketHeaderSize (all_paths[active_path]);
+  double max_payload_bytes = m_pktSize - sizeof (AppData) - scion_header_bytes;
+  double packets_to_send = std::ceil ((double) available_bytes / max_payload_bytes);
+
+  Log ("Sending frame " + std::to_string (frame_no) + " with " + std::to_string (available_bytes) +
        " bytes on path " + std::to_string (active_path));
 
-  double packets_to_send = std::ceil ((double) frame_bytes / m_pktSize);
   Time packet_interval = frame_interval / packets_to_send;
   Time packet_schedule_delay = Seconds (0);
 
-  // split up into multiple packets if larger than max pkt size
-  while (frame_bytes > m_pktSize)
+  while (available_bytes > max_payload_bytes)
     {
-      Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, m_pktSize,
-                           all_paths[active_path]);
+      Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, max_payload_bytes,
+                           scion_header_bytes, all_paths[active_path]);
       packet_schedule_delay += packet_interval;
-      frame_bytes -= m_pktSize;
+      available_bytes -= max_payload_bytes;
     }
-  if (frame_bytes > 0)
+  if (available_bytes > 0)
     {
-      Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, m_pktSize,
-                           all_paths[active_path]);
+      Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, max_payload_bytes,
+                           scion_header_bytes, all_paths[active_path]);
     }
 
   frame_no++;
 
-  // Schedule next packet
-  auto delay = RandomDelay ((frame_interval / 10).ToInteger (Time::Unit::PS));
-  Simulator::Schedule (frame_interval + delay, &RTCApp::SendVideoFrame, this);
+  // Introduce a random offset of up to 1ms when scheduling the next frame
+  auto rand_offset = RandomDelay (1000);
+  Simulator::Schedule (frame_interval + rand_offset, &RTCApp::SendVideoFrame, this);
 }
 
 void
@@ -301,6 +299,7 @@ RTCApp::ReceiveAppResponse (AppResp app_resp)
 {
   auto path_id = app_resp.path_id;
   std::shared_ptr<PacketsReport> report = app_resp.packets_report;
+  total_bytes_arrived += report->total_bytes;
 
   if (path_id != active_path)
     {
@@ -627,7 +626,8 @@ RTCApp::SwitchToPath (uint32_t new_path)
 }
 
 void
-RTCApp::SendPacket (double payload_size, std::vector<const PathSegment *> path)
+RTCApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes,
+                    std::vector<const PathSegment *> path)
 {
   AppData app_data;
   app_data.app_id = app_id;
@@ -637,17 +637,18 @@ RTCApp::SendPacket (double payload_size, std::vector<const PathSegment *> path)
   app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
   Payload payload = app_data;
   PayloadType payload_type = PayloadType::APPLICATION_DATA;
-  auto packet_size = payload_size + sizeof (AppData);
-  host->SendAppPacket (this, payload, payload_type, packet_size, path);
+  host->SendAppPacket (this, payload, payload_type, payload_bytes, path);
   Log ("Sending packet with frame_no " + std::to_string (frame_no) + " and seq_no " +
        std::to_string (app_data.seq_no) + " on path " + std::to_string (active_path));
 
   webrtc::SentPacket sent_packet;
   sent_packet.sequence_number = app_data.seq_no;
   sent_packet.send_time = TimestampNow ();
-  sent_packet.size = webrtc::DataSize::Bytes (packet_size);
 
-  path_metrics[active_path].in_flight_bytes += packet_size;
+  double scion_pkt_total_bytes = payload_bytes + scion_header_bytes;
+  path_metrics[active_path].in_flight_bytes += scion_pkt_total_bytes;
+
+  sent_packet.size = webrtc::DataSize::Bytes (scion_pkt_total_bytes);
   sent_packet.data_in_flight = webrtc::DataSize::Bytes (path_metrics[active_path].in_flight_bytes);
   // sent_packet.prior_unacked_data // TODO
   path_metrics[active_path].in_flight_packets.push_back (sent_packet);
@@ -694,6 +695,8 @@ RTCApp::PrintResults ()
   j["src_ia"] = ia_addr;
   j["dst_ia"] = dst_ia;
   j["dst_host_addr"] = dst_host_addr;
+  j["bytes_sent"] = total_bytes_sent;
+  j["bytes_received"] = total_bytes_arrived;
 
   nlohmann::json j_states;
   for (RTCAppMetric state : app_metrics)

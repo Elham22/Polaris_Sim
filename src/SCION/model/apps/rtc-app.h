@@ -112,6 +112,9 @@ protected:
   double A_s = 0; // send rate estimate by the sender side loss based controller
   double sendrate = 300'000 / 8; // 300 Kbps
 
+  double total_bytes_sent = 0; // total of app packets sent
+  double total_bytes_arrived = 0; // total of app packets arrived
+
   Time last_path_change = Seconds (0);
   Time last_A_r_update = Seconds (0);
   Time last_report = Seconds (0);
@@ -145,7 +148,7 @@ public:
 
   void SendVideoFrame ();
 
-  void SendPacket (double payload_size, std::vector<const PathSegment *> path);
+  void SendPacket (double payload_size, u_int16_t scion_header_bytes, std::vector<const PathSegment *> path);
 
   void ReceiveAppResponse (AppResp app_resp);
 

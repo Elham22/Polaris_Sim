@@ -63,11 +63,13 @@ struct PacketsReport
 {
   Time time_created = Simulator::Now ();
   std::vector<PacketRecord> packets;
+  double total_bytes = 0;
 
   void
   AddPacket (PacketRecord packet)
   {
     packets.push_back (packet);
+    total_bytes += packet.size;
   }
 
   // Frame is assumed complete when the newest packet is part of a new frame

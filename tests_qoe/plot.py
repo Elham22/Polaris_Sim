@@ -13,6 +13,9 @@ def parse_args():
                                      description="Plotting of host QOE simulation results from SCION simulator")
     parser.add_argument(
         "filepath", help="Input file (result file of simulation) to parse")
+    parser.add_argument("-l", "--loss", action='store_true', help="Plot the loss")
+    parser.add_argument("-d", "--latency", action='store_true', help="Plot the latency")
+    parser.add_argument("-t", "--total", action='store_true', help="Plot the total send rate")
     parser.add_argument("-g", "--gradient",
                         action="store_true", help="Plot the GCC gradient")
     parser.add_argument("-p", "--paths",
@@ -33,18 +36,27 @@ def plotAppResults(apps: list[dict]):
     plt.rc('axes', prop_cycle=default_cycler)
     # plt.style.use('dark_background')
 
-    plot_total_send_rate = False
+    # max number of apps before we stop showing the legend
+    max_apps_legend = 6
+
+    plot_loss = args.loss
+    plot_latency = args.latency
+    plot_total_send_rate = args.total
     plot_active_paths = args.paths
     plot_gcc_gradient = args.gradient
     plot_gcc_state = args.state
     plot_gcc_params = False
 
+    # If true, automatically align metric timestamps to those of the first
+    # application for summing up the total send rate
+    auto_match_time = False
+
     # For which app to plot extra details if there are multiple applications
     detail_app = 0
 
-    no_plots = 4
-    size_y = 4
-    ratios = [1, 1, 1, 1]
+    no_plots = 1
+    size_y = 1
+    ratios = [2]
 
     # Lazy hack to make plot sizing dynamic
     for var in list(locals()):
@@ -57,25 +69,39 @@ def plotAppResults(apps: list[dict]):
     plot_number = 0
     gs = gridspec.GridSpec(no_plots, 1, height_ratios=ratios)
 
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=-0.5 / no_plots)
+    # plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=-0.5 / no_plots)
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
 
-    ax1 = plt.subplot(gs[plot_number])
-    plot_number += 1
-    for app in apps:
-        plt.plot(app['time'], app['loss'], label=app['name'])
+    ax = None
 
-        plt.legend()
-    plt.ylabel("Loss [%]")
+    if plot_loss:
+        if ax is None:
+            ax = plt.subplot(gs[plot_number])
+        else:
+            plt.subplot(gs[plot_number], sharex=ax)
+        plot_number += 1
+        for app in apps:
+            plt.plot(app['time'], app['loss'], label=app['name'])
+        if len(apps) <= max_apps_legend:
+            plt.legend()
+        plt.ylabel("Loss [%]")
 
-    plt.subplot(gs[plot_number], sharex=ax1)
-    plot_number += 1
-    for app in apps:
-        plt.plot(app['time'], app['latency'], label=app['name'])
+    if plot_latency:
+        if ax is None:
+            ax = plt.subplot(gs[plot_number])
+        else:
+            plt.subplot(gs[plot_number], sharex=ax)
+        plot_number += 1
+        for app in apps:
+            plt.plot(app['time'], app['latency'], label=app['name'])
+        if len(apps) <= max_apps_legend:
+            plt.legend()
+        plt.ylabel("Latency [ms]")
 
-        plt.legend()
-    plt.ylabel("Latency [ms]")
-
-    plt.subplot(gs[plot_number], sharex=ax1)
+    if ax is None:
+            ax = plt.subplot(gs[plot_number])
+    else:
+        plt.subplot(gs[plot_number], sharex=ax)
     plot_number += 1
     if len(apps) == 1:  # If there is only one application, plot everything for it
         app = apps[0]
@@ -86,7 +112,8 @@ def plotAppResults(apps: list[dict]):
         if 'A_r' in app:
             plt.plot(app['time'], app['A_r'], label="A_r")
         plt.plot(app['time'], app['bottleneck_share'], label="fair share",
-                 linewidth=0.5, color='black')
+                 linewidth=0.5, color='black', linestyle='--')
+        print(f"Median send rate:        {np.median(app['sendrate'])}")
     else:
         # Plot the sending rate for all applications
         for app in apps:
@@ -94,52 +121,93 @@ def plotAppResults(apps: list[dict]):
         # ..but the bottleneck_share only for the selected application
         app = apps[detail_app]
         plt.plot(app['time'], app['bottleneck_share'],
-                 label=f"{detail_app}: fair share", linewidth=0.5, color='black')
-    plt.legend()
+                 label=f"{detail_app}: fair share", linewidth=0.5, color='black', linestyle='--')
+        
+        # Print highest median send rate
+        highest_median = 0
+        highest_median_app = ""
+        lowest_median = 1000
+        lowest_median_app = ""
+        for app in apps:
+            median = np.median(app['sendrate'])
+            if median > highest_median:
+                highest_median = median
+                highest_median_app = app['name']
+            if median < lowest_median:
+                lowest_median = median
+                lowest_median_app = app['name']
+        print(f"Highest median send rate: {highest_median} by app {highest_median_app})")
+        print(f"Lowest median send rate:  {lowest_median} by app {lowest_median_app})")
+    if len(apps) <= max_apps_legend:
+        plt.legend()
     plt.ylabel("Send rate [MB/s]")
 
     if plot_total_send_rate:
-        plt.subplot(gs[plot_number], sharex=ax1)
+        plt.subplot(gs[plot_number], sharex=ax)
         plot_number += 1
 
-        time = apps[0]['time'].copy()
-        total_rate = apps[0]['sendrate'].copy()
+        if auto_match_time:
+            time = apps[0]['time'].copy()
+            total_rate = apps[0]['sendrate'].copy()
 
-        # Try to match the closest sendrates of all applications to sum them up
-        for app in apps[1:]:
-            for i, t in enumerate(time):
-                # Find the closest time in the other app
-                closest_time = min(app['time'], key=lambda x: abs(x - t))
-                closest_index = app['time'].index(closest_time)
-                total_rate[i] += app['sendrate'][closest_index]
+            # Try to match the closest sendrates of all applications to sum them up
+            for app in apps[1:]:
+                for i, t in enumerate(time):
+                    # Find the closest time in the other app, make use of the fact that the time is sorted
+                    closest_index = np.searchsorted(app['time'], t)
+                    if closest_index >= len(app['time']):
+                        continue
+                    total_rate[i] += app['sendrate'][closest_index]
 
-        plt.plot(time, total_rate, label="Total")
-        plt.grid()
+            plt.plot(time, total_rate, label="Total")
+
+        else:
+            sendrate_at_time = dict()
+            for app in apps:
+                for i, t in enumerate(app['time']):
+                    if t not in sendrate_at_time:
+                        sendrate_at_time[t] = app['sendrate'][i]
+                    sendrate_at_time[t] += app['sendrate'][i]
+            
+            plt.plot(list(sendrate_at_time.keys()), list(sendrate_at_time.values()), label="Total")
+
+            # Draw some lines for reference. Since all links are 1MB/s, a simple
+            # upper bound for the total min(no_apps, no_paths)
+            upper_bound = min(len(apps), max(apps[0]['active_path']) + 1)
+            plt.axhline(y=upper_bound, color='black', linewidth=0.5, linestyle='--', label="Upper bound")
+
+            print(f"Max total send rate:     {max(list(sendrate_at_time.values()))}")
+            print(f"Median total send rate:  {np.median(list(sendrate_at_time.values()))}")
+            print(f"Mean total send rate:    {np.mean(list(sendrate_at_time.values()))}")
+        if len(apps) <= max_apps_legend:
+            plt.legend()
         plt.legend()
         plt.ylabel("Total Send Rate [MB/s]")
 
     if plot_active_paths:
-        plt.subplot(gs[plot_number], sharex=ax1)
+        plt.subplot(gs[plot_number], sharex=ax)
         plot_number += 1
         for app in apps:
             plt.plot(app['time'], app['active_path'], label=app['name'])
 
-        plt.legend()
+        if len(apps) <= max_apps_legend:
+            plt.legend()
         plt.ylabel("Paths")
 
     if plot_gcc_state:
-        plt.subplot(gs[plot_number], sharex=ax1)
+        plt.subplot(gs[plot_number], sharex=ax)
         plot_number += 1
         app = apps[detail_app]
         plt.plot(app['time'], app['gcc_state'], label="State",
                  drawstyle='steps-post', linestyle='--', linewidth=1)
         # plt.plot(app['time'], app['gcc_signal'], label="Signal",
         #          drawstyle='steps-post', linestyle='-.', linewidth=1)
-        plt.legend()
+        if len(apps) <= max_apps_legend:
+            plt.legend()
         plt.ylabel("GCC State")
 
     if plot_gcc_gradient:
-        plt.subplot(gs[plot_number], sharex=ax1)
+        plt.subplot(gs[plot_number], sharex=ax)
         plot_number += 1
         app = apps[detail_app]
         plt.plot(app['time'], app['gradient'], label="Gradient",
@@ -148,11 +216,12 @@ def plotAppResults(apps: list[dict]):
                  color='black', linestyle=':', linewidth=0.5)
         plt.plot(app['time'], app['threshold_lo'], label="threshold -γ",
                  color='black', linestyle=':', linewidth=0.5)
-        plt.legend()
+        if len(apps) <= max_apps_legend:
+            plt.legend()
         plt.ylabel("GCC Gradient")
 
     if plot_gcc_params:
-        plt.subplot(gs[plot_number], sharex=ax1)
+        plt.subplot(gs[plot_number], sharex=ax)
         plot_number += 1
         app = apps[detail_app]
         plt.plot(app['time'], app['kalman_gain'], label="Kalman gain",
@@ -162,7 +231,8 @@ def plotAppResults(apps: list[dict]):
         plt.plot(app['time'], app['error'], label="Error",
                  color='black', linestyle=':', linewidth=1)
 
-        plt.legend()
+        if len(apps) <= max_apps_legend:
+            plt.legend()
         plt.ylabel("GCC Parameters")
 
     xlabel = "Time (s)"
@@ -185,6 +255,12 @@ def host_eval(file):
             app['host'] = host
             print(f"Found results for host {host} app {
                   app['app_id']} type {app['app_type']}")
+            
+            # if app['states'] is null
+            if 'states' not in app or app['states'] is None:
+                print(f"    No states found for app {app['app_id']}")
+                print(json.dumps(app, indent=4))
+                continue
 
             # Remove startup from time and convert to seconds
             app['time'] = [state['time'] / 1000 -
@@ -200,6 +276,12 @@ def host_eval(file):
 
             if not 'name' in app:
                 app['name'] = f"{app['app_id']}:{app['app_type']}"
+
+            if 'bytes_sent' in app:
+                print(f"    Bytes sent:     {app['bytes_sent']}")
+            
+            if 'bytes_received' in app:
+                print(f"    Bytes received: {app['bytes_received']}")
 
             results.append(app)
 

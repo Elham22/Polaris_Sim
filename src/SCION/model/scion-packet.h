@@ -179,6 +179,13 @@ typedef std::variant<PathReqFromHost, RegPathsFromLocalPs, ListOfAllASes, NtpReq
                      ScmpReqOrResp, ProbeReq, ProbeResp, AppData, AppResp, AppProbe>
     Payload;
 
+/**
+ * @brief Compute the overhead of a SCION packet
+ * @param path The chosen path
+ * @return The overhead in bytes
+ */
+uint16_t ScionPacketHeaderSize(const std::vector<const PathSegment *> &path);
+
 struct ScionPacket
 {
 public:
