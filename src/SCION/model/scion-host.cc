@@ -610,7 +610,7 @@ ScionHost::ReceiveAppData (ScionPacket *packet, AppData *data)
       connection.seq_no_start = data->seq_no;
       connection.frame_no = data->frame_no;
       connection.path = packet->path;
-      connection.report = new PacketsReport ();
+      connection.report = std::make_shared<PacketsReport> ();
       connection_infos[key] = connection;
       Simulator::Schedule (connection_timeout, &ScionHost::CheckConnectionTimeout, this, key);
     }
@@ -640,9 +640,7 @@ ScionHost::ReceiveAppData (ScionPacket *packet, AppData *data)
   // sender will see.
   connection->ecn = packet->ecn;
 
-  auto *report = connection->report;
-
-  report->AddPacket (PacketRecord{
+  connection->report->AddPacket (PacketRecord{
       .time_sent = MicroSeconds (data->timestamp),
       .time_received = local_time,
       .seq_no = data->seq_no,
@@ -650,7 +648,7 @@ ScionHost::ReceiveAppData (ScionPacket *packet, AppData *data)
       .size = packet->size,
   });
 
-  if (report->IsFrameComplete () || report->Age () > max_report_interval)
+  if (connection->report->IsFrameComplete () || connection->report->Age () > max_report_interval)
     {
       SendAppResp (key);
     }
@@ -669,7 +667,11 @@ ScionHost::CheckConnectionTimeout (app_connection_key_t key)
   Time time_since_last_update = local_time - connection->last_update;
   if (time_since_last_update > connection_timeout)
     {
-      delete connection->report;
+      // Send final app response if we have anything to report and delete connection
+      if (!connection->report->packets.empty ())
+        {
+          SendAppResp (key);
+        }
       connection_infos.erase (key);
       std::cout << GetLogPrefix () << "Connection closed: No update in "
                 << connection_timeout.GetSeconds () << " seconds from app " << std::get<2> (key)
@@ -677,8 +679,7 @@ ScionHost::CheckConnectionTimeout (app_connection_key_t key)
       return;
     }
 
-  Simulator::Schedule (connection_timeout,
-                       &ScionHost::CheckConnectionTimeout, this, key);
+  Simulator::Schedule (connection_timeout, &ScionHost::CheckConnectionTimeout, this, key);
 }
 
 void
@@ -715,6 +716,7 @@ ScionHost::SendAppResp (app_connection_key_t key)
   app_resp.timestamp = local_time.ToInteger (Time::Unit::US);
   app_resp.path_id = std::get<3> (key);
   app_resp.packets_report = connection->report;
+  connection->report.reset (new PacketsReport ());
 
   Payload payload = app_resp;
 
@@ -723,12 +725,12 @@ ScionHost::SendAppResp (app_connection_key_t key)
   packet->path_reversed = true;
   packet->curr_inf = packet->path.size () - 1;
   packet->cur_hopf = packet->path.at (packet->curr_inf)->hops.size () - 1;
-  std::cout << GetLogPrefix () << "Sending app report to app " << app_resp.app_id << " via path "
-            << app_resp.path_id << ", sequence numbers " << connection->seq_no_start << " to "
-            << connection->seq_no_last << ", num_packets: " << connection->num_packets
-            << ", loss: " << app_resp.loss << ", avg_latency: " << app_resp.avg_latency
-            << ", bytes_received: " << connection->bytes_received << ", ecn: " << app_resp.ecn
-            << std::endl;
+  // std::cout << GetLogPrefix () << "Sending app report to app " << app_resp.app_id << " via path "
+  //           << app_resp.path_id << ", sequence numbers " << connection->seq_no_start << " to "
+  //           << connection->seq_no_last << ", num_packets: " << connection->num_packets
+  //           << ", loss: " << app_resp.loss << ", avg_latency: " << app_resp.avg_latency
+  //           << ", bytes_received: " << connection->bytes_received << ", ecn: " << app_resp.ecn
+  //           << std::endl;
 
   SendScionPacket (packet);
 
@@ -737,10 +739,6 @@ ScionHost::SendAppResp (app_connection_key_t key)
   connection->num_packets = 0;
   connection->bytes_received = 0;
   connection->seq_no_start = connection->seq_no_last + 1;
-
-  // NOTE: Old report will be taken care of by sender. We don't drop app
-  // response packets, so it should never be lost.
-  connection->report = new PacketsReport ();
 }
 
 void

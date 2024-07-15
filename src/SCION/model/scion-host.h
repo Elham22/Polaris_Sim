@@ -48,7 +48,7 @@ struct ConnectionInfo
   int64_t aggregated_latencies = 0;
   uint16_t ecn = 0;
   Time last_update = Seconds(0);
-  PacketsReport *report = nullptr;
+  std::shared_ptr<PacketsReport> report;
 };
 
 class ScionHost : public ScionCapableNode

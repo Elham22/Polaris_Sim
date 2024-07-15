@@ -26,6 +26,7 @@
 #include "ns3/object.h"
 #include "path-segment.h"
 #include "webrtc-cc/types.h"
+#include <memory>
 #include <unordered_set>
 #include <variant>
 
@@ -164,7 +165,7 @@ struct AppResp
 
   // Simplify by sending back report via pointer. Real implementation would use
   // some form of run-length encoding to minimize feedback overhead
-  PacketsReport *packets_report;
+  std::shared_ptr<PacketsReport> packets_report;
 };
 
 struct ScmpReqOrResp

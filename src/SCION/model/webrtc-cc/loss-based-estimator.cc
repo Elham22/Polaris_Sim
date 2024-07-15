@@ -22,6 +22,7 @@
 #define WEBRTC_CC_LOSS_BASED_ESTIMATOR_H
 
 #include <algorithm>
+#include <memory>
 #include <vector>
 #include "src/core/model/simulator.h"
 #include "src/SCION/model/webrtc-cc/cc-units.h"
@@ -172,7 +173,7 @@ public:
   }
 
   void
-  FeedReport (PacketsReport *report)
+  FeedReport (std::shared_ptr<PacketsReport> report)
   {
     packet_history.clear (); // TODO: hack to react quicker
     for (auto packet : report->packets)

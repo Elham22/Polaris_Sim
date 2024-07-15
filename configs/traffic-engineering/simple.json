@@ -1,14 +1,9 @@
 {"events":
 [
   {
-    "time": "30min",
+    "time": "30.00min",
     "type": "start_application",
     "args": ["0", "1", "2", "0", "0", "2", "rtc", "0.0", "0", "1"]
-  },
-  {
-    "time": "30.25min",
-    "type": "start_application",
-    "args": ["0", "1", "2", "0", "0", "2", "TcpCubic", "0.0", "1", "1"]
   }
 ]
 }

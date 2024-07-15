@@ -300,14 +300,13 @@ void
 RTCApp::ReceiveAppResponse (AppResp app_resp)
 {
   auto path_id = app_resp.path_id;
-  PacketsReport *report = app_resp.packets_report;
+  std::shared_ptr<PacketsReport> report = app_resp.packets_report;
 
   if (path_id != active_path)
     {
       Log ("Receiving response on inactive (old) path: " + std::to_string (path_id));
 
       // Don't process responses on inactive paths
-      delete report;
       return;
     }
 
@@ -336,7 +335,7 @@ RTCApp::ReceiveAppResponse (AppResp app_resp)
   path_metrics[path_id].loss = app_resp.loss;
 
   loss_based_estimator.FeedReport (report);
-  delay_based_estimator.FeedReport (report);
+  // delay_based_estimator.FeedReport (report);
 
   path_metrics[path_id].loss = loss_based_estimator.GetLoss ();
 
@@ -344,7 +343,6 @@ RTCApp::ReceiveAppResponse (AppResp app_resp)
   if (report->packets.empty ())
     {
       Log ("WARN: Empty report received");
-      delete report;
       return;
     }
 
@@ -436,8 +434,6 @@ RTCApp::ReceiveAppResponse (AppResp app_resp)
     {
       UpdateActivePath ();
     }
-
-  delete report;
 }
 
 void

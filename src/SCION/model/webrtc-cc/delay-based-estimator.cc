@@ -22,6 +22,7 @@
 #define WEBRTC_CC_DELAY_BASED_ESTIMATOR_H
 
 #include <deque>
+#include <memory>
 #include "src/core/model/simulator.h"
 #include "src/SCION/model/webrtc-cc/cc-units.h"
 #include "src/SCION/model/webrtc-cc/types.h"
@@ -591,7 +592,7 @@ public:
   }
 
   void
-  FeedReport (PacketsReport *report)
+  FeedReport (std::shared_ptr<PacketsReport> report)
   {
     trend_history.clear ();
     for (auto packet : report->packets)
