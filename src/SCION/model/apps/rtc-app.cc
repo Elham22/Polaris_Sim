@@ -105,12 +105,38 @@ RTCApp::StartAppTraffic ()
 
   SendVideoFrame ();
   SendProbes ();
+
+  // Record metrics exactly at multiples of metrics_interval absolute simulation time
+  uint64_t sched_abs_time_ms = Simulator::Now ().GetMilliSeconds () + metrics_interval_ms;
+  sched_abs_time_ms = std::ceil (sched_abs_time_ms / metrics_interval_ms) * metrics_interval_ms;
+  Time sched_rel_time = MilliSeconds (sched_abs_time_ms) - Simulator::Now ();
+  std::cout << "Scheduling metrics recording at " << sched_abs_time_ms << " ms" << std::endl;
+  std::cout << "Current time: " << Simulator::Now ().GetMilliSeconds () << " ms" << std::endl;
+  Simulator::Schedule (sched_rel_time, &RTCApp::RecordMetrics, this);
 }
 
 void
 RTCApp::RecordMetrics ()
 {
   if (stopped)
+    {
+      return;
+    }
+
+  // Schedule the next metrics recording
+  Simulator::Schedule (metrics_interval, &RTCApp::RecordMetrics, this);
+
+  // Assert that time now is a multiple of metrics_interval
+  NS_ASSERT_MSG (Simulator::Now ().GetMilliSeconds () % metrics_interval_ms == 0,
+                 "Time now is not a multiple of metrics_interval: " +
+                     std::to_string (Simulator::Now ().GetMilliSeconds ()) + " % " +
+                     std::to_string (metrics_interval_ms));
+
+  // Schedule the next metrics recording
+  Simulator::Schedule (metrics_interval, &RTCApp::RecordMetrics, this);
+
+  // Wait until we have received at least one report
+  if (!first_report_received)
     {
       return;
     }
@@ -297,6 +323,7 @@ RTCApp::SendVideoFrame ()
 void
 RTCApp::ReceiveAppResponse (AppResp app_resp)
 {
+  first_report_received = true;
   auto path_id = app_resp.path_id;
   std::shared_ptr<PacketsReport> report = app_resp.packets_report;
   total_bytes_arrived += report->total_bytes;
@@ -427,7 +454,6 @@ RTCApp::ReceiveAppResponse (AppResp app_resp)
     }
 
   // UpdateBWE ();
-  RecordMetrics ();
 
   if (cfgPathSwitching)
     {
@@ -702,7 +728,7 @@ RTCApp::PrintResults ()
   for (RTCAppMetric state : app_metrics)
     {
       nlohmann::json j_state;
-      j_state["time"] = state.timestamp.ToDouble (Time::Unit::MS);
+      j_state["time"] = state.timestamp.ToInteger (Time::Unit::MS);
       j_state["sendrate"] = state.sendrate / 1e6;
       j_state["latency"] = state.latency / 1000.0;
       j_state["loss"] = state.loss;
