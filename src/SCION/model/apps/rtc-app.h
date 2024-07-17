@@ -46,12 +46,20 @@ struct PathMetric
   double bottleneck_share = 0; // estimated fair share in Gbps
   double bottleneck_no_flows = 0; // number of flows at the bottleneck link
   double loss = 0; // estimated loss fraction
+  double sendrate = 0; // current send rate
 
   std::vector<webrtc::SentPacket> in_flight_packets;
   double in_flight_bytes = 0;
 
-  Time probed_last = Seconds (0); // time the last probing was initiated
+  Time probed_last = Seconds (0); // time the last probe was sent
+  AppProbe last_probe_result;
+  bool HasFreshProbeResultsSince (Time t);
+
   app_packet_id_t probe_seq_no = 0; // probe packet seq_no
+
+  // Earliest point in time since which path has continously been a switching candidate
+  Time is_candidate_since = Time::Max ();
+  bool is_candidate = false;
 };
 
 /**
@@ -69,6 +77,13 @@ struct RTCAppMetric
   app_path_id_t active_path;
 };
 
+enum class PathChangeStrategy {
+  IMMEDIATE, // instantly switch, with hint to congestion controller
+  TRANSITION // enter transition phase where manual ramp up the rate
+};
+
+enum class PathTransitionStrategy { LINEAR, SIGMOID };
+
 /**
  * Application with WebRTC congestion control and smart path selection
 */
@@ -81,14 +96,24 @@ protected:
   bool cfgDelayBwe = true;
   bool cfgPathSwitching = true;
 
+  PathChangeStrategy path_change_strategy = PathChangeStrategy::TRANSITION;
+  PathTransitionStrategy path_transition_strategy = PathTransitionStrategy::SIGMOID;
+
   // How much better a path must be before we consider switching to it
-  const double PATH_SWITCH_TRESHOLD = 1.5;
+  const double path_candidate_treshold = 1.4;
 
   // How long we wait before switching paths again
-  const Time PATH_SWITCH_MIN_INTERVAL = Seconds (10);
+  const Time path_switch_min_interval = Seconds (10);
+
+  // How long a path needs to be a candidate before we select it
+  const Time path_switch_min_candidacy = Seconds (0);
+
+  // Time since last report before we consider a path dead
+  const Time path_alive_treshold = Seconds (1);
 
   uint32_t num_paths;
   app_path_id_t active_path;
+  app_path_id_t previous_path;
 
   // Store information on each candidate path
   std::vector<PathMetric> path_metrics;
@@ -110,11 +135,16 @@ protected:
 
   double A_r = 0; // send rate estimate by the receiver side loss based controller
   double A_s = 0; // send rate estimate by the sender side loss based controller
-  double sendrate = 300'000 / 8; // 300 Kbps
+  double target_sendrate = 300'000 / 8; // 300 Kbps
+  double previous_sendrate = 0; // used to limit rate on old path while shifting
 
   double total_bytes_sent = 0; // total of app packets sent
   double total_bytes_arrived = 0; // total of app packets arrived
 
+  bool path_shifting = false; // if enabled, shift gradually between paths
+  bool in_path_transition = false;
+  double prev_sendrate = 0;
+  Time path_transition_end = Seconds (0);
   Time last_path_change = Seconds (0);
   Time last_A_r_update = Seconds (0);
 
@@ -123,9 +153,8 @@ protected:
   u_int64_t metrics_interval_ms = metrics_interval.GetMilliSeconds ();
 
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
-  uint16_t probe_simultaneous = 2; // How many paths to probe at the same time
+  uint16_t probe_simultaneous = 3; // How many paths to probe at the same time
   app_packet_id_t probe_id = 0; // Identifies a probe, not the packet though, that is probe_seq_no
-
 
   void Log (std::string msg, bool with_prefix = true);
 
@@ -149,9 +178,11 @@ public:
 
   void ProbePath (app_path_id_t path_id);
 
-  void SendVideoFrame ();
+  void ScheduleSend ();
 
-  void SendPacket (double payload_size, u_int16_t scion_header_bytes, std::vector<const PathSegment *> path);
+  void SendFrameData (double sendrate, app_path_id_t path);
+
+  void SendPacket (double payload_size, u_int16_t scion_header_bytes, app_path_id_t path);
 
   void ReceiveAppResponse (AppResp app_resp);
 
@@ -159,7 +190,7 @@ public:
 
   void ReceiveScmp (ScmpReqOrResp scmp);
 
-  void UpdateActivePath ();
+  void UpdatePathCandidates ();
 
   void SwitchToPath (uint32_t new_path);
 

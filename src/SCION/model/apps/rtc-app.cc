@@ -77,14 +77,6 @@ RTCApp::RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
   // Choose a random path to start with
   // active_path = rand () % num_paths;
   active_path = 0; // TODO: For testing
-  // for (int i = 1; i < all_paths.size (); i++)
-  //   {
-  //     if (all_paths[i].size () < all_paths[active_path].size ())
-  //       {
-  //         active_path = i;
-  //       }
-  //   }
-  // cfgPathSwitching = false; // TODO: For testing
 
   Log ("Initialized RTCApp " + std::to_string (app_id));
   Log ("  Runtime config: " + std::to_string (runtime_config), false);
@@ -100,10 +92,10 @@ RTCApp::StartAppTraffic ()
 {
 
   // Start sending probes and video frames after a random delay, to avoid synchronization
-  // Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &RTCApp::SendVideoFrame, this);
+  // Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &RTCApp::ScheduleSend, this);
   // Simulator::Schedule (MilliSeconds (2000) + RandomDelay (1500), &RTCApp::SendProbes, this);
 
-  SendVideoFrame ();
+  ScheduleSend ();
   SendProbes ();
 
   // Record metrics exactly at multiples of metrics_interval absolute simulation time
@@ -147,13 +139,21 @@ RTCApp::RecordMetrics ()
   RTCAppMetric state;
   state.timestamp = Simulator::Now ();
   state.active_path = active_path;
-  state.sendrate = sendrate;
+  state.sendrate = target_sendrate;
   state.latency = metric.latency;
   state.loss = loss_based_estimator.GetLoss ();
-  // state.controller_state = delay_based_estimator.GetStateSnapshot ();
   state.A_s = A_s;
   state.A_r = A_r;
   state.bottleneck_share = metric.bottleneck_share;
+
+  if (in_path_transition)
+    {
+      state.in_transition = true;
+      state.sendrate = path_metrics[previous_path].sendrate + path_metrics[active_path].sendrate;
+      state.oldrate = path_metrics[previous_path].sendrate;
+      state.newrate = path_metrics[active_path].sendrate;
+    }
+
   app_metrics.push_back (state);
 
   Log ("Current state:");
@@ -279,23 +279,93 @@ RTCApp::ReceiveScmp (ScmpReqOrResp scmp)
 }
 
 void
-RTCApp::SendVideoFrame ()
+RTCApp::ScheduleSend ()
 {
   if (stopped)
     {
       return;
     }
 
+  if (path_shifting && Simulator::Now () >= path_transition_end)
+    {
+      in_path_transition = false;
+      Log ("Finished path transition to path " + std::to_string (active_path));
+
+      webrtc::TargetRateConstraints new_constraints;
+      new_constraints.at_time = TimestampNow ();
+      new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (target_sendrate);
+      new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
+
+      (void) network_controller->OnTargetRateConstraints (new_constraints);
+
+      // HACK: calling this twice to reset all internal controllers and force it to use the new rate
+      (void) network_controller->OnTargetRateConstraints (new_constraints);
+    }
+
+  if (in_path_transition)
+    {
+      double transition_progress =
+          ((Simulator::Now () - last_path_change) / (path_transition_end - last_path_change))
+              .GetDouble ();
+
+      NS_ASSERT_MSG (transition_progress >= 0 && transition_progress <= 1,
+                     "Transition progress out of bounds: " + std::to_string (transition_progress));
+      NS_ASSERT_MSG (target_sendrate > previous_sendrate,
+                     "Target sendrate is not greater than previous sendrate");
+
+      double ramp_up_rate = 0;
+
+      if (path_transition_strategy == PathTransitionStrategy::LINEAR)
+        {
+          ramp_up_rate =
+              previous_sendrate + transition_progress * (target_sendrate - previous_sendrate);
+        }
+      else if (path_transition_strategy == PathTransitionStrategy::SIGMOID)
+        {
+          // Use sigmoid function to gradually increase sending rate on the new path from 0 to 1 times the sendrate
+          double sigmoid = 1 / (1 + std::exp (-10 * (transition_progress - 0.5)));
+
+          ramp_up_rate = target_sendrate * sigmoid;
+        }
+
+      path_metrics[active_path].sendrate = ramp_up_rate;
+      SendFrameData (ramp_up_rate, active_path);
+
+      // Send on the old path with the remaining rate
+      double maintenance_rate = target_sendrate - ramp_up_rate;
+      maintenance_rate = std::clamp (maintenance_rate, 0.0, previous_sendrate);
+      // maintenance_rate = 0;
+      path_metrics[previous_path].sendrate = maintenance_rate;
+      if (maintenance_rate > 0)
+        {
+          SendFrameData (maintenance_rate, previous_path);
+        }
+    }
+  else // on a single path
+    {
+      SendFrameData (target_sendrate, active_path);
+    }
+
+  frame_no++;
+
+  // Introduce a random offset of up to 1ms when scheduling the next frame
+  auto rand_offset = RandomDelay (1000);
+  Simulator::Schedule (frame_interval + rand_offset, &RTCApp::ScheduleSend, this);
+}
+
+void
+RTCApp::SendFrameData (double sendrate, app_path_id_t path)
+{
   // sendrate / fps == (payload_data + header_overhead) * no_pkts
 
   auto available_bytes = sendrate / fps;
 
-  uint16_t scion_header_bytes = ScionPacketHeaderSize (all_paths[active_path]);
+  uint16_t scion_header_bytes = ScionPacketHeaderSize (all_paths[path]);
   double max_payload_bytes = m_pktSize - sizeof (AppData) - scion_header_bytes;
   double packets_to_send = std::ceil ((double) available_bytes / max_payload_bytes);
 
-  Log ("Sending frame " + std::to_string (frame_no) + " with " + std::to_string (available_bytes) +
-       " bytes on path " + std::to_string (active_path));
+  Log ("Sending " + std::to_string (available_bytes) + " bytes of frame " +
+       std::to_string (frame_no) + " on path " + std::to_string (path));
 
   Time packet_interval = frame_interval / packets_to_send;
   Time packet_schedule_delay = Seconds (0);
@@ -303,21 +373,46 @@ RTCApp::SendVideoFrame ()
   while (available_bytes > max_payload_bytes)
     {
       Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, max_payload_bytes,
-                           scion_header_bytes, all_paths[active_path]);
+                           scion_header_bytes, path);
       packet_schedule_delay += packet_interval;
       available_bytes -= max_payload_bytes;
     }
   if (available_bytes > 0)
     {
       Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, max_payload_bytes,
-                           scion_header_bytes, all_paths[active_path]);
+                           scion_header_bytes, path);
     }
 
   frame_no++;
+}
 
-  // Introduce a random offset of up to 1ms when scheduling the next frame
-  auto rand_offset = RandomDelay (1000);
-  Simulator::Schedule (frame_interval + rand_offset, &RTCApp::SendVideoFrame, this);
+void
+RTCApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_path_id_t path)
+{
+  AppData app_data;
+  app_data.app_id = app_id;
+  app_data.path_id = path;
+  app_data.seq_no = path_metrics[path].seq_no++;
+  app_data.frame_no = frame_no;
+  app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
+  Payload payload = app_data;
+  PayloadType payload_type = PayloadType::APPLICATION_DATA;
+  host->SendAppPacket (this, payload, payload_type, payload_bytes, all_paths[path]);
+  Log ("Sending packet with frame_no " + std::to_string (frame_no) + " and seq_no " +
+       std::to_string (app_data.seq_no) + " on path " + std::to_string (path));
+
+  webrtc::SentPacket sent_packet;
+  sent_packet.sequence_number = app_data.seq_no;
+  sent_packet.send_time = TimestampNow ();
+
+  double scion_pkt_total_bytes = payload_bytes + scion_header_bytes;
+  path_metrics[path].in_flight_bytes += scion_pkt_total_bytes;
+
+  sent_packet.size = webrtc::DataSize::Bytes (scion_pkt_total_bytes);
+  sent_packet.data_in_flight = webrtc::DataSize::Bytes (path_metrics[path].in_flight_bytes);
+  // sent_packet.prior_unacked_data // TODO
+  path_metrics[path].in_flight_packets.push_back (sent_packet);
+  (void) network_controller->OnSentPacket (sent_packet);
 }
 
 void
@@ -432,11 +527,17 @@ RTCApp::ReceiveAppResponse (AppResp app_resp)
   webrtc::NetworkControlUpdate update =
       network_controller->OnTransportPacketsFeedback (std::move (feedback));
 
+  if (in_path_transition)
+    {
+      // Return at this point, we're not going to use the controller estimate or update path candidates
+      return;
+    }
+
   if (update.target_rate.has_value ())
     {
       webrtc::TargetTransferRate target_rate = update.target_rate.value ();
-      sendrate = target_rate.target_rate.bps () / 8;
-      Log ("Received target rate update: " + std::to_string (sendrate));
+      target_sendrate = target_rate.target_rate.bps () / 8;
+      Log ("Received target rate update: " + std::to_string (target_sendrate));
 
       webrtc::GoogCcNetworkController *goog_cc_network_controller =
           dynamic_cast<webrtc::GoogCcNetworkController *> (network_controller.get ());
@@ -448,7 +549,7 @@ RTCApp::ReceiveAppResponse (AppResp app_resp)
               Log ("Warning: GetNetworkState returned different target rate: ");
 
               target_rate = update.target_rate.value ();
-              sendrate = target_rate.target_rate.bps () / 8;
+              target_sendrate = target_rate.target_rate.bps () / 8;
             }
         }
     }
@@ -457,7 +558,7 @@ RTCApp::ReceiveAppResponse (AppResp app_resp)
 
   if (cfgPathSwitching)
     {
-      UpdateActivePath ();
+      UpdatePathCandidates ();
     }
 }
 
@@ -466,7 +567,7 @@ RTCApp::UpdateBWE ()
 {
 
   A_r = delay_based_estimator.GetRate ();
-  sendrate = A_r;
+  target_sendrate = A_r;
   return;
 
   A_s = loss_based_estimator.GetRate ();
@@ -484,7 +585,7 @@ RTCApp::UpdateBWE ()
       else // stay in startup phase
         {
           // During startup, we just use the loss based estimate
-          sendrate = A_s;
+          target_sendrate = A_s;
         }
     }
   else if (phase == CongestionControlPhase::CONGESTION_AVOIDANCE)
@@ -493,7 +594,7 @@ RTCApp::UpdateBWE ()
       A_r = delay_based_estimator.GetRate ();
       Log ("Receiver estimate: " + std::to_string (A_r));
 
-      sendrate = A_s;
+      target_sendrate = A_s;
 
       // If we got an estimate from the receiver, use it
       if (cfgDelayBwe && A_r > 0)
@@ -502,8 +603,8 @@ RTCApp::UpdateBWE ()
             {
               Log ("Receiver estimate lower than sender estimate: " + std::to_string (A_r) + " < " +
                    std::to_string (A_s) + ". Using receiver estimate.");
-              sendrate = A_r;
-              loss_based_estimator.LimitRate (1 * sendrate);
+              target_sendrate = A_r;
+              loss_based_estimator.LimitRate (1 * target_sendrate);
             }
           else
             {
@@ -518,7 +619,7 @@ RTCApp::UpdateBWE ()
 
       if (cfgPathSwitching)
         {
-          UpdateActivePath ();
+          UpdatePathCandidates ();
         }
     }
 }
@@ -538,6 +639,9 @@ RTCApp::ReceiveProbeResponse (AppProbe probe_resp)
       return;
     }
 
+  // Store the probe result in the path metric
+  path_metrics[path_id].last_probe_result = probe_resp;
+
   // Compute latency
   auto latency = probe_resp.time_rx - probe_resp.time_tx;
   auto hop = probe_resp.bottleneck_hop;
@@ -545,7 +649,7 @@ RTCApp::ReceiveProbeResponse (AppProbe probe_resp)
   Log ("Received probe response on path " + std::to_string (path_id));
   Log ("    Latency [ms]: " + std::to_string (latency / 1000.0), false);
   Log ("    min fair share: " + std::to_string (probe_resp.bottleneck_share * 1e6 / 8), false);
-  Log ("    min fair share seen at AS " + std::to_string (GET_HOP_AS (hop)) + " and hop " +
+  Log ("    min fair share seen at AS " + std::to_string (GET_HOP_AS (hop)) + " and egress iface " +
            std::to_string (GET_HOP_EG_IF (hop)),
        false);
 
@@ -576,12 +680,23 @@ RTCApp::ReceiveProbeResponse (AppProbe probe_resp)
 }
 
 void
-RTCApp::UpdateActivePath ()
+RTCApp::UpdatePathCandidates ()
 {
-  // Avoid switching paths too often
-  if (Simulator::Now () - last_path_change < PATH_SWITCH_MIN_INTERVAL)
+  bool is_active_path_usable =
+      path_metrics[active_path].last_report > Simulator::Now () - path_alive_treshold &&
+      path_metrics[active_path].loss < 0.9;
+
+  // Avoid switching paths too often if possible
+  if (is_active_path_usable)
     {
-      return;
+      if (Simulator::Now () - last_path_change < path_switch_min_interval)
+        {
+          return;
+        }
+    }
+  else
+    {
+      std::cerr << "Active path not usable" << std::endl;
     }
 
   // Choose as candidates all paths that have a significantly higher
@@ -592,93 +707,112 @@ RTCApp::UpdateActivePath ()
   // there's just one better path, we don't want all applications to switch to
   // it at the same time. Whereas if we have many, applications are likely to
   // spread out.
-  std::vector<uint32_t> switch_candidates;
+  std::vector<uint32_t> final_candidates;
   for (uint32_t i = 0; i < num_paths; i++)
     {
-      if (i == active_path)
+      PathMetric *m = &path_metrics[i];
+
+      // The active path itself is always a candidate unless it becomes unusable
+      if (i == active_path && is_active_path_usable)
         {
-          switch_candidates.push_back (i);
+          final_candidates.push_back (i);
+          continue;
         }
-      else if (path_metrics[i].bottleneck_share > sendrate * PATH_SWITCH_TRESHOLD)
+
+      // If the probe result is not fresh enough, this is not a candidate
+      if (!m->HasFreshProbeResultsSince (last_path_change))
+        {
+          m->is_candidate = false;
+          continue;
+        }
+
+      // If the promised bottleneck share is not high enough, this is not a candidate
+      if (path_metrics[i].bottleneck_share < target_sendrate * path_candidate_treshold)
+        {
+          m->is_candidate = false;
+          Log ("Excluding path switch candidate: " + std::to_string (active_path) + " to " +
+               std::to_string (i) + ". Estimated fair share is not high enough " +
+               std::to_string (path_metrics[i].bottleneck_share) + " < " +
+               std::to_string (target_sendrate));
+          continue;
+        }
+
+      // We have found a candidate path
+      if (!m->is_candidate)
+        {
+          m->is_candidate = true;
+          m->is_candidate_since = Simulator::Now ();
+        }
+
+      // If path has been candidate for long enough, select it for final list
+      if (m->is_candidate_since <= Simulator::Now () - path_switch_min_candidacy)
         {
           Log ("Selecting path switch candidate: " + std::to_string (active_path) + " to " +
                std::to_string (i) + ". Estimated fair share is higher than current bitrate " +
                std::to_string (path_metrics[i].bottleneck_share) + " > " +
-               std::to_string (sendrate));
-          switch_candidates.push_back (i);
-        }
-      else
-        {
-          Log ("Excluding path switch candidate: " + std::to_string (active_path) + " to " +
-               std::to_string (i) + ". Estimated fair share is not high enough " +
-               std::to_string (path_metrics[i].bottleneck_share) + " / " +
-               std::to_string (sendrate));
+               std::to_string (target_sendrate));
+          final_candidates.push_back (i);
         }
     }
 
-  // We should always have at least the active path as a candidate
-  NS_ASSERT (!switch_candidates.empty ());
+  if (final_candidates.empty ())
+    {
+      Log ("WARNING: No candidate path available!");
+      return;
+    }
 
   // Pick a candidate at random
-  uint32_t new_path = switch_candidates.at (rand () % switch_candidates.size ());
+  uint32_t new_path = final_candidates.at (rand () % final_candidates.size ());
   SwitchToPath (new_path);
 }
 
 void
 RTCApp::SwitchToPath (uint32_t new_path)
 {
+  last_path_change = Simulator::Now ();
   if (new_path == active_path)
     {
       Log ("Staying on current path " + std::to_string (active_path));
       return;
     }
   Log ("Switching from path " + std::to_string (active_path) + " to " + std::to_string (new_path));
+
+  previous_path = active_path;
   active_path = new_path;
-  loss_based_estimator.Reset ();
-  delay_based_estimator.SetPhase (CongestionControlPhase::STARTUP);
-  last_path_change = Simulator::Now ();
 
   double new_rate = path_metrics[new_path].bottleneck_share;
 
+  if (path_shifting)
+    {
+      path_transition_end = Simulator::Now () + 2 * round_trip_time; // TODO: use RTT of new path
+      path_transition_end = Simulator::Now () + Seconds (5); // TODO: For testing
+      previous_sendrate = target_sendrate;
+      target_sendrate = path_metrics[new_path].bottleneck_share;
+      path_metrics[new_path].sendrate = 0;
+      path_metrics[previous_path].sendrate = prev_sendrate;
+      target_sendrate = new_rate;
+      in_path_transition = true;
+    }
+
+  loss_based_estimator.Reset ();
+  delay_based_estimator.SetPhase (CongestionControlPhase::STARTUP);
+
+  // Reset candidacy of all paths
+  for (size_t i = 0; i < num_paths; i++)
+    {
+      path_metrics[i].is_candidate = false;
+    }
+
+  // Update congestion controller
   webrtc::TargetRateConstraints new_constraints;
+  webrtc::NetworkRouteChange route_change;
   new_constraints.at_time = TimestampNow ();
   new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (new_rate);
-
-  webrtc::NetworkRouteChange route_change;
+  new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
   route_change.at_time = TimestampNow ();
   route_change.constraints = new_constraints;
 
   (void) network_controller->OnNetworkRouteChange (route_change);
-}
-
-void
-RTCApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes,
-                    std::vector<const PathSegment *> path)
-{
-  AppData app_data;
-  app_data.app_id = app_id;
-  app_data.path_id = active_path;
-  app_data.seq_no = path_metrics[active_path].seq_no++;
-  app_data.frame_no = frame_no;
-  app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
-  Payload payload = app_data;
-  PayloadType payload_type = PayloadType::APPLICATION_DATA;
-  host->SendAppPacket (this, payload, payload_type, payload_bytes, path);
-  Log ("Sending packet with frame_no " + std::to_string (frame_no) + " and seq_no " +
-       std::to_string (app_data.seq_no) + " on path " + std::to_string (active_path));
-
-  webrtc::SentPacket sent_packet;
-  sent_packet.sequence_number = app_data.seq_no;
-  sent_packet.send_time = TimestampNow ();
-
-  double scion_pkt_total_bytes = payload_bytes + scion_header_bytes;
-  path_metrics[active_path].in_flight_bytes += scion_pkt_total_bytes;
-
-  sent_packet.size = webrtc::DataSize::Bytes (scion_pkt_total_bytes);
-  sent_packet.data_in_flight = webrtc::DataSize::Bytes (path_metrics[active_path].in_flight_bytes);
-  // sent_packet.prior_unacked_data // TODO
-  path_metrics[active_path].in_flight_packets.push_back (sent_packet);
-  (void) network_controller->OnSentPacket (sent_packet);
 }
 
 webrtc::Timestamp
@@ -697,18 +831,18 @@ std::string
 RTCApp::InfoString ()
 {
   std::string info = "rtc";
-  if (cfgLossBwe && cfgDelayBwe)
-    {
-      info += " D+L";
-    }
-  else if (cfgLossBwe)
-    {
-      info += "   L";
-    }
-  else if (cfgDelayBwe)
-    {
-      info += " D  ";
-    }
+  // if (cfgLossBwe && cfgDelayBwe)
+  //   {
+  //     info += " D+L";
+  //   }
+  // else if (cfgLossBwe)
+  //   {
+  //     info += "   L";
+  //   }
+  // else if (cfgDelayBwe)
+  //   {
+  //     info += " D  ";
+  //   }
   return info;
 }
 
@@ -751,6 +885,15 @@ RTCApp::PrintResults ()
 
   // Dump JSON into a single line
   std::cout << j.dump () << std::endl;
+}
+
+bool
+PathMetric::HasFreshProbeResultsSince (Time t)
+{
+  // For the result to be fresh, it must be from a probe initiated after t +
+  // latency to account for any potential changes to the bottleneck share
+  // incurred by a path switch
+  return MicroSeconds (last_probe_result.time_tx) > t + MicroSeconds (latency);
 }
 
 /**
