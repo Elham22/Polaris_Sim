@@ -37,7 +37,7 @@ def plotAppResults(apps: list[dict]):
     # plt.style.use('dark_background')
 
     # max number of apps before we stop showing the legend
-    max_apps_legend = 6
+    max_apps_legend = 10
 
     plot_loss = args.loss
     plot_latency = args.latency
@@ -56,7 +56,7 @@ def plotAppResults(apps: list[dict]):
 
     no_plots = 1
     size_y = 1
-    ratios = [2]
+    ratios = [1]
 
     # Lazy hack to make plot sizing dynamic
     for var in list(locals()):
@@ -65,12 +65,35 @@ def plotAppResults(apps: list[dict]):
             size_y += 1
             ratios.append(1)
 
-    plt.figure(figsize=(size_y, 1))
+    fig = plt.figure(figsize=(size_y, 1))
     plot_number = 0
     gs = gridspec.GridSpec(no_plots, 1, height_ratios=ratios)
 
     # plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=-0.5 / no_plots)
     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+
+    lines_dict = dict()
+
+    def on_pick(event):
+        legend_text = None
+        # Check if the pick event is on the legend text
+        if event.artist in legend.get_texts():
+            legend_text = event.artist.get_text()
+        # Check if the pick event is on the legend line
+        elif event.artist in legend.get_lines():
+            line_index = legend.get_lines().index(event.artist)
+            legend_text = legend.get_texts()[line_index].get_text()
+            
+        if legend_text:
+            # Find the original lines associated with this legend entry
+            origlines = lines_dict.get(legend_text, [])
+            if origlines:
+                visibility = origlines[0].get_visible()
+                for origline in origlines:
+                    origline.set_visible(not visibility)
+                plt.gcf().canvas.draw()
+
+    fig.canvas.mpl_connect('pick_event', on_pick)
 
     ax = None
 
@@ -117,11 +140,27 @@ def plotAppResults(apps: list[dict]):
     else:
         # Plot the sending rate for all applications
         for app in apps:
-            plt.plot(app['time'], app['sendrate'], label=app['name'])
-        # ..but the bottleneck_share only for the selected application
-        app = apps[detail_app]
-        plt.plot(app['time'], app['bottleneck_share'],
-                 label=f"{detail_app}: fair share", linewidth=0.5, color='black', linestyle='--')
+            lines = ()
+            line_sendrate, = plt.plot(app['time'], app['sendrate'], label=app['name'], picker=5)
+            lines += (line_sendrate,)
+            # Plot bottleneck share and transition rates without a label to exclude them from the legend
+            if 'bottleneck_share' in app:
+                line_fair_share, = plt.plot(app['time'], app['bottleneck_share'], linewidth=0.5, color='black', linestyle='--', picker=5)
+                # if not the detail app, hide the fair share line
+                if app['name'] != apps[detail_app]['name']:
+                    line_fair_share.set_visible(False)
+                lines += (line_fair_share,)
+            if 'oldrate' in app:
+                line_oldrate, = plt.plot(app['time_transition'], app['oldrate'], linewidth=0.5, color='red', linestyle=':', picker=5)
+                line_oldrate.set_visible(False)
+                lines += (line_oldrate,)
+            if 'newrate' in app:
+                line_newrate, = plt.plot(app['time_transition'], app['newrate'], linewidth=0.5, color='blue', linestyle='-.', picker=5)
+                line_newrate.set_visible(False)
+                lines += (line_newrate,)
+
+            # Store references to the lines for toggling
+            lines_dict[app['name']] = lines
         
         # Print highest median send rate
         highest_median = 0
@@ -139,7 +178,11 @@ def plotAppResults(apps: list[dict]):
         print(f"Highest median send rate: {highest_median} by app {highest_median_app})")
         print(f"Lowest median send rate:  {lowest_median} by app {lowest_median_app})")
     if len(apps) <= max_apps_legend:
-        plt.legend()
+        legend = plt.legend()
+        # Make legend entries pickable
+        for legline, origline in zip(legend.get_lines(), legend.get_texts()):
+            legline.set_picker(5)  # 5 pts tolerance
+            origline.set_picker(5)  # Also make the text pickable
     plt.ylabel("Send rate [MB/s]")
 
     if plot_total_send_rate:
@@ -269,6 +312,21 @@ def host_eval(file):
             # Convert loss to percentage
             app['loss'] = [state['loss'] * 100 for state in app['states']]
 
+            # Optional metrics for path transitions
+            if 'in_transition' in app['states'][0]:
+                app['oldrate'] = []
+                app['newrate'] = []
+                app['time_transition'] = []
+                for i, state in enumerate(app['states']):
+                    if state['in_transition']:
+                        app['oldrate'].append(state['oldrate'])
+                        app['newrate'].append(state['newrate'])
+                        app['time_transition'].append(app['time'][i])
+                    else:
+                        app['oldrate'].append(None)
+                        app['newrate'].append(None)
+                        app['time_transition'].append(None)
+            
             # For ever other field in states, generate a list of values
             for field in app['states'][0]:
                 if field not in app:

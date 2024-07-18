@@ -69,6 +69,9 @@ struct RTCAppMetric
 {
   Time timestamp;
   double sendrate = 0;
+  double oldrate = 0;
+  double newrate = 0;
+  bool in_transition = false;
   double A_s = 0;
   double A_r = 0;
   double bottleneck_share = 0;

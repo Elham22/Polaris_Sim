@@ -868,6 +868,9 @@ RTCApp::PrintResults ()
       j_state["loss"] = state.loss;
       j_state["active_path"] = state.active_path;
       j_state["bottleneck_share"] = state.bottleneck_share / 1e6;
+      j_state["in_transition"] = state.in_transition;
+      j_state["oldrate"] = state.oldrate / 1e6;
+      j_state["newrate"] = state.newrate / 1e6;
       j_state["A_s"] = state.A_s / 1e6;
       j_state["A_r"] = state.A_r / 1e6;
       // j_state["gradient"] = state.controller_state.m;
