@@ -40,6 +40,48 @@
 
 using namespace ns3;
 
+class ProgressRenderer
+{
+public:
+  Time m_simulation_end_time;
+  const double startup_seconds = 1800;
+  double end_seconds;
+  ProgressRenderer (Time simulation_end_time) : m_simulation_end_time (simulation_end_time)
+  {
+    end_seconds = m_simulation_end_time.GetSeconds () - startup_seconds;
+  }
+
+  void
+  PrintProgress ()
+  {
+    Simulator::Schedule (Seconds (0.1), &ProgressRenderer::PrintProgress, this);
+    double elapsed_seconds = Simulator::Now ().GetSeconds () - startup_seconds;
+    
+    // Clamp to 0 during start-up phase
+    elapsed_seconds = std::max (0.0, elapsed_seconds);
+    
+    double progress = elapsed_seconds / end_seconds;
+    int barWidth = 20;
+
+    // clear the previous line
+    fprintf (stdout, "\033[2K");
+    fprintf (stdout, "\r");
+    int pos = std::ceil (barWidth * progress);
+    for (int i = 0; i < barWidth; ++i)
+      {
+        if (i < pos)
+          fprintf (stdout, "█");
+        else if (i == pos)
+          fprintf (stdout, "▓");
+        else
+          fprintf (stdout, "░");
+      }
+    fprintf (stdout, " %.f%%", std::round (progress * 100.0));
+    fprintf (stdout, " (%3.f / %3.fs)", elapsed_seconds, end_seconds);
+    fflush (stdout);
+  }
+};
+
 int
 main (int argc, char *argv[])
 {
@@ -144,8 +186,12 @@ main (int argc, char *argv[])
 
   // LogComponentEnable ("ScionCapableNode", LOG_LEVEL_ALL);
 
+  fprintf (stdout, "Running simulation...\n");
   Simulator::Stop (simulation_end_time);
+  ProgressRenderer pp = ProgressRenderer (simulation_end_time);
+  pp.PrintProgress ();
   Simulator::Run ();
+  fprintf (stdout, "\n");
 
   PostSimulationEvaluations *eval =
       new PostSimulationEvaluations (config, nodes, real_to_alias_as_no, alias_to_real_as_no);
