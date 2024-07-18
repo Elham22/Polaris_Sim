@@ -2,6 +2,42 @@ import json
 import random
 import argparse
 
+def generate_flows(flow_num, time_span, node_num, seed):
+    flow_list = []
+
+    for flow_id in range(flow_num):
+        current_seed = seed + str(flow_id)
+        random.seed(current_seed)
+
+        start_time = random.randint(0, time_span - 1)
+
+        current_seed += 'a'
+        random.seed(current_seed)
+
+        duration = random.randint(
+            min(2, time_span - start_time), time_span - start_time)
+
+        source = 0
+        destination = 2
+        # source = random.randint(0, node_num - 1)
+        # dest = random.randint(0, node_num - 1)
+
+        # Ensure source and destination are not the same
+        attempt_count = 0
+        while source == destination:
+            current_seed += str(attempt_count)
+            random.seed(current_seed)
+            destination = random.randint(0, node_num - 1)
+            attempt_count += 1
+
+        flow_type = 0  # Fixed value, can be changed to random if needed
+        app_limit = 1.2  # Fixed value, can be adjusted if needed
+
+        flow_list.append((flow_id, source, destination,
+                         app_limit, duration, start_time, flow_type))
+
+    return flow_list
+
 def generate_random_event(app_id, time):
     source_node = random.randint(0, 3)
     target_node = random.randint(0, 3)
@@ -10,6 +46,9 @@ def generate_random_event(app_id, time):
         target_node = random.randint(0, 3)
     
     args = ["0", str(source_node), "2", "0", str(target_node), "2", "rtc", "0.0", str(app_id), "0"]
+
+    # TODO: use the generate_flows function to re-produce the same random scenarios used for MILP
+    # flows = generate_flows(number_of_events, 30, 4, str(0))
     
     event = {
         "time": f"{time:.2f}min",
@@ -40,6 +79,8 @@ def main():
     output = {
         "events": events
     }
+
+    # TODO: add fixed BGP paths to events file(?) for BGP scenarios
     
     with open(args.output, 'w') as f:
         json.dump(output, f, indent=4)
