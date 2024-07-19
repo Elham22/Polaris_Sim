@@ -151,10 +151,6 @@ protected:
   Time last_path_change = Seconds (0);
   Time last_A_r_update = Seconds (0);
 
-  bool first_report_received = false;
-  Time metrics_interval = MilliSeconds (50);
-  u_int64_t metrics_interval_ms = metrics_interval.GetMilliSeconds ();
-
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 3; // How many paths to probe at the same time
   app_packet_id_t probe_id = 0; // Identifies a probe, not the packet though, that is probe_seq_no

@@ -78,7 +78,7 @@ protected:
   uint64_t bytes_received_this_window = 0;
   uint64_t bytes_sent_this_window = 0;
   AppResp last_report;
-  Time last_report_time = Time::Min ();
+  Time last_report_time = Seconds(0);
 
   void
   SendScionPacket (Ptr<Packet> ip_packet)
@@ -354,9 +354,17 @@ protected:
   }
 
   void
-  RecordState ()
+  RecordMetrics ()
   {
     if (stopped)
+      {
+        return;
+      }
+
+    // Schedule the next metrics recording
+    Simulator::Schedule (metrics_interval, &TCPApp::RecordMetrics, this);
+
+    if (!first_report_received)
       {
         return;
       }
@@ -567,6 +575,14 @@ public:
     Log ("Starting application", true);
     app.Start (Seconds (0));
     stopped = false;
+
+    // Record metrics exactly at multiples of metrics_interval absolute simulation time
+    uint64_t sched_abs_time_ms = Simulator::Now ().GetMilliSeconds () + metrics_interval_ms;
+    sched_abs_time_ms = std::ceil (sched_abs_time_ms / metrics_interval_ms) * metrics_interval_ms;
+    Time sched_rel_time = MilliSeconds (sched_abs_time_ms) - Simulator::Now ();
+    std::cout << "Scheduling metrics recording at " << sched_abs_time_ms << " ms" << std::endl;
+    std::cout << "Current time: " << Simulator::Now ().GetMilliSeconds () << " ms" << std::endl;
+    Simulator::Schedule (sched_rel_time, &TCPApp::RecordMetrics, this);
   }
 
   void
@@ -580,7 +596,7 @@ public:
   ReceiveAppResponse (AppResp app_resp)
   {
     last_report = app_resp;
-    RecordState ();
+    first_report_received = true;
   }
 
   void
