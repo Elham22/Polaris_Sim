@@ -68,7 +68,7 @@ def find_interface_level_path(G, source_as, destination_as):
         current_interface = ingress_interface
 
     # End at the destination AS with the special interface (0)
-    interface_path.append((destination_AS, current_interface, 0))
+    interface_path.append((destination_as, current_interface, 0))
 
     return interface_path
 
@@ -216,7 +216,23 @@ def transform_path(path):
     return '['+", ".join(transformed_path)+', ]'
 
 
-def main(input_file, source, s_host, destination, d_host, flow_id):
+def transform_path_json(path):
+    """
+    Convert path into a list of hops (dicts) for easy JSON output
+    """
+    hops = []
+    for (as_number, ingress, egress) in path:
+        hops.append({
+            "as_no": as_number,
+            "ingress": ingress - 1,
+            "egress": egress - 1
+        })
+    return {
+        "hops": hops
+    }
+
+
+def get_path(input_file, source, s_host, destination, d_host, flow_id):
     global TUPLE_HASH
 
     flow_tuple = str((source, s_host, destination, d_host, flow_id))
@@ -229,20 +245,17 @@ def main(input_file, source, s_host, destination, d_host, flow_id):
         G.add_edge(edge[1], edge[2], key=edge[0], bandwidth=1, from_interface=edge[3], to_interface=edge[4])
 
     interface_level_path = find_interface_level_path(G, source, destination)
-    output_format = transform_path(interface_level_path)
 
-    # print(interface_level_path)
-    print(output_format)
-
+    return interface_level_path
 
 TUPLE_HASH = 0
 if __name__ == "__main__":
     # output is the interface_level_path:
     # [(Host_AS, 0, egress_interface), (Intermediate_AS, ingress_interface, egress_interface), ... , (Destination_AS, ingress_interface, 0)]
-    read_file = 0
+    read_file = 1
     if read_file:
-        if len(sys.argv) != 6:
-            print("Usage: python script.py source_as source_host destination_as destination_host flow_id")
+        if len(sys.argv) != 7:
+            print("Usage: python script.py source_as source_host destination_as destination_host flow_id xml_file")
             sys.exit(1)
         source_AS = int(sys.argv[1])
         source_host = int(sys.argv[2])
@@ -256,6 +269,8 @@ if __name__ == "__main__":
         source_host = 1
         destination_host = 1
         flow_id = 0
-        xml_file = r"C:\Users\eehsa\Downloads\toy-topology.xml"  # Replace with the path to your XML file
-    main(xml_file, source_AS, source_host, destination_AS, destination_host, flow_id)
+        xml_file = r"configs/traffic-engineering/toy-topology.xml"  # Replace with the path to your XML file
+    
+    path = get_path(xml_file, source_AS, source_host, destination_AS, destination_host, flow_id)
+    print(transform_path_json(path))
 
