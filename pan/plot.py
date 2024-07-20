@@ -22,6 +22,8 @@ def parse_args():
                         action="store_true", help="Plot the active paths")
     parser.add_argument("-s", "--state", action="store_true",
                         help="Plot the GCC state")
+    parser.add_argument("-a", "--active-flows", action="store_true",
+                        help="Plot the number of active flows")
     return parser.parse_args()
 
 
@@ -46,10 +48,7 @@ def plotAppResults(apps: list[dict]):
     plot_gcc_gradient = args.gradient
     plot_gcc_state = args.state
     plot_gcc_params = False
-
-    # If true, automatically align metric timestamps to those of the first
-    # application for summing up the total send rate
-    auto_match_time = False
+    plot_active_flows = args.active_flows
 
     # For which app to plot extra details if there are multiple applications
     detail_app = 0
@@ -72,6 +71,23 @@ def plotAppResults(apps: list[dict]):
     # plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=-0.5 / no_plots)
     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
 
+    # Pre-process a dict with total sendrate and number of active apps at any point in time
+    timestamps = {}
+    for app in apps:
+        for state in app['states']:
+            t = state['time']
+            if t not in timestamps:
+                timestamps[t] = {'active_apps': 0, 'total_sendrate': 0}
+
+            # if (state['sendrate'] == 0):
+            #     continue
+
+            timestamps[t]['active_apps'] += 1
+            timestamps[t]['total_sendrate'] += state['sendrate']
+
+    timestamps = {t / 1000 - 1800: r for t, r in timestamps.items()}
+    timestamps = dict(sorted(timestamps.items()))
+
     lines_dict = dict()
 
     def on_pick(event):
@@ -83,7 +99,7 @@ def plotAppResults(apps: list[dict]):
         elif event.artist in legend.get_lines():
             line_index = legend.get_lines().index(event.artist)
             legend_text = legend.get_texts()[line_index].get_text()
-            
+
         if legend_text:
             # Find the original lines associated with this legend entry
             origlines = lines_dict.get(legend_text, [])
@@ -122,7 +138,7 @@ def plotAppResults(apps: list[dict]):
         plt.ylabel("Latency [ms]")
 
     if ax is None:
-            ax = plt.subplot(gs[plot_number])
+        ax = plt.subplot(gs[plot_number])
     else:
         plt.subplot(gs[plot_number], sharex=ax)
     plot_number += 1
@@ -161,7 +177,7 @@ def plotAppResults(apps: list[dict]):
 
             # Store references to the lines for toggling
             lines_dict[app['name']] = lines
-        
+
         # Print highest median send rate
         highest_median = 0
         highest_median_app = ""
@@ -189,39 +205,23 @@ def plotAppResults(apps: list[dict]):
         plt.subplot(gs[plot_number], sharex=ax)
         plot_number += 1
 
-        if auto_match_time:
-            time = apps[0]['time'].copy()
-            total_rate = apps[0]['sendrate'].copy()
+        # Get times and total send rates as list, sendrates are keyed under ['total_sendrate']
+        times = list(timestamps.keys())
+        sendrates = [r['total_sendrate'] for r in timestamps.values()]
 
-            # Try to match the closest sendrates of all applications to sum them up
-            for app in apps[1:]:
-                for i, t in enumerate(time):
-                    # Find the closest time in the other app, make use of the fact that the time is sorted
-                    closest_index = np.searchsorted(app['time'], t)
-                    if closest_index >= len(app['time']):
-                        continue
-                    total_rate[i] += app['sendrate'][closest_index]
+        plt.plot(times, sendrates, label="Total send rate")
 
-            plt.plot(time, total_rate, label="Total")
+        # Draw some lines for reference. Since all links are 1MB/s, a simple
+        # upper bound for the total min(no_apps, no_paths)
+        upper_bound = min(len(apps), max(apps[0]['active_path']) + 1)
 
-        else:
-            sendrate_at_time = dict()
-            for app in apps:
-                for i, t in enumerate(app['time']):
-                    if t not in sendrate_at_time:
-                        sendrate_at_time[t] = app['sendrate'][i]
-                    sendrate_at_time[t] += app['sendrate'][i]
-            
-            plt.plot(list(sendrate_at_time.keys()), list(sendrate_at_time.values()), label="Total")
-
-            # Draw some lines for reference. Since all links are 1MB/s, a simple
-            # upper bound for the total min(no_apps, no_paths)
-            upper_bound = min(len(apps), max(apps[0]['active_path']) + 1)
+        if upper_bound < max(sendrates) * 1.5:
             plt.axhline(y=upper_bound, color='black', linewidth=0.5, linestyle='--', label="Upper bound")
 
-            print(f"Max total send rate:     {max(list(sendrate_at_time.values()))}")
-            print(f"Median total send rate:  {np.median(list(sendrate_at_time.values()))}")
-            print(f"Mean total send rate:    {np.mean(list(sendrate_at_time.values()))}")
+        print(f"Max total send rate:     {max(sendrates)}")
+        print(f"Median total send rate:  {np.median(sendrates)}")
+        print(f"Mean total send rate:    {np.mean(sendrates)}")
+
         if len(apps) <= max_apps_legend:
             plt.legend()
         plt.legend()
@@ -278,6 +278,13 @@ def plotAppResults(apps: list[dict]):
             plt.legend()
         plt.ylabel("GCC Parameters")
 
+    if plot_active_flows:
+        plt.subplot(gs[plot_number], sharex=ax)
+        plot_number += 1
+
+        plt.plot(list(timestamps.keys()), [r['active_apps'] for r in timestamps.values()], label="Active flows")
+        plt.ylabel("Active flows")
+
     xlabel = "Time (s)"
     plt.xlabel(xlabel)
     # plt.tight_layout()
@@ -298,7 +305,7 @@ def host_eval(file):
             app['host'] = host
             print(f"Found results for host {host} app {
                   app['app_id']} type {app['app_type']}")
-            
+
             # if app['states'] is null
             if 'states' not in app or app['states'] is None:
                 print(f"    No states found for app {app['app_id']}")
@@ -326,7 +333,7 @@ def host_eval(file):
                         app['oldrate'].append(None)
                         app['newrate'].append(None)
                         app['time_transition'].append(None)
-            
+
             # For ever other field in states, generate a list of values
             for field in app['states'][0]:
                 if field not in app:
@@ -337,7 +344,7 @@ def host_eval(file):
 
             if 'bytes_sent' in app:
                 print(f"    Bytes sent:     {app['bytes_sent']}")
-            
+
             if 'bytes_received' in app:
                 print(f"    Bytes received: {app['bytes_received']}")
 
