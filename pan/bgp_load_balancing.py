@@ -99,7 +99,6 @@ def shortest_path_multigraph(G, source, target):
 
 
 def select_egress_interface(G, curr_interface, current_node, next_node):
-
     edgess = G[current_node][next_node]
     edge_keys = list(edgess.keys())
     n = G.degree(current_node) + 1
@@ -107,9 +106,12 @@ def select_egress_interface(G, curr_interface, current_node, next_node):
     rewiring_prob = 0.5
     if k % 2 != 0:
         k += 1  # Ensure k is even
-    ws_graph = nx.watts_strogatz_graph(n, k, rewiring_prob)
+    seed = int(hashlib.sha256(str(current_node).encode()).hexdigest(), 16)
+    ws_graph = nx.watts_strogatz_graph(n, k, rewiring_prob, seed=seed)
+    ok = 0
     while not nx.is_connected(ws_graph):
-        ws_graph = nx.watts_strogatz_graph(n, k, rewiring_prob)
+        ok += 1
+        ws_graph = nx.watts_strogatz_graph(n, k, rewiring_prob, seed=seed+ok)
     ws_hops_matrix = nx.floyd_warshall_numpy(ws_graph)
 
     if current_node < next_node:
@@ -201,24 +203,26 @@ def parse_topology(xml_file):
     return nodes, links
 
 
-def transform_path(path):
+def pretty_print_path(path):
     transformed_path = []
 
     # Process each tuple in the path
     for i, (as_number, ingress, egress) in enumerate(path):
         if i == 0:  # Host_AS (first element)
-            transformed_path.append(f"-{egress-1}->{{AS {as_number}}}->{0}")
+            transformed_path.append(f"-{0}->{{AS {as_number}}}->{egress-1}")
         elif i == len(path) - 1:  # Destination_AS (last element)
-            transformed_path.append(f"-{0}->{{AS {as_number}}}->{ingress-1}")
+            transformed_path.append(f"-{ingress-1}->{{AS {as_number}}}->{0}")
         else:  # Intermediate_AS
-            transformed_path.append(f"-{egress-1}->{{AS {as_number}}}->{ingress-1}")
+            transformed_path.append(f"-{ingress-1}->{{AS {as_number}}}->{egress-1}")
 
-    return '['+", ".join(transformed_path)+', ]'
+    print('['+", ".join(transformed_path)+', ]')
 
 
 def transform_path_json(path):
     """
-    Convert path into a list of hops (dicts) for easy JSON output
+    Convert path into a dict of hops for easy JSON output
+    Args:
+        path: an interface-level path as returned by get_path()
     """
     hops = []
     for (as_number, ingress, egress) in path:
@@ -232,11 +236,12 @@ def transform_path_json(path):
     }
 
 
-def get_path(input_file, source, s_host, destination, d_host, flow_id):
-    global TUPLE_HASH
+def get_path(input_file, source, s_host, destination, d_host, flow_id, it):
+    global TUPLE_HASH, IT
 
     flow_tuple = str((source, s_host, destination, d_host, flow_id))
     TUPLE_HASH = int(hashlib.sha256(flow_tuple.encode()).hexdigest(), 16)
+    IT = it
 
     nodes, links = parse_topology(input_file)
     xml_edges = assign_interfaces(nodes, links)
@@ -249,13 +254,15 @@ def get_path(input_file, source, s_host, destination, d_host, flow_id):
     return interface_level_path
 
 TUPLE_HASH = 0
+IT = 0
 if __name__ == "__main__":
     # output is the interface_level_path:
     # [(Host_AS, 0, egress_interface), (Intermediate_AS, ingress_interface, egress_interface), ... , (Destination_AS, ingress_interface, 0)]
-    read_file = 1
-    if read_file:
-        if len(sys.argv) != 7:
-            print("Usage: python script.py source_as source_host destination_as destination_host flow_id xml_file")
+
+    if len(sys.argv) > 1:
+        # Read inputs from args
+        if len(sys.argv) != 8:
+            print("Usage: python script.py source_as source_host destination_as destination_host flow_id xml_file iteration")
             sys.exit(1)
         source_AS = int(sys.argv[1])
         source_host = int(sys.argv[2])
@@ -263,14 +270,17 @@ if __name__ == "__main__":
         destination_host = int(sys.argv[4])
         flow_id = sys.argv[5]
         xml_file = sys.argv[6]
+        it = sys.argv[7]
     else:
+        # Use default values
+        it = 0
         source_AS = 0
         destination_AS = 2
         source_host = 1
         destination_host = 1
         flow_id = 0
-        xml_file = r"configs/traffic-engineering/toy-topology.xml"  # Replace with the path to your XML file
+        xml_file = r"C:\Users\eehsa\Downloads\toy-topology.xml"  # Replace with the path to your XML file
     
-    path = get_path(xml_file, source_AS, source_host, destination_AS, destination_host, flow_id)
-    print(transform_path_json(path))
+    path = get_path(xml_file, source_AS, source_host, destination_AS, destination_host, flow_id, it)
+    pretty_print_path(path)
 

@@ -115,9 +115,6 @@ RTCApp::RecordMetrics ()
       return;
     }
 
-  // Schedule the next metrics recording
-  Simulator::Schedule (metrics_interval, &RTCApp::RecordMetrics, this);
-
   // Assert that time now is a multiple of metrics_interval
   NS_ASSERT_MSG (Simulator::Now ().GetMilliSeconds () % metrics_interval_ms == 0,
                  "Time now is not a multiple of metrics_interval: " +

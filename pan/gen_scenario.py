@@ -51,7 +51,7 @@ def generate_random_events(app_id, time):
 
     # TODO: Make these test scenarios configurable
     source_node = 0
-    target_node = 1
+    target_node = 2
 
     args = ["0", str(source_node), "2", "0", str(target_node),
             "2", "rtc", "0.0", str(app_id), "0"]
@@ -78,7 +78,7 @@ def generate_bgp_lb_paths(events: dict, out_path: str):
         dest_host = e["args"][5]
         app_id = e["args"][8]
         p = bgp_load_balancing.get_path(
-            topology_file, int(src_as), int(src_host), int(dest_as), int(dest_host), int(app_id))
+            topology_file, int(src_as), int(src_host), int(dest_as), int(dest_host), int(app_id), 0)
         p = bgp_load_balancing.transform_path_json(p)
         key = f"{src_as}-{dest_as}-{src_host}-{dest_host}-{app_id}"
         paths[key] = p
