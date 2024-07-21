@@ -4,6 +4,8 @@ from matplotlib import gridspec
 from cycler import cycler
 import json
 import os
+import seaborn as sns
+from itertools import cycle
 
 import numpy as np
 
@@ -32,11 +34,14 @@ def getStateAttributeList(app: dict, attribute: str):
     return [state[attribute] for state in states]
 
 
-def plotAppResults(apps: list[dict]):
-    default_cycler = (cycler(color=['r', 'g', 'b', 'y']) +
-                      cycler(linestyle=['-', '--', ':', '-.']))
-    plt.rc('axes', prop_cycle=default_cycler)
-    # plt.style.use('dark_background')
+def plotScenarioResults(scenario: dict):
+    # colors = sns.color_palette("tab10")
+    # linestyles = cycle(['-', '--', ':', '-.'])  # Cycle through these styles
+    # markers = cycle(['o', 's', '^', 'd'])  # Cycle through these markers
+
+    # # Create a combined cycler with equal length cycles
+    # default_cycler = cycler(color=colors) + cycler(linestyle=linestyles) + cycler(marker=markers)
+    # plt.rc('axes', prop_cycle=default_cycler)
 
     # max number of apps before we stop showing the legend
     max_apps_legend = 10
@@ -71,22 +76,8 @@ def plotAppResults(apps: list[dict]):
     # plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=-0.5 / no_plots)
     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
 
-    # Pre-process a dict with total sendrate and number of active apps at any point in time
-    timestamps = {}
-    for app in apps:
-        for state in app['states']:
-            t = state['time']
-            if t not in timestamps:
-                timestamps[t] = {'active_apps': 0, 'total_sendrate': 0}
-
-            # if (state['sendrate'] == 0):
-            #     continue
-
-            timestamps[t]['active_apps'] += 1
-            timestamps[t]['total_sendrate'] += state['sendrate']
-
-    timestamps = {t / 1000 - 1800: r for t, r in timestamps.items()}
-    timestamps = dict(sorted(timestamps.items()))
+    apps = scenario['apps']
+    timestamps = scenario['timestamps']
 
     lines_dict = dict()
 
@@ -287,12 +278,19 @@ def plotAppResults(apps: list[dict]):
 
     xlabel = "Time (s)"
     plt.xlabel(xlabel)
-    # plt.tight_layout()
+
+    settings = scenario['settings']
+
+    if 'time_slots' in settings:
+        # show vertical grid lines at time slots
+        for i in range(1, settings['time_slots']):
+            plt.axvline(x=i * settings['slot_size'], color='gray', linestyle='--', linewidth=0.5)
+
     plt.show()
 
 
-def host_eval(file):
-    results = []
+def parseScenarioResults(file):
+    apps = []
     while (True):
         line = file.readline().strip()
         if "End Apps evaluation" in line:
@@ -303,8 +301,8 @@ def host_eval(file):
         elif "{" in line:
             app = json.loads(line)
             app['host'] = host
-            print(f"Found results for host {host} app {
-                  app['app_id']} type {app['app_type']}")
+            # print(f"Found results for host {host} app {
+            #       app['app_id']} type {app['app_type']}")
 
             # if app['states'] is null
             if 'states' not in app or app['states'] is None:
@@ -340,47 +338,193 @@ def host_eval(file):
                     app[field] = getStateAttributeList(app, field)
 
             if not 'name' in app:
-                app['name'] = f"{app['app_id']}:{app['app_type']}"
+                app['name'] = f"{app['app_type']} {app['app_id']:2}"
 
-            if 'bytes_sent' in app:
-                print(f"    Bytes sent:     {app['bytes_sent']}")
+            #     print(f"    Bytes sent:     {app['bytes_sent']}")
+            #     print(f"    Bytes received: {app['bytes_received']}")
 
-            if 'bytes_received' in app:
-                print(f"    Bytes received: {app['bytes_received']}")
+            app['total_running_time'] = app['time'][-1] - app['time'][0]
+            app['average_bandwidth'] = app['bytes_received'] / app['total_running_time'] / 1e6
 
-            results.append(app)
+            apps.append(app)
 
-    return results
+    if len(apps) == 0:
+        print(f"No app results found in {file.name}")
+        return {}
+    else:
+        print(f"Loaded {len(apps):2} apps from {file.name}")
 
+    # Pre-process a dict with total sendrate and number of active apps at any point in time
+    timestamps = {}
+    for app in apps:
+        for state in app['states']:
+            t = state['time']
+            if t not in timestamps:
+                timestamps[t] = {'active_apps': 0, 'total_sendrate': 0}
+
+            # if (state['sendrate'] == 0):
+            #     continue
+
+            timestamps[t]['active_apps'] += 1
+            timestamps[t]['total_sendrate'] += state['sendrate']
+
+    median_total_sendrate = np.median([r['total_sendrate'] for r in timestamps.values()])
+
+    timestamps = {t / 1000 - 1800: r for t, r in timestamps.items()}
+    timestamps = dict(sorted(timestamps.items()))
+
+    settings = {}
+    time_slots = {}
+
+    if 'settings' in inputs:
+        settings = inputs['settings']
+
+        time_slots = {}
+        for t, r in timestamps.items():
+            slot = int(t // settings['slot_size'])
+            if slot not in time_slots:
+                time_slots[slot] = {}
+            if 'total_sendrates' not in time_slots[slot]:
+                time_slots[slot]['total_sendrates'] = []
+            time_slots[slot]['total_sendrates'].append(r['total_sendrate'])
+
+        for slot, results in time_slots.items():
+            time_slots[slot]['median_total_sendrate'] = np.median(results['total_sendrates'])
+
+    scenario = {
+        'apps': apps,
+        'timestamps': timestamps,
+        'time_slots': time_slots,
+        'median_total_sendrate': median_total_sendrate,
+        'settings': settings,
+    }
+
+    return scenario
+
+
+def plotAllIterations(scenarios: list[dict]) -> None:
+    # All scenarios should have the same number of time slots
+    time_slots = scenarios[0]['settings']['time_slots']
+
+    # Map containing the global results: 
+    # {flow_type: 
+    #   {num_flows: 
+    #       {
+    #           median_totals: list[float],
+    #           mean_total: float
+    #           ci_total: float}
+    #       }
+    #   }
+    # }
+    global_results = {}
+
+    use_cum_avg_bw = True
+
+    for scenario in scenarios:
+        flow_type = scenario['settings']['description']
+        if flow_type not in global_results:
+            global_results[flow_type] = {}
+
+        num_flows = scenario['settings']['num_flows']
+
+        if num_flows not in global_results[flow_type]:
+            global_results[flow_type][num_flows] = {}
+
+        if 'median_totals' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['median_totals'] = []
+        
+        global_results[flow_type][num_flows]['median_totals'].append(scenario['median_total_sendrate'])
+
+        if 'cumulative_avg_bandwidths' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['cumulative_avg_bandwidths'] = []
+
+        cumulative_avg_bandwidth = 0
+        for app in scenario['apps']:
+            cumulative_avg_bandwidth += app['average_bandwidth']
+        # cumulative_avg_bandwidth = cumulative_bandwidth / len(scenario['apps'])
+        global_results[flow_type][num_flows]['cumulative_avg_bandwidths'].append(cumulative_avg_bandwidth)
+
+    # Compute the mean and the 95% confidence interval of all medians of the total send rates per flow type and per number of flows
+    for flow_type, flow_results in global_results.items():
+        for num_flows, results in flow_results.items():
+            if use_cum_avg_bw:
+                results['mean_total'] = np.mean(results['cumulative_avg_bandwidths'])
+                results['ci_total'] = 1.96 * np.std(results['cumulative_avg_bandwidths'], ddof=1) / np.sqrt(len(results['cumulative_avg_bandwidths']))
+            else:
+                results['mean_total'] = np.mean(results['median_totals'])
+                results['ci_total'] = 1.96 * np.std(results['median_totals'], ddof=1) / np.sqrt(len(results['median_totals']))
+
+    # Plot the results
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
+    colors = plt.cm.tab10(np.linspace(0, 1, len(global_results)))
+
+    for (flow_type, color, marker), flow_results in zip(zip(global_results.keys(), colors, markers), global_results.values()):
+        num_flows = sorted(flow_results.keys())
+        mean_totals = [flow_results[n]['mean_total'] for n in num_flows]
+        ci_totals = [flow_results[n]['ci_total'] for n in num_flows]
+
+        ax.errorbar(num_flows, mean_totals, yerr=ci_totals, fmt='-o', label=flow_type, color=color, marker=marker, markersize=8, linewidth=2, capsize=5)
+
+    ax.set_xlabel("# of Flows", fontsize=14)
+    ax.set_ylabel("CumAvgBW (MB/s)", fontsize=14)
+    # ax.set_title("Average Bandwidth by Flow Type", fontsize=16)
+
+    # Customize tick parameters
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    ax.set_xticks(num_flows)
+
+    # Add gridlines
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    # Render the legend above the plot with a shadow and a frame
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1), fancybox=True, shadow=True, ncol=3, fontsize=12)
+
+    plt.tight_layout()  # Adjust the layout to make room for the legend
+
+    plt.show()
 
 def main():
     global args
+    global inputs
+
     args = parse_args()
     paths = []
     if os.path.isdir(args.filepath):
         for file in os.listdir(args.filepath):
-            paths.append(os.path.join(args.filepath, file))
+            if file.endswith(".out.txt"):
+                paths.append(os.path.join(args.filepath, file))
     else:
         paths.append(args.filepath)
 
     print(f"Found {len(paths)} files")
 
-    print("Parsing files")
+    scenarios = []
     for filepath in paths:
-        apps = []
+        # First, load the corresponding inputs file to get meta information like time slots
+        inputs_json_path = filepath.replace(".out.txt", ".json")
+        with open(inputs_json_path) as f:
+            inputs = json.load(f)
+            # print(f"Loaded inputs from {inputs_json_path}")
+
+        # Then, load the app metrics from the simulation output file
         with open(filepath) as file:
             while True:
                 line = file.readline()
                 if line == '':
                     break
                 if "# Host Apps evaluation" in line:
-                    apps = host_eval(file)
+                    s = parseScenarioResults(file)
+                    if s:
+                        scenarios.append(s)
 
-        if len(apps) == 0:
-            print(f"No app results found in {filepath}")
-            continue
+    print("Processed a total of", len(scenarios), "scenarios")
 
-        plotAppResults(apps)
+    if len(scenarios) == 1:
+        plotScenarioResults(scenarios[0])
+    elif len(scenarios) > 1:
+        plotAllIterations(scenarios)
 
     print("Done. Exiting.")
 

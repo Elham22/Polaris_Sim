@@ -1,6 +1,7 @@
 import json
 import random
 import argparse
+import os
 
 import bgp_load_balancing
 
@@ -42,88 +43,150 @@ def generate_flows(flow_num, time_span, node_num, seed):
     return flow_list
 
 
-def generate_random_events(app_id, time):
-    source_node = random.randint(0, 3)
-    target_node = random.randint(0, 3)
+def build_scenario(flow: list, startup_phase_end_seconds: int, timeslot_size_seconds: int) -> dict:
 
-    while source_node == target_node:
-        target_node = random.randint(0, 3)
+    applications = []
+    events = []
 
-    # TODO: Make these test scenarios configurable
-    source_node = 0
-    target_node = 2
+    # Add a random offset to the startup time of flows within the same timeslot
+    timeslot_offsets = {}
 
-    args = ["0", str(source_node), "2", "0", str(target_node),
-            "2", "rtc", "0.0", str(app_id), "0"]
+    for f in flow:
+        flow_id, src_as, dst_as, app_limit, duration, start_timeslot, flow_type = f
 
-    event = {
-        "time": f"{time:.2f}min",
-        "type": "start_application",
-        "args": args
+        app_type = "rtc" if flow_type == 0 else "TcpCubic"
+
+        # UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as_no,
+        #                      std::string src_local_address, std::string dst_isd_number,
+        #                      std::string real_dst_as_no, std::string dst_local_address,
+        #                      std::string app_type, std::string backgroundBwdFactor,
+        #                      std::string app_id_str, std::string runtime_config)
+
+        args = ["0", str(src_as), "2", "0", str(dst_as),
+                "2", app_type, "0.0", str(flow_id), "0"]
+
+        start_time_seconds = startup_phase_end_seconds + start_timeslot * timeslot_size_seconds
+
+        offset = timeslot_offsets.get(start_timeslot, 0)
+        timeslot_offsets[start_timeslot] = offset + random.uniform(timeslot_size_seconds / 100, timeslot_size_seconds / 20)
+
+        start_time_offset_seconds = start_time_seconds + offset
+
+        start_event = {
+            "time": f"{start_time_offset_seconds:.2f}s",
+            "type": "start_application",
+            "args": args
+        }
+
+        events.append(start_event)
+
+        end_time_seconds = start_time_seconds + duration * timeslot_size_seconds
+
+        # Stop a bit before the end of the timeslot
+        end_time_offset_seconds = end_time_seconds - timeslot_size_seconds / 20
+
+        # UserDefinedEvents::StopAppTraffic (std::string src_isd_number, std::string real_src_as_no,
+        #                           std::string src_local_address, std::string app_id)
+
+        args = ["0", str(src_as), "2", str(flow_id)]
+
+        end_event = {
+            "time": f"{end_time_offset_seconds:.2f}s",
+            "type": "stop_app_traffic",
+            "args": args
+        }
+        events.append(end_event)
+
+        applications.append({
+            "app_id": flow_id,
+            "src_as": src_as,
+            "src_host": 2,
+            "dst_as": dst_as,
+            "dst_host": 2,
+            "app_type": app_type,
+            "start_slot": start_timeslot,
+            "start_time": start_time_offset_seconds,
+            "end_slot": start_timeslot + duration,
+            "end_time": end_time_offset_seconds
+        })
+
+        # print(f"Adding flow {flow_id:02} of type {app_type:8} sending from AS {src_as} to AS {
+        #       dst_as} running from time slot {start_timeslot:02} to {start_timeslot + duration:02} ({start_time_offset_seconds:.2f}s - {end_time_offset_seconds:.2f}s)")
+
+    scenario = {
+        "applications": applications,
+        "events": events
     }
 
-    print(f"Application {app_id} sending from {source_node} to {
-          target_node} starting at {time:.2f}min")
-
-    return event
+    return scenario
 
 
-def generate_bgp_lb_paths(events: dict, out_path: str):
+def add_bgp_lb_paths_to_flows(scenario: dict, iteration: int) -> None:
     topology_file = "configs/traffic-engineering/toy-topology.xml"
-    paths = {}
-    for e in events:
-        src_as = e["args"][1]
-        src_host = e["args"][2]
-        dest_as = e["args"][4]
-        dest_host = e["args"][5]
-        app_id = e["args"][8]
-        p = bgp_load_balancing.get_path(
-            topology_file, int(src_as), int(src_host), int(dest_as), int(dest_host), int(app_id), 0)
-        p = bgp_load_balancing.transform_path_json(p)
-        key = f"{src_as}-{dest_as}-{src_host}-{dest_host}-{app_id}"
-        paths[key] = p
+    for app in scenario["applications"]:
 
-    return paths
+        p = bgp_load_balancing.get_path(
+            topology_file, app["src_as"], app["src_host"], app["dst_as"], app["dst_host"], app["app_id"], iteration)
+        p = bgp_load_balancing.transform_path_json(p)
+        app["path"] = p
+
+    print(f"Generated BGP load balanced paths for all flows")
 
 
 def main():
     parser = argparse.ArgumentParser(
         description='Generate events for a JSON file.')
-    parser.add_argument('-e', '--events', type=int, default=4,
+    parser.add_argument('-n', '--number-of-flows', type=int, default=4,
                         help='number of events to generate (default: 4)')
-    parser.add_argument(
-        '-o', '--output', default='configs/traffic-engineering/toy.json', help='output path')
+
+    parser.add_argument('-t', '--time-slots', type=int, default=5,
+                        help='number of time slots (default: 5)')
+    parser.add_argument('-s', '--slot-size', type=int, default=120,
+                        help='size of a time slot in seconds (default: 120)')
+    parser.add_argument('-i', '--iterations', type=int, default=3)
+    parser.add_argument('-o', '--output', default='configs/traffic-engineering/toy.json',
+                        help='output path')
     parser.add_argument('--bgp-lb', action='store_true',
                         help='Generate a GBP LB paths file alongside the events (default: False)')
 
     args = parser.parse_args()
 
-    number_of_events = args.events
+    num_flows_list = [args.number_of_flows]
+    output_path_template = args.output
 
-    # TODO: use the generate_flows function to re-produce the same random scenarios used for MILP
-    # flows = generate_flows(number_of_events, 30, 4, str(0))
+    # If output is a directory, then generate multiple scenarios
+    # for a whole range of flow numbers
+    if os.path.isdir(args.output):
+        output_path_template = os.path.join(args.output, "scenario.json")
+        num_flows_list = [2, 4, 6, 8, 10, 15, 20, 30]
 
-    events = []
-    time = 30.0  # starting time in minutes
+    for num_flows in num_flows_list:
+        for iteration in range(args.iterations):
+            print(f"Generating scenario iteration {iteration} with {num_flows} flows")
+            flows = generate_flows(num_flows, time_span=args.time_slots,
+                                   node_num=4, seed=str(iteration))
 
-    for i in range(number_of_events):
-        event = generate_random_events(i, time)
-        events.append(event)
-        # increment time by a random amount for variety
-        time += random.uniform(0.0, 0.1)
+            scenario = build_scenario(
+                flows, startup_phase_end_seconds=1800, timeslot_size_seconds=args.slot_size)
 
-    output = {
-        "events": events
-    }
+            scenario["settings"] = {
+                "time_slots": args.time_slots,
+                "slot_size": args.slot_size,
+                "num_flows": num_flows,
+            }
 
-    if args.bgp_lb:
-        output["paths"] = generate_bgp_lb_paths(events, args.output)
+            if args.bgp_lb:
+                add_bgp_lb_paths_to_flows(scenario, iteration)
+                scenario["settings"]["description"] = "BGP ECMP Flow-Level Load Balancing"
+                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_bgp_lb.json")
+            else:
+                scenario["settings"]["description"] = "Ciao"
+                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_ciao.json")
 
-    with open(args.output, 'w') as f:
-        json.dump(output, f, indent=4)
+            with open(output_path, 'w') as f:
+                json.dump(scenario, f, indent=4)
 
-    print(f"Generated scenario with {
-          number_of_events} flows and saved to {args.output}")
+            print(f"Saving scenario to {output_path}")
 
 
 if __name__ == "__main__":
