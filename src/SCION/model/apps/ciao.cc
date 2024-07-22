@@ -18,7 +18,7 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#include "rtc-app.h"
+#include "ciao.h"
 
 #include "api/environment/environment_factory.h"
 #include "api/transport/goog_cc_factory.h"
@@ -26,7 +26,7 @@
 namespace ns3 {
 
 void
-RTCApp::Log (std::string msg, bool with_prefix)
+CiaoApp::Log (std::string msg, bool with_prefix)
 {
   if (!cfgLogging)
     {
@@ -42,7 +42,7 @@ RTCApp::Log (std::string msg, bool with_prefix)
   std::cout << prefix << msg << std::endl;
 }
 
-RTCApp::RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
+CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
                 host_addr_t app_dst_host_addr,
                 std::vector<std::vector<const PathSegment *>> all_paths, uint32_t runtime_config)
     : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, runtime_config)
@@ -78,7 +78,7 @@ RTCApp::RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
   // active_path = rand () % num_paths;
   active_path = 0; // TODO: For testing
 
-  Log ("Initialized RTCApp " + std::to_string (app_id));
+  Log ("Initialized CiaoApp " + std::to_string (app_id));
   Log ("  Runtime config: " + std::to_string (runtime_config), false);
   Log ("  Active path: " + std::to_string (active_path), false);
   Log ("  Logging enabled: " + std::to_string (cfgLogging), false);
@@ -88,12 +88,12 @@ RTCApp::RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
 }
 
 void
-RTCApp::StartAppTraffic ()
+CiaoApp::StartAppTraffic ()
 {
 
   // Start sending probes and video frames after a random delay, to avoid synchronization
-  // Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &RTCApp::ScheduleSend, this);
-  // Simulator::Schedule (MilliSeconds (2000) + RandomDelay (1500), &RTCApp::SendProbes, this);
+  // Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &CiaoApp::ScheduleSend, this);
+  // Simulator::Schedule (MilliSeconds (2000) + RandomDelay (1500), &CiaoApp::SendProbes, this);
 
   ScheduleSend ();
   SendProbes ();
@@ -104,11 +104,11 @@ RTCApp::StartAppTraffic ()
   Time sched_rel_time = MilliSeconds (sched_abs_time_ms) - Simulator::Now ();
   std::cout << "Scheduling metrics recording at " << sched_abs_time_ms << " ms" << std::endl;
   std::cout << "Current time: " << Simulator::Now ().GetMilliSeconds () << " ms" << std::endl;
-  Simulator::Schedule (sched_rel_time, &RTCApp::RecordMetrics, this);
+  Simulator::Schedule (sched_rel_time, &CiaoApp::RecordMetrics, this);
 }
 
 void
-RTCApp::RecordMetrics ()
+CiaoApp::RecordMetrics ()
 {
   if (stopped)
     {
@@ -122,7 +122,7 @@ RTCApp::RecordMetrics ()
                      std::to_string (metrics_interval_ms));
 
   // Schedule the next metrics recording
-  Simulator::Schedule (metrics_interval, &RTCApp::RecordMetrics, this);
+  Simulator::Schedule (metrics_interval, &CiaoApp::RecordMetrics, this);
 
   // Wait until we have received at least one report
   if (!first_report_received)
@@ -166,7 +166,7 @@ RTCApp::RecordMetrics ()
 }
 
 std::vector<app_path_id_t>
-RTCApp::FindProbeCandidates ()
+CiaoApp::FindProbeCandidates ()
 {
   std::vector<app_path_id_t> candidates;
   Time probed_last_min = Simulator::Now () - Seconds (1);
@@ -212,7 +212,7 @@ RTCApp::FindProbeCandidates ()
 }
 
 void
-RTCApp::ProbePath (app_path_id_t path_id)
+CiaoApp::ProbePath (app_path_id_t path_id)
 {
   // First set the probe id. This belongs to the entire probing action that
   // we're performing right now, not to the individual packet. Performing a
@@ -237,7 +237,7 @@ RTCApp::ProbePath (app_path_id_t path_id)
 }
 
 void
-RTCApp::SendProbes ()
+CiaoApp::SendProbes ()
 {
   if (stopped)
     {
@@ -264,11 +264,11 @@ RTCApp::SendProbes ()
   // Schedule the next round of probing
   Simulator::Schedule (probe_interval +
                            RandomDelay ((probe_interval / 2).ToInteger (Time::Unit::MS)),
-                       &RTCApp::SendProbes, this);
+                       &CiaoApp::SendProbes, this);
 }
 
 void
-RTCApp::ReceiveScmp (ScmpReqOrResp scmp)
+CiaoApp::ReceiveScmp (ScmpReqOrResp scmp)
 {
   // TODO
   // Need information from host here about which path is affected
@@ -276,7 +276,7 @@ RTCApp::ReceiveScmp (ScmpReqOrResp scmp)
 }
 
 void
-RTCApp::EndPathTransition ()
+CiaoApp::EndPathTransition ()
 {
   last_path_change = Simulator::Now ();
   in_path_transition = false;
@@ -300,7 +300,7 @@ RTCApp::EndPathTransition ()
 }
 
 void
-RTCApp::ScheduleSend ()
+CiaoApp::ScheduleSend ()
 {
   if (stopped)
     {
@@ -377,11 +377,11 @@ RTCApp::ScheduleSend ()
 
   // Introduce a random offset of up to 1ms when scheduling the next frame
   auto rand_offset = RandomDelay (1000);
-  Simulator::Schedule (frame_interval + rand_offset, &RTCApp::ScheduleSend, this);
+  Simulator::Schedule (frame_interval + rand_offset, &CiaoApp::ScheduleSend, this);
 }
 
 void
-RTCApp::SendFrameData (double sendrate, app_path_id_t path)
+CiaoApp::SendFrameData (double sendrate, app_path_id_t path)
 {
   // sendrate / fps == (payload_data + header_overhead) * no_pkts
 
@@ -399,14 +399,14 @@ RTCApp::SendFrameData (double sendrate, app_path_id_t path)
 
   while (available_bytes > max_payload_bytes)
     {
-      Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, max_payload_bytes,
+      Simulator::Schedule (packet_schedule_delay, &CiaoApp::SendPacket, this, max_payload_bytes,
                            scion_header_bytes, path);
       packet_schedule_delay += packet_interval;
       available_bytes -= max_payload_bytes;
     }
   if (available_bytes > 0)
     {
-      Simulator::Schedule (packet_schedule_delay, &RTCApp::SendPacket, this, max_payload_bytes,
+      Simulator::Schedule (packet_schedule_delay, &CiaoApp::SendPacket, this, max_payload_bytes,
                            scion_header_bytes, path);
     }
 
@@ -414,7 +414,7 @@ RTCApp::SendFrameData (double sendrate, app_path_id_t path)
 }
 
 void
-RTCApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_path_id_t path)
+CiaoApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_path_id_t path)
 {
   AppData app_data;
   app_data.app_id = app_id;
@@ -448,7 +448,7 @@ RTCApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_path
 }
 
 void
-RTCApp::ReceiveAppResponse (AppResp app_resp)
+CiaoApp::ReceiveAppResponse (AppResp app_resp)
 {
   first_report_received = true;
   auto path_id = app_resp.path_id;
@@ -595,7 +595,7 @@ RTCApp::ReceiveAppResponse (AppResp app_resp)
 }
 
 void
-RTCApp::UpdateBWE ()
+CiaoApp::UpdateBWE ()
 {
 
   A_r = delay_based_estimator.GetRate ();
@@ -657,7 +657,7 @@ RTCApp::UpdateBWE ()
 }
 
 void
-RTCApp::ReceiveProbeResponse (AppProbe probe_resp)
+CiaoApp::ReceiveProbeResponse (AppProbe probe_resp)
 {
   auto probe_id = probe_resp.probe_id;
   auto path_id = probe_resp.path_id;
@@ -712,7 +712,7 @@ RTCApp::ReceiveProbeResponse (AppProbe probe_resp)
 }
 
 void
-RTCApp::UpdatePathCandidates ()
+CiaoApp::UpdatePathCandidates ()
 {
   bool is_active_path_usable =
       path_metrics[active_path].last_report > Simulator::Now () - path_alive_treshold &&
@@ -799,7 +799,7 @@ RTCApp::UpdatePathCandidates ()
 }
 
 void
-RTCApp::SwitchToPath (uint32_t new_path)
+CiaoApp::SwitchToPath (uint32_t new_path)
 {
   last_path_change = Simulator::Now ();
   if (new_path == active_path)
@@ -852,38 +852,32 @@ RTCApp::SwitchToPath (uint32_t new_path)
 }
 
 webrtc::Timestamp
-RTCApp::TimestampNow ()
+CiaoApp::TimestampNow ()
 {
   return webrtc::Timestamp::Micros (Simulator::Now ().GetMicroSeconds ());
 }
 
 void
-RTCApp::StopAppTraffic ()
+CiaoApp::StopAppTraffic ()
 {
   stopped = true;
 }
 
 std::string
-RTCApp::InfoString ()
+CiaoApp::InfoString ()
 {
-  std::string info = "rtc";
-  // if (cfgLossBwe && cfgDelayBwe)
-  //   {
-  //     info += " D+L";
-  //   }
-  // else if (cfgLossBwe)
-  //   {
-  //     info += "   L";
-  //   }
-  // else if (cfgDelayBwe)
-  //   {
-  //     info += " D  ";
-  //   }
+  std::string info = "Ciao";
+
+  // Ciao without path switching is basically GCC
+  if (!cfgPathSwitching){
+    info = "GCC";
+  }
+  
   return info;
 }
 
 void
-RTCApp::PrintResults ()
+CiaoApp::PrintResults ()
 {
   nlohmann::json j;
   j["app_id"] = app_id;
@@ -939,16 +933,16 @@ PathMetric::HasFreshProbeResultsSince (Time t)
    * Override to throw error, we don't use probes but keep the existing code
   */
 void
-RTCApp::ReceiveProbeResponse (ProbeResp probe_resp)
+CiaoApp::ReceiveProbeResponse (ProbeResp probe_resp)
 {
-  NS_FATAL_ERROR ("[rtc-app] legacy probe response not supported");
+  NS_FATAL_ERROR ("[ciao] legacy probe response not supported");
 }
 
 /**
    * @return a random time between -N and N where N is an integer parameter in ps
    */
 Time
-RTCApp::RandomDelay (int N)
+CiaoApp::RandomDelay (int N)
 {
   return PicoSeconds (rand () % (2 * N) - N);
 }

@@ -18,8 +18,8 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#ifndef SCION_RTC_APP_H
-#define SCION_RTC_APP_H
+#ifndef SCION_CIAO_APP_H
+#define SCION_CIAO_APP_H
 
 #include "src/SCION/model/externs.h"
 #include "src/SCION/model/scion-core-as.h"
@@ -90,7 +90,7 @@ enum class PathTransitionStrategy { LINEAR, SIGMOID, CUBIC };
 /**
  * Application with WebRTC congestion control and smart path selection
 */
-class RTCApp : public App
+class CiaoApp : public App
 {
 protected:
   // App config
@@ -158,7 +158,7 @@ protected:
   void Log (std::string msg, bool with_prefix = true);
 
 public:
-  RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
+  CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
           host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
           uint32_t runtime_config);
 
@@ -219,4 +219,4 @@ public:
 
 } // namespace ns3
 
-#endif // SCION_RTC_APP_H
+#endif // SCION_CIAO_APP_H

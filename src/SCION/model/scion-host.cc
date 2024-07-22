@@ -29,7 +29,7 @@
 #include "apps/app.h"
 #include "apps/general-traffic-app.h"
 #include "apps/video-conference-app.h"
-#include "apps/rtc-app.h"
+#include "apps/ciao.h"
 #include "apps/tcp-app.cc"
 
 namespace ns3 {
@@ -327,10 +327,10 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
 
       if (apps.find (app_id) != apps.end ())
         {
-          RTCApp *rtc_app = dynamic_cast<RTCApp *> (apps.at (app_id));
-          if (rtc_app != nullptr)
+          CiaoApp *ciao_app = dynamic_cast<CiaoApp *> (apps.at (app_id));
+          if (ciao_app != nullptr)
             {
-              rtc_app->ReceiveProbeResponse (*payload);
+              ciao_app->ReceiveProbeResponse (*payload);
             }
           else
             {
@@ -505,7 +505,7 @@ ScionHost::StartApplication (std::string app_type, uint32_t app_id, ia_t dst_ia,
         }
       else if (app_type == "rtc")
         {
-          app = new RTCApp (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
+          app = new CiaoApp (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
         }
       else if (app_type.find ("Tcp") == 0)
         {
