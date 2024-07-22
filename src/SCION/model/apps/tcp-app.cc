@@ -94,7 +94,7 @@ protected:
 
     PayloadType payload_type = PayloadType::APPLICATION_DATA;
     host->SendAppPacket (this, payload, payload_type,
-                         ip_packet->GetSize () * scale + sizeof (AppData), all_paths[active_path]);
+                         ip_packet->GetSize () * scale + sizeof (AppData), paths[active_path]);
   }
 
   /**
@@ -530,6 +530,22 @@ public:
     SetupIPStack ();
 
     active_path = 0;
+
+    if (is_sink && path_override)
+      {
+        // As the host on the receiving end, we need to reverse the manually provided path
+        std::vector<const PathSegment *> bgp_path = all_paths[0];
+        PathSegment * seg = new PathSegment ();
+        // Copy the hops in reverse order
+        for (int i = bgp_path[0]->hops.size () - 1; i >= 0; i--)
+          {
+            seg->hops.push_back (bgp_path[0]->hops[i]);
+          }
+        // Ingresses and egresses stay the same, but we set the reverse flag
+        seg->reverse = true;
+        all_paths[0].clear ();
+        all_paths[0].push_back (seg);
+      }
 
     std::cout << app_type << " initialized." << std::endl;
   }

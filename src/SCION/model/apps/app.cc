@@ -42,6 +42,64 @@ PathInfo::GetLoss (double *additional_scoring)
   return 1. - noloss;
 }
 
+App::App (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
+          host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
+          int runtime_config)
+    : dst_ia (app_dst_ia),
+      dst_host_addr (app_dst_host_addr),
+      host (host),
+      app_id (app_id),
+      ia_addr (ia_addr),
+      paths (all_paths),
+      runtime_config (runtime_config)
+{
+
+  // Find the inputs for this application in the JSON
+  if (inputs_json.contains ("applications") && inputs_json["applications"].is_array ())
+    {
+      for (const auto &application : inputs_json["applications"])
+        {
+          if (application.contains ("app_id") && application["app_id"].get<uint32_t> () == app_id)
+            {
+              inputs = application;
+              break;
+            }
+        }
+    }
+
+  // If the input specifies a path, use this one instead of the ones provided by the path server
+  if (inputs.contains ("path"))
+    {
+      std::vector<const PathSegment *> bgp_path;
+      PathSegment *seg = new PathSegment ();
+
+      for (auto const &hop : inputs["path"]["hops"])
+        {
+          uint64_t hop_field = 0;
+
+          uint64_t as = hop["as_no"].get<uint16_t> ();
+          uint64_t ingress = hop["ingress"].get<uint16_t> ();
+          uint64_t egress = hop["egress"].get<uint16_t> ();
+
+          hop_field |= as << 32;
+          hop_field |= ingress << 16;
+          hop_field |= egress;
+
+          seg->hops.push_back (hop_field);
+        }
+
+      bgp_path.push_back (seg);
+      paths.clear ();
+      paths.push_back (bgp_path);
+
+      path_override = true;
+
+      std::cout << "Using path override for app " << app_id << " (AS " << ia_addr << " to "
+                << dst_ia << "): ";
+      host->PrintPath (bgp_path);
+    }
+}
+
 void
 App::StartAppTrafficDelayed (Time delay)
 {
@@ -132,7 +190,7 @@ App::SendProbes ()
 
   std::vector<uint8_t> shortcuts;
 
-  for (uint i = 0; i < all_paths.size (); i++)
+  for (uint i = 0; i < paths.size (); i++)
     {
       PayloadType payload_type = PayloadType::QOS_PROBE_REQ;
       ProbeReq probe_req;
@@ -141,8 +199,8 @@ App::SendProbes ()
       probe_req.expected_bandwidth = ComputeExpectedBandwidth (i);
       Payload payload = probe_req;
 
-      path_infos->push_back (PathInfo (all_paths.at (i)));
-      host->SendAppPacket (this, payload, payload_type, sizeof (ProbeReq), all_paths.at (i));
+      path_infos->push_back (PathInfo (paths.at (i)));
+      host->SendAppPacket (this, payload, payload_type, sizeof (ProbeReq), paths.at (i));
     }
 
   Simulator::Schedule (Seconds (3), &App::CheckResendProbes, this);
@@ -289,7 +347,7 @@ App::ComputeScore (double latency, double loss, double additional_scoring, uint3
 std::vector<const ns3::PathSegment *>
 App::GetPath ()
 {
-  return all_paths.at (best_path_id);
+  return paths.at (best_path_id);
 }
 
 bool
@@ -333,10 +391,10 @@ void
 App::PrintPathInfo ()
 {
   std::cout << host->GetAddressAsString () << " " << app_id << std::endl;
-  for (uint64_t i = 0; i < all_paths.size (); ++i)
+  for (uint64_t i = 0; i < paths.size (); ++i)
     {
       std::cout << "path_id " << i << ", ";
-      host->PrintPath (all_paths.at (i));
+      host->PrintPath (paths.at (i));
     }
   std::cout << "End of app path info" << std::endl;
 }

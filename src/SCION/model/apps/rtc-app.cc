@@ -52,9 +52,9 @@ RTCApp::RTCApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
   cfgLossBwe = !(DISABLE_LOSS_BWE (runtime_config));
   cfgDelayBwe = !(DISABLE_DELAY_BWE (runtime_config));
   cfgPathSwitching = !(DISABLE_PATH_SWITCHING (runtime_config));
-
+  
   // Initialize path infos
-  num_paths = all_paths.size ();
+  num_paths = paths.size ();
   for (uint32_t i = 0; i < num_paths; i++)
     {
       PathMetric metric;
@@ -233,7 +233,7 @@ RTCApp::ProbePath (app_path_id_t path_id)
 
   Payload payload = probe;
   host->SendAppPacket (this, payload, PayloadType::APPLICATION_PROBE, sizeof (AppProbe),
-                       all_paths[path_id]);
+                       paths[path_id]);
 }
 
 void
@@ -276,6 +276,30 @@ RTCApp::ReceiveScmp (ScmpReqOrResp scmp)
 }
 
 void
+RTCApp::EndPathTransition ()
+{
+  last_path_change = Simulator::Now ();
+  in_path_transition = false;
+  Log ("Finished transition from path " + std::to_string (previous_path) + " to path " +
+       std::to_string (active_path));
+
+  // webrtc::TargetRateConstraints new_constraints;
+  // webrtc::NetworkRouteChange route_change;
+  // new_constraints.at_time = TimestampNow ();
+  // new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (target_sendrate);
+  // route_change.at_time = TimestampNow ();
+  // route_change.constraints = new_constraints;
+
+  // (void) network_controller->OnNetworkRouteChange (route_change);
+  // // (void) network_controller->OnNetworkRouteChange (route_change);
+
+  // webrtc::NetworkStateEstimate estimate;
+  // estimate.update_time = TimestampNow ();
+  // estimate.link_capacity = webrtc::DataRate::BytesPerSec(target_sendrate);
+  // (void) network_controller->OnNetworkStateEstimate(estimate);
+}
+
+void
 RTCApp::ScheduleSend ()
 {
   if (stopped)
@@ -283,20 +307,9 @@ RTCApp::ScheduleSend ()
       return;
     }
 
-  if (path_shifting && Simulator::Now () >= path_transition_end)
+  if (in_path_transition && Simulator::Now () >= path_transition_end)
     {
-      in_path_transition = false;
-      Log ("Finished path transition to path " + std::to_string (active_path));
-
-      webrtc::TargetRateConstraints new_constraints;
-      new_constraints.at_time = TimestampNow ();
-      new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (target_sendrate);
-      new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
-
-      (void) network_controller->OnTargetRateConstraints (new_constraints);
-
-      // HACK: calling this twice to reset all internal controllers and force it to use the new rate
-      (void) network_controller->OnTargetRateConstraints (new_constraints);
+      EndPathTransition ();
     }
 
   if (in_path_transition)
@@ -312,17 +325,34 @@ RTCApp::ScheduleSend ()
 
       double ramp_up_rate = 0;
 
-      if (path_transition_strategy == PathTransitionStrategy::LINEAR)
-        {
-          ramp_up_rate =
-              previous_sendrate + transition_progress * (target_sendrate - previous_sendrate);
-        }
-      else if (path_transition_strategy == PathTransitionStrategy::SIGMOID)
+      if (path_transition_strategy == PathTransitionStrategy::SIGMOID)
         {
           // Use sigmoid function to gradually increase sending rate on the new path from 0 to 1 times the sendrate
           double sigmoid = 1 / (1 + std::exp (-10 * (transition_progress - 0.5)));
 
           ramp_up_rate = target_sendrate * sigmoid;
+        }
+      else if (path_transition_strategy == PathTransitionStrategy::CUBIC)
+        {
+          // Use cubic function to very quickly ramp up and then slow down towards the end
+          double cubic = 1 - std::pow (1 - transition_progress, 3);
+
+          ramp_up_rate = target_sendrate * cubic;
+        }
+      else // linear
+        {
+          ramp_up_rate = target_sendrate * transition_progress;
+        }
+
+      // If a new probe result comes back during the transition with a bottleneck share lower than
+      // our ramp-up rate, clamp the rate and finish the transition early
+      if (path_metrics[active_path].bottleneck_share < ramp_up_rate)
+        {
+          Log ("Bottleneck share from new probe result lower than ramp-up rate. Exiting transition "
+               "early.");
+          ramp_up_rate = path_metrics[active_path].bottleneck_share;
+          target_sendrate = ramp_up_rate;
+          EndPathTransition ();
         }
 
       path_metrics[active_path].sendrate = ramp_up_rate;
@@ -357,7 +387,7 @@ RTCApp::SendFrameData (double sendrate, app_path_id_t path)
 
   auto available_bytes = sendrate / fps;
 
-  uint16_t scion_header_bytes = ScionPacketHeaderSize (all_paths[path]);
+  uint16_t scion_header_bytes = ScionPacketHeaderSize (paths[path]);
   double max_payload_bytes = m_pktSize - sizeof (AppData) - scion_header_bytes;
   double packets_to_send = std::ceil ((double) available_bytes / max_payload_bytes);
 
@@ -394,22 +424,27 @@ RTCApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_path
   app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
   Payload payload = app_data;
   PayloadType payload_type = PayloadType::APPLICATION_DATA;
-  host->SendAppPacket (this, payload, payload_type, payload_bytes, all_paths[path]);
+  host->SendAppPacket (this, payload, payload_type, payload_bytes, paths[path]);
   Log ("Sending packet with frame_no " + std::to_string (frame_no) + " and seq_no " +
        std::to_string (app_data.seq_no) + " on path " + std::to_string (path));
 
-  webrtc::SentPacket sent_packet;
-  sent_packet.sequence_number = app_data.seq_no;
-  sent_packet.send_time = TimestampNow ();
+  // Track in-flight packets for congestion controller on active path
+  if (path == active_path)
+    {
+      webrtc::SentPacket sent_packet;
+      sent_packet.sequence_number = app_data.seq_no;
+      sent_packet.send_time = TimestampNow ();
 
-  double scion_pkt_total_bytes = payload_bytes + scion_header_bytes;
-  path_metrics[path].in_flight_bytes += scion_pkt_total_bytes;
+      double scion_pkt_total_bytes = payload_bytes + scion_header_bytes;
+      path_metrics[path].in_flight_bytes += scion_pkt_total_bytes;
 
-  sent_packet.size = webrtc::DataSize::Bytes (scion_pkt_total_bytes);
-  sent_packet.data_in_flight = webrtc::DataSize::Bytes (path_metrics[path].in_flight_bytes);
-  // sent_packet.prior_unacked_data // TODO
-  path_metrics[path].in_flight_packets.push_back (sent_packet);
-  (void) network_controller->OnSentPacket (sent_packet);
+      sent_packet.size = webrtc::DataSize::Bytes (scion_pkt_total_bytes);
+      sent_packet.data_in_flight = webrtc::DataSize::Bytes (path_metrics[path].in_flight_bytes);
+      // sent_packet.prior_unacked_data // TODO
+      path_metrics[path].in_flight_packets.push_back (sent_packet);
+      // Update the network controller with the sent packet
+      (void) network_controller->OnSentPacket (sent_packet);
+    }
 }
 
 void
@@ -693,7 +728,7 @@ RTCApp::UpdatePathCandidates ()
     }
   else
     {
-      std::cerr << "Active path not usable" << std::endl;
+      Log ("Active path found to be unusable.");
     }
 
   // Choose as candidates all paths that have a significantly higher
@@ -777,19 +812,10 @@ RTCApp::SwitchToPath (uint32_t new_path)
   previous_path = active_path;
   active_path = new_path;
 
-  double new_rate = path_metrics[new_path].bottleneck_share;
+  path_metrics[active_path].in_flight_bytes = 0;
+  path_metrics[active_path].in_flight_packets.clear ();
 
-  if (path_shifting)
-    {
-      path_transition_end = Simulator::Now () + 2 * round_trip_time; // TODO: use RTT of new path
-      path_transition_end = Simulator::Now () + Seconds (5); // TODO: For testing
-      previous_sendrate = target_sendrate;
-      target_sendrate = path_metrics[new_path].bottleneck_share;
-      path_metrics[new_path].sendrate = 0;
-      path_metrics[previous_path].sendrate = prev_sendrate;
-      target_sendrate = new_rate;
-      in_path_transition = true;
-    }
+  double new_rate = path_metrics[new_path].bottleneck_share;
 
   loss_based_estimator.Reset ();
   delay_based_estimator.SetPhase (CongestionControlPhase::STARTUP);
@@ -800,12 +826,25 @@ RTCApp::SwitchToPath (uint32_t new_path)
       path_metrics[i].is_candidate = false;
     }
 
+  if (path_shifting)
+    {
+      path_transition_end = Simulator::Now () + MilliSeconds(200) + 2 * round_trip_time; // TODO: use RTT of new path
+      // path_transition_end = Simulator::Now () + Seconds (10); // TODO: For testing
+      previous_sendrate = target_sendrate;
+      target_sendrate = path_metrics[new_path].bottleneck_share;
+      path_metrics[new_path].sendrate = 0;
+      path_metrics[previous_path].sendrate = prev_sendrate;
+      target_sendrate = new_rate;
+      in_path_transition = true;
+      return;
+    }
+
   // Update congestion controller
   webrtc::TargetRateConstraints new_constraints;
   webrtc::NetworkRouteChange route_change;
   new_constraints.at_time = TimestampNow ();
   new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (new_rate);
-  new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
+  // new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
   route_change.at_time = TimestampNow ();
   route_change.constraints = new_constraints;
 

@@ -67,20 +67,13 @@ class App
 public:
   App (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
        host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
-       int runtime_config)
-      : dst_ia (app_dst_ia),
-        dst_host_addr (app_dst_host_addr),
-        host (host),
-        app_id (app_id),
-        ia_addr (ia_addr),
-        all_paths (all_paths),
-        runtime_config (runtime_config)
-  {
-  }
+       int runtime_config);
 
   ia_t dst_ia;
   host_addr_t dst_host_addr;
   static const uint16_t scale = 1; // scaling factor for app data packets
+  nlohmann::json inputs;
+  bool path_override = false;
 
   virtual void StartAppTraffic ();
   virtual void StopAppTraffic ();
@@ -98,7 +91,7 @@ protected:
   app_packet_id_t packet_id = 0;
   ia_t ia_addr;
   //std::vector<const PathSegment *> active_path;
-  std::vector<std::vector<const PathSegment *>> all_paths;
+  std::vector<std::vector<const PathSegment *>> paths;
   //std::vector<std::vector<ProbeResp *>> probe_responses;
   bool probes_pending = false;
   bool first_probe_returned = false;
@@ -117,7 +110,7 @@ protected:
   int runtime_config = false;
 
   bool first_report_received = false;
-  Time metrics_interval = MilliSeconds (50);
+  Time metrics_interval = MilliSeconds (1000);
   u_int64_t metrics_interval_ms = metrics_interval.GetMilliSeconds ();
 
   virtual bool rescore (double active_loss);

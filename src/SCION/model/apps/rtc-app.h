@@ -85,7 +85,7 @@ enum class PathChangeStrategy {
   TRANSITION // enter transition phase where manual ramp up the rate
 };
 
-enum class PathTransitionStrategy { LINEAR, SIGMOID };
+enum class PathTransitionStrategy { LINEAR, SIGMOID, CUBIC };
 
 /**
  * Application with WebRTC congestion control and smart path selection
@@ -100,7 +100,7 @@ protected:
   bool cfgPathSwitching = true;
 
   PathChangeStrategy path_change_strategy = PathChangeStrategy::TRANSITION;
-  PathTransitionStrategy path_transition_strategy = PathTransitionStrategy::SIGMOID;
+  PathTransitionStrategy path_transition_strategy = PathTransitionStrategy::CUBIC;
 
   // How much better a path must be before we consider switching to it
   const double path_candidate_treshold = 1.4;
@@ -192,6 +192,8 @@ public:
   void UpdatePathCandidates ();
 
   void SwitchToPath (uint32_t new_path);
+
+  void EndPathTransition ();
 
   void UpdateBWE ();
 

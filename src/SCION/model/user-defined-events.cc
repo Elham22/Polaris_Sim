@@ -92,12 +92,11 @@ UserDefinedEvents::ConstructFuncMap ()
 void
 UserDefinedEvents::ReadAndScheduleUserDefinedEvents (const std::string &events_file_str)
 {
-  nlohmann::json events_json;
   std::ifstream events_file (events_file_str);
-  events_file >> events_json;
+  events_file >> inputs_json;
   events_file.close ();
 
-  for (auto const &event : events_json.at ("events"))
+  for (auto const &event : inputs_json.at ("events"))
     {
       Time time = Time ((std::string) event["time"]);
       std::string func_name = (std::string) event["type"];

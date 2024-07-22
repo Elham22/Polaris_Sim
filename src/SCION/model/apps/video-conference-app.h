@@ -66,7 +66,7 @@ public:
         copies[i] = all_paths.at (i % num_paths);
       }
 
-    App::all_paths = copies;
+    App::paths = copies;
     /*for (uint32_t i = 0; i < copies.size (); ++i)
       {
         std::cout << "Path_id " << i << ", ";

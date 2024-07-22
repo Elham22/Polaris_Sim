@@ -184,7 +184,7 @@ BackgroundTrafficApp::SendData (uint32_t size, std::vector<const ns3::PathSegmen
 std::string
 BackgroundTrafficApp::GetIfInfoAsString ()
 {
-  auto seg = all_paths.at (best_path_id).at (inf);
+  auto seg = paths.at (best_path_id).at (inf);
   auto hop = seg->hops.at (hopf);
   return "ing " + std::to_string (GET_HOP_ING_IF (hop)) + " eg " +
          std::to_string (GET_HOP_EG_IF (hop));

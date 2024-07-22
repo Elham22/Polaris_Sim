@@ -285,7 +285,7 @@ VCAGiven::ParseGivenPath (std::string given_path)
   for (uint32_t i = 0; i < num_paths; i++)
     {
       // only works for paths consisting of 1 segment, but we only ever have 1 segment in core only topologies.
-      auto hops = all_paths.at (i).at (0)->hops;
+      auto hops = paths.at (i).at (0)->hops;
       if (given_hops.size () != hops.size ())
         {
           continue;

@@ -25,3 +25,4 @@ std::map<uint16_t, int32_t> alias_to_real_as_no;
 std::map<uint16_t, uint16_t> as_to_isd_map;
 uint32_t num_core;
 ns3::NodeContainer nodes;
+nlohmann::json inputs_json;
