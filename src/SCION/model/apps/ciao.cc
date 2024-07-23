@@ -722,19 +722,6 @@ CiaoApp::UpdatePathCandidates ()
       path_metrics[active_path].last_report > Simulator::Now () - path_alive_treshold &&
       path_metrics[active_path].loss < 0.9;
 
-  // Avoid switching paths too often if possible
-  if (is_active_path_usable)
-    {
-      if (Simulator::Now () - last_path_change < path_switch_min_interval)
-        {
-          return;
-        }
-    }
-  else
-    {
-      Log ("Active path found to be unusable.");
-    }
-
   // Choose as candidates all paths that have a significantly higher
   // bottleneck_share than what is our current send rate. We also include the active
   // path, to provide a chance to stay on the current path and desynchronize
@@ -791,6 +778,19 @@ CiaoApp::UpdatePathCandidates ()
         }
     }
 
+  // Avoid switching paths too often if possible
+  if (is_active_path_usable)
+    {
+      if (Simulator::Now () - last_path_change < path_switch_min_interval)
+        {
+          return;
+        }
+    }
+  else
+    {
+      Log ("Active path found to be unusable. Skipping the minimum path switch interval");
+    }
+
   if (final_candidates.empty ())
     {
       Log ("WARNING: No candidate path available!");
@@ -832,7 +832,8 @@ CiaoApp::SwitchToPath (uint32_t new_path)
 
   if (path_shifting)
     {
-      path_transition_end = Simulator::Now () + MilliSeconds(200) + 2 * round_trip_time; // TODO: use RTT of new path
+      path_transition_end =
+          Simulator::Now () + MilliSeconds (200) + 2 * round_trip_time; // TODO: use RTT of new path
       // path_transition_end = Simulator::Now () + Seconds (10); // TODO: For testing
       previous_sendrate = target_sendrate;
       target_sendrate = path_metrics[new_path].bottleneck_share;

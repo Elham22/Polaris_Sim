@@ -109,7 +109,7 @@ protected:
   const Time path_switch_min_interval = Seconds (10);
 
   // How long a path needs to be a candidate before we select it
-  const Time path_switch_min_candidacy = Seconds (0);
+  const Time path_switch_min_candidacy = Seconds (5);
 
   // Time since last report before we consider a path dead
   const Time path_alive_treshold = Seconds (1);
