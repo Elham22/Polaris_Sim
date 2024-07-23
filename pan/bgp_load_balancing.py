@@ -45,7 +45,7 @@ def assign_interfaces(nodes, links):
     return xml_edges
 
 
-def find_interface_level_path(G, source_as, destination_as):
+def find_interface_level_path(G, source_as, destination_as, use_ecmp: bool):
     shortest_as_path = shortest_path_multigraph(G, source_as, destination_as)
     interface_path = []
     current_interface = 0
@@ -53,7 +53,7 @@ def find_interface_level_path(G, source_as, destination_as):
     for i in range(len(shortest_as_path) - 1):
         current_node = shortest_as_path[i]
         next_node = shortest_as_path[i + 1]
-        selected_key = select_egress_interface(G, current_interface, current_node, next_node)
+        selected_key = select_egress_interface(G, current_interface, current_node, next_node, use_ecmp)
         edge_data = G[current_node][next_node][selected_key]
 
         # Append the current egress interface and the corresponding ingress interface at the next AS
@@ -98,9 +98,16 @@ def shortest_path_multigraph(G, source, target):
     return shortest_path
 
 
-def select_egress_interface(G, curr_interface, current_node, next_node):
+def select_egress_interface(G, curr_interface, current_node, next_node, use_ecmp: bool):
     edgess = G[current_node][next_node]
     edge_keys = list(edgess.keys())
+
+    # For full diversity flow-based load balancing, we allow all egresses
+    # independently of the IGP cost
+    if not use_ecmp:
+        selected__key = edge_keys[TUPLE_HASH % len(edge_keys)]
+        return selected__key
+
     n = G.degree(current_node) + 1
     k = int(0.5 * n)
     rewiring_prob = 0.5
@@ -236,7 +243,7 @@ def transform_path_json(path):
     }
 
 
-def get_path(input_file, source, s_host, destination, d_host, flow_id, it):
+def get_path(input_file, source, s_host, destination, d_host, flow_id, it, use_ecmp=False):
     global TUPLE_HASH, IT
 
     flow_tuple = str((source, s_host, destination, d_host, flow_id))
@@ -249,7 +256,7 @@ def get_path(input_file, source, s_host, destination, d_host, flow_id, it):
     for edge in xml_edges:
         G.add_edge(edge[1], edge[2], key=edge[0], bandwidth=1, from_interface=edge[3], to_interface=edge[4])
 
-    interface_level_path = find_interface_level_path(G, source, destination)
+    interface_level_path = find_interface_level_path(G, source, destination, use_ecmp)
 
     return interface_level_path
 

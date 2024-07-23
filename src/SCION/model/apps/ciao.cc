@@ -43,8 +43,8 @@ CiaoApp::Log (std::string msg, bool with_prefix)
 }
 
 CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
-                host_addr_t app_dst_host_addr,
-                std::vector<std::vector<const PathSegment *>> all_paths, uint32_t runtime_config)
+                  host_addr_t app_dst_host_addr,
+                  std::vector<std::vector<const PathSegment *>> all_paths, uint32_t runtime_config)
     : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, runtime_config)
 {
   // Setup the runtime configuration
@@ -52,7 +52,13 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
   cfgLossBwe = !(DISABLE_LOSS_BWE (runtime_config));
   cfgDelayBwe = !(DISABLE_DELAY_BWE (runtime_config));
   cfgPathSwitching = !(DISABLE_PATH_SWITCHING (runtime_config));
-  
+
+  // Config map overrides the runtime config arg
+  cfgLogging = inputs.contains ("logging") ? inputs["logging"].get<bool> () : cfgLogging;
+  cfgPathSwitching =
+      inputs.contains ("path_switching") ? inputs["path_switching"].get<bool> () : cfgPathSwitching;
+  path_shifting = inputs.contains ("path_shifting") ? inputs["path_shifting"].get<bool> () : false;
+
   // Initialize path infos
   num_paths = paths.size ();
   for (uint32_t i = 0; i < num_paths; i++)
@@ -75,16 +81,14 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
   network_controller = factory.Create (config);
 
   // Choose a random path to start with
-  // active_path = rand () % num_paths;
-  active_path = 0; // TODO: For testing
+  active_path = rand () % num_paths;
+  // active_path = 0; // TODO: For testing
 
-  Log ("Initialized CiaoApp " + std::to_string (app_id));
-  Log ("  Runtime config: " + std::to_string (runtime_config), false);
-  Log ("  Active path: " + std::to_string (active_path), false);
-  Log ("  Logging enabled: " + std::to_string (cfgLogging), false);
-  Log ("  Loss controller enabled: " + std::to_string (cfgLossBwe), false);
-  Log ("  Delay controller enabled: " + std::to_string (cfgDelayBwe), false);
-  Log ("  Path switching enabled: " + std::to_string (cfgPathSwitching), false);
+  std::cout << "CiaoApp " << app_id << " initialized" << std::endl;
+  std::cout << "  Active path: " << active_path << std::endl;
+  std::cout << "  Logging enabled: " << cfgLogging << std::endl;
+  std::cout << "  Path switching enabled: " << cfgPathSwitching << std::endl;
+  std::cout << "  Path shifting enabled: " << path_shifting << std::endl;
 }
 
 void
@@ -869,10 +873,11 @@ CiaoApp::InfoString ()
   std::string info = "Ciao";
 
   // Ciao without path switching is basically GCC
-  if (!cfgPathSwitching){
-    info = "GCC";
-  }
-  
+  if (!cfgPathSwitching)
+    {
+      info = "GCC";
+    }
+
   return info;
 }
 

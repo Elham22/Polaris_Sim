@@ -1,11 +1,8 @@
 import argparse
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
-from cycler import cycler
 import json
 import os
-import seaborn as sns
-from itertools import cycle
 
 import numpy as np
 
@@ -151,7 +148,7 @@ def plotScenarioResults(scenario: dict):
             line_sendrate, = plt.plot(app['time'], app['sendrate'], label=app['name'], picker=5)
             lines += (line_sendrate,)
             # Plot bottleneck share and transition rates without a label to exclude them from the legend
-            if 'bottleneck_share' in app:
+            if 'bottleneck_share' in app and False:
                 line_fair_share, = plt.plot(app['time'], app['bottleneck_share'], linewidth=0.5, color='black', linestyle='--', picker=5)
                 # if not the detail app, hide the fair share line
                 if app['name'] != apps[detail_app]['name']:
@@ -184,6 +181,8 @@ def plotScenarioResults(scenario: dict):
                 lowest_median_app = app['name']
         print(f"Highest median send rate: {highest_median} by app {highest_median_app})")
         print(f"Lowest median send rate:  {lowest_median} by app {lowest_median_app})")
+    # Draw a gridline through 0
+    plt.axhline(y=0, color='black', linewidth=0.5, linestyle='--')
     if len(apps) <= max_apps_legend:
         legend = plt.legend()
         # Make legend entries pickable
@@ -201,12 +200,13 @@ def plotScenarioResults(scenario: dict):
         sendrates = [r['total_sendrate'] for r in timestamps.values()]
 
         plt.plot(times, sendrates, label="Total send rate")
+        plt.axhline(y=0, color='black', linewidth=0.5, linestyle='--')
 
         # Draw some lines for reference. Since all links are 1MB/s, a simple
         # upper bound for the total min(no_apps, no_paths)
         upper_bound = min(len(apps), max(apps[0]['active_path']) + 1)
 
-        if upper_bound < max(sendrates) * 1.5:
+        if upper_bound < max(sendrates) * 1.5 and upper_bound > 0.5 * max(sendrates):
             plt.axhline(y=upper_bound, color='black', linewidth=0.5, linestyle='--', label="Upper bound")
 
         print(f"Max total send rate:     {max(sendrates)}")
@@ -289,7 +289,7 @@ def plotScenarioResults(scenario: dict):
     plt.show()
 
 
-def parseScenarioResults(file):
+def parseScenarioResults(file, inputs: dict) -> dict:
     apps = []
     while (True):
         line = file.readline().strip()
@@ -338,7 +338,7 @@ def parseScenarioResults(file):
                     app[field] = getStateAttributeList(app, field)
 
             if not 'name' in app:
-                app['name'] = f"{app['app_type']} {app['app_id']:2}"
+                app['name'] = f"{app['app_id']:2} {app['app_type']}"
 
             #     print(f"    Bytes sent:     {app['bytes_sent']}")
             #     print(f"    Bytes received: {app['bytes_received']}")
@@ -406,9 +406,9 @@ def plotAllIterations(scenarios: list[dict]) -> None:
     # All scenarios should have the same number of time slots
     time_slots = scenarios[0]['settings']['time_slots']
 
-    # Map containing the global results: 
-    # {flow_type: 
-    #   {num_flows: 
+    # Map containing the global results:
+    # {flow_type:
+    #   {num_flows:
     #       {
     #           median_totals: list[float],
     #           mean_total: float
@@ -417,8 +417,6 @@ def plotAllIterations(scenarios: list[dict]) -> None:
     #   }
     # }
     global_results = {}
-
-    use_cum_avg_bw = True
 
     for scenario in scenarios:
         flow_type = scenario['settings']['description']
@@ -432,51 +430,132 @@ def plotAllIterations(scenarios: list[dict]) -> None:
 
         if 'median_totals' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['median_totals'] = []
-        
+
         global_results[flow_type][num_flows]['median_totals'].append(scenario['median_total_sendrate'])
 
         if 'cumulative_avg_bandwidths' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['cumulative_avg_bandwidths'] = []
 
-        cumulative_avg_bandwidth = 0
+        cumulative_avg_bandwidth = sum([app['average_bandwidth'] for app in scenario['apps']])
+        global_results[flow_type][num_flows]['cumulative_avg_bandwidths'].append(cumulative_avg_bandwidth)
+
+        if 'losses' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['losses'] = []
+
+        if 'latencies' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['latencies'] = []
+
+        all_losses = []
+        all_latencies = []
         for app in scenario['apps']:
             cumulative_avg_bandwidth += app['average_bandwidth']
+
+            # To remove noise, consider only the averages across 300ms intervals for loss and latency
+            # Since the actual values are recorded in 50ms intervals internally, we average over 6 values
+            # Append the new list of averaged values to the global all_ list
+            # Use numpy
+            average_num = 20
+            losses = app['loss']
+            latencies = app['latency']
+            averaged_losses = [np.mean(losses[i:i+average_num]) for i in range(0, len(losses), average_num)]
+            averaged_latencies = [np.mean(latencies[i:i+average_num]) for i in range(0, len(latencies), average_num)]
+            all_losses.extend(averaged_losses)
+            all_latencies.extend(averaged_latencies)
+
+        global_results[flow_type][num_flows]['losses'].extend(all_losses)
+        global_results[flow_type][num_flows]['latencies'].extend(all_latencies)
+
         # cumulative_avg_bandwidth = cumulative_bandwidth / len(scenario['apps'])
-        global_results[flow_type][num_flows]['cumulative_avg_bandwidths'].append(cumulative_avg_bandwidth)
 
     # Compute the mean and the 95% confidence interval of all medians of the total send rates per flow type and per number of flows
     for flow_type, flow_results in global_results.items():
         for num_flows, results in flow_results.items():
-            if use_cum_avg_bw:
+            if args.loss:
+                results['mean_total'] = np.mean([np.mean(loss) for loss in results['losses']])
+                results['ci_total'] = 1.96 * np.std([np.mean(loss) for loss in results['losses']], ddof=1) / np.sqrt(len(results['losses']))
+            elif args.latency:
+                results['mean_total'] = np.mean([np.mean(latency) for latency in results['latencies']])
+                results['ci_total'] = 1.96 * np.std([np.mean(latency) for latency in results['latencies']], ddof=1) / np.sqrt(len(results['latencies']))
+            else:
                 results['mean_total'] = np.mean(results['cumulative_avg_bandwidths'])
                 results['ci_total'] = 1.96 * np.std(results['cumulative_avg_bandwidths'], ddof=1) / np.sqrt(len(results['cumulative_avg_bandwidths']))
-            else:
-                results['mean_total'] = np.mean(results['median_totals'])
-                results['ci_total'] = 1.96 * np.std(results['median_totals'], ddof=1) / np.sqrt(len(results['median_totals']))
+                # results['mean_total'] = np.mean(results['median_totals'])
+                # results['ci_total'] = 1.96 * np.std(results['median_totals'], ddof=1) / np.sqrt(len(results['median_totals']))
 
     # Plot the results
     fig, ax = plt.subplots(figsize=(10, 6))
 
+    # Create a mapping from original x values to evenly spaced integers
+    flow_types = list(global_results.keys())
+    all_num_flows = sorted(global_results[flow_types[0]].keys())
+    x_mapping = {num_flows: i * 6 for i, num_flows in enumerate(all_num_flows)}
+    print(x_mapping)
+
     markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
     colors = plt.cm.tab10(np.linspace(0, 1, len(global_results)))
 
-    for (flow_type, color, marker), flow_results in zip(zip(global_results.keys(), colors, markers), global_results.values()):
-        num_flows = sorted(flow_results.keys())
-        mean_totals = [flow_results[n]['mean_total'] for n in num_flows]
-        ci_totals = [flow_results[n]['ci_total'] for n in num_flows]
-
-        ax.errorbar(num_flows, mean_totals, yerr=ci_totals, fmt='-o', label=flow_type, color=color, marker=marker, markersize=8, linewidth=2, capsize=5)
-
     ax.set_xlabel("# of Flows", fontsize=14)
-    ax.set_ylabel("CumAvgBW (MB/s)", fontsize=14)
+
+    # Calculate dodge positions to avoid overlap of the boxes
+    dodge_width = 0.9
+    total_dodge_space = 1.0
+
+    if args.loss:
+        ax.set_ylabel("Loss (%)", fontsize=14)
+        for i, (flow_type, color, marker) in enumerate(zip(flow_types, colors, markers)):
+            num_flows = sorted(global_results[flow_type].keys())
+            losses = [global_results[flow_type][n]['losses'] for n in num_flows]
+            dodge_positions = [x_mapping[n] + (i - len(flow_types)/2) * total_dodge_space for n in num_flows]
+
+            ax.boxplot(losses, positions=dodge_positions, widths=dodge_width, showfliers=False, patch_artist=True,
+                       boxprops=dict(facecolor=color, color=color), medianprops=dict(color='black'),
+                       whiskerprops=dict(color=color), capprops=dict(color=color))
+
+            ax.plot([], label=flow_type, color=color, marker=marker, markersize=8, linewidth=2)
+
+    elif args.latency:
+        ax.set_ylabel("Latency (ms)", fontsize=14)
+        for i, (flow_type, color, marker) in enumerate(zip(flow_types, colors, markers)):
+            num_flows = sorted(global_results[flow_type].keys())
+            latencies = [global_results[flow_type][n]['latencies'] for n in num_flows]
+            dodge_positions = [x_mapping[n] + (i - len(flow_types)/2) * total_dodge_space for n in num_flows]
+
+            ax.boxplot(latencies, positions=dodge_positions, widths=dodge_width, showfliers=False, patch_artist=True,
+                       boxprops=dict(facecolor=color, color=color), medianprops=dict(color='black'),
+                       whiskerprops=dict(color=color), capprops=dict(color=color))
+
+            ax.plot([], label=flow_type, color=color, marker=marker, markersize=8, linewidth=2)
+
+    else:
+        ax.set_ylabel("CumAvgBW (MB/s)", fontsize=14)
+
+        for (flow_type, color, marker), flow_results in zip(zip(global_results.keys(), colors, markers), global_results.values()):
+            num_flows = sorted(flow_results.keys())
+            mean_totals = [flow_results[n]['mean_total'] for n in num_flows]
+            ci_totals = [flow_results[n]['ci_total'] for n in num_flows]
+
+            ax.errorbar(num_flows, mean_totals, yerr=ci_totals, fmt='-o', label=flow_type, color=color, marker=marker, markersize=8, linewidth=2, capsize=5)
+
+    if args.loss or args.latency:
+        ax.set_xticks(list(x_mapping.values()))
+        ax.set_xticklabels(list(x_mapping.keys()))
+    else:
+        ax.set_xticks(all_num_flows)
+
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    ax.tick_params(axis='both', which='major', labelsize=12)
+
+    # Optionally, you can also enable the grid for better visibility of the alignment
+    # ax.grid(True, which='both', axis='x', linestyle='--', linewidth=0.5)
     # ax.set_title("Average Bandwidth by Flow Type", fontsize=16)
 
     # Customize tick parameters
-    ax.tick_params(axis='both', which='major', labelsize=12)
-    ax.set_xticks(num_flows)
+    # ax.tick_params(axis='both', which='major', labelsize=12)
+    # ax.set_xticks(num_flows)
 
     # Add gridlines
-    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+    # ax.grid(True, which='both', linestyle='--', linewidth=0.5)
 
     # Render the legend above the plot with a shadow and a frame
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1), fancybox=True, shadow=True, ncol=3, fontsize=12)
@@ -485,9 +564,9 @@ def plotAllIterations(scenarios: list[dict]) -> None:
 
     plt.show()
 
+
 def main():
     global args
-    global inputs
 
     args = parse_args()
     paths = []
@@ -515,7 +594,7 @@ def main():
                 if line == '':
                     break
                 if "# Host Apps evaluation" in line:
-                    s = parseScenarioResults(file)
+                    s = parseScenarioResults(file, inputs)
                     if s:
                         scenarios.append(s)
 

@@ -6,6 +6,9 @@ import os
 import bgp_load_balancing
 
 
+TOPOLOGY_FILE = "configs/traffic-engineering/toy-topology.xml"
+
+
 def generate_flows(flow_num, time_span, node_num, seed):
     flow_list = []
 
@@ -21,18 +24,20 @@ def generate_flows(flow_num, time_span, node_num, seed):
         duration = random.randint(
             min(2, time_span - start_time), time_span - start_time)
 
-        source = 0
-        destination = 2
-        # source = random.randint(0, node_num - 1)
-        # dest = random.randint(0, node_num - 1)
+        source = args.src
+        destination = args.dst
 
-        # Ensure source and destination are not the same
-        attempt_count = 0
-        while source == destination:
-            current_seed += str(attempt_count)
-            random.seed(current_seed)
+        if args.all_to_all:
+            source = random.randint(0, node_num - 1)
             destination = random.randint(0, node_num - 1)
-            attempt_count += 1
+
+            # Ensure source and destination are not the same
+            attempt_count = 0
+            while source == destination:
+                current_seed += str(attempt_count)
+                random.seed(current_seed)
+                destination = random.randint(0, node_num - 1)
+                attempt_count += 1
 
         flow_type = 0  # Fixed value, can be changed to random if needed
         app_limit = 1.2  # Fixed value, can be adjusted if needed
@@ -43,8 +48,8 @@ def generate_flows(flow_num, time_span, node_num, seed):
     return flow_list
 
 
-def build_scenario(flow: list, startup_phase_end_seconds: int, timeslot_size_seconds: int) -> dict:
-
+def build_scenario(flow: list, startup_phase_end_seconds: int, timeslot_size_seconds: int,
+                   path_switching: bool) -> dict:
     applications = []
     events = []
 
@@ -107,7 +112,8 @@ def build_scenario(flow: list, startup_phase_end_seconds: int, timeslot_size_sec
             "start_slot": start_timeslot,
             "start_time": start_time_offset_seconds,
             "end_slot": start_timeslot + duration,
-            "end_time": end_time_offset_seconds
+            "end_time": end_time_offset_seconds,
+            "path_switching": path_switching,
         })
 
         # print(f"Adding flow {flow_id:02} of type {app_type:8} sending from AS {src_as} to AS {
@@ -121,24 +127,23 @@ def build_scenario(flow: list, startup_phase_end_seconds: int, timeslot_size_sec
     return scenario
 
 
-def add_bgp_lb_paths_to_flows(scenario: dict, iteration: int) -> None:
-    topology_file = "configs/traffic-engineering/toy-topology.xml"
+def add_bgp_lb_paths_to_flows(scenario: dict, iteration: int, use_ecmp: bool) -> None:
     for app in scenario["applications"]:
-
         p = bgp_load_balancing.get_path(
-            topology_file, app["src_as"], app["src_host"], app["dst_as"], app["dst_host"], app["app_id"], iteration)
+            TOPOLOGY_FILE, app["src_as"], app["src_host"], app["dst_as"], app["dst_host"], app["app_id"], iteration, use_ecmp)
         p = bgp_load_balancing.transform_path_json(p)
         app["path"] = p
 
-    print(f"Generated BGP load balanced paths for all flows")
+    # print(f"Generated BGP load balanced paths for all flows")
 
 
 def main():
+    global args
+
     parser = argparse.ArgumentParser(
         description='Generate events for a JSON file.')
     parser.add_argument('-n', '--number-of-flows', type=int, default=4,
                         help='number of events to generate (default: 4)')
-
     parser.add_argument('-t', '--time-slots', type=int, default=5,
                         help='number of time slots (default: 5)')
     parser.add_argument('-s', '--slot-size', type=int, default=120,
@@ -146,8 +151,20 @@ def main():
     parser.add_argument('-i', '--iterations', type=int, default=3)
     parser.add_argument('-o', '--output', default='configs/traffic-engineering/toy.json',
                         help='output path')
-    parser.add_argument('--bgp-lb', action='store_true',
-                        help='Generate a GBP LB paths file alongside the events (default: False)')
+    parser.add_argument('--bgp-fd', action='store_true',
+                        help='use BGP load balancing with full diversity')
+    parser.add_argument('--bgp-ecmp', action='store_true',
+                        help='use BGP load balancing with ECMP')
+    parser.add_argument('--naive', action='store_true',
+                        help='use naive routing (random path)')
+    parser.add_argument('--ciao', action='store_true',
+                        help='use Ciao (dynamic path selection)')
+    parser.add_argument('--src', type=int, default=0,
+                        help='source AS number')
+    parser.add_argument('--dst', type=int, default=2,
+                        help='destination AS number')
+    parser.add_argument('-a', '--all-to-all', action='store_true',
+                        help='use random source and destination pairs')
 
     args = parser.parse_args()
 
@@ -158,16 +175,15 @@ def main():
     # for a whole range of flow numbers
     if os.path.isdir(args.output):
         output_path_template = os.path.join(args.output, "scenario.json")
-        num_flows_list = [2, 4, 6, 8, 10, 15, 20, 30]
+        num_flows_list = [2, 4, 6, 8, 10, 15, 20, 30, 50, 70, 100]
 
     for num_flows in num_flows_list:
         for iteration in range(args.iterations):
-            print(f"Generating scenario iteration {iteration} with {num_flows} flows")
             flows = generate_flows(num_flows, time_span=args.time_slots,
                                    node_num=4, seed=str(iteration))
 
             scenario = build_scenario(
-                flows, startup_phase_end_seconds=1800, timeslot_size_seconds=args.slot_size)
+                flows, startup_phase_end_seconds=1800, timeslot_size_seconds=args.slot_size, path_switching=args.ciao)
 
             scenario["settings"] = {
                 "time_slots": args.time_slots,
@@ -175,10 +191,17 @@ def main():
                 "num_flows": num_flows,
             }
 
-            if args.bgp_lb:
-                add_bgp_lb_paths_to_flows(scenario, iteration)
-                scenario["settings"]["description"] = "BGP ECMP Flow-Level Load Balancing"
-                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_bgp_lb.json")
+            if args.bgp_fd:
+                add_bgp_lb_paths_to_flows(scenario, iteration, use_ecmp=False)
+                scenario["settings"]["description"] = "BGP FD"
+                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_bgp_fd.json")
+            elif args.bgp_ecmp:
+                add_bgp_lb_paths_to_flows(scenario, iteration, use_ecmp=True)
+                scenario["settings"]["description"] = "BGP ECMP"
+                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_bgp_ecmp.json")
+            elif args.naive:
+                scenario["settings"]["description"] = "Naive"
+                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_naive.json")
             else:
                 scenario["settings"]["description"] = "Ciao"
                 output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_ciao.json")
@@ -186,7 +209,7 @@ def main():
             with open(output_path, 'w') as f:
                 json.dump(scenario, f, indent=4)
 
-            print(f"Saving scenario to {output_path}")
+            print(f"Saving scenario: {num_flows:2} flows, iteration {iteration:2} to {output_path}")
 
 
 if __name__ == "__main__":
