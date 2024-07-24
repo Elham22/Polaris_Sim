@@ -1,0 +1,54 @@
+{
+  "applications": [
+    {
+      "app_id": 0,
+      "path_switching": true,
+      "logging": false
+    },
+    {
+      "app_id": 1,
+      "path_switching": true
+    },
+    {
+      "app_id": 2,
+      "path_switching": false
+    },
+    {
+      "app_id": 3,
+      "path_switching": false
+    }
+  ],  
+  "events":
+    [
+      {
+        "time": "30.10min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "0", "0"]
+      },
+      {
+        "time": "30.15min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "1", "0"]
+      },
+      {
+        "time": "30.20min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "2", "0"]
+      },
+      {
+        "time": "30.30min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "3", "0"]
+      },
+      {
+        "time": "30.00min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "TcpNewReno", "0.0", "4", "0"]
+      },
+      {
+        "time": "30.05min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "TcpCubic", "0.0", "5", "0"]
+      }
+    ]
+}

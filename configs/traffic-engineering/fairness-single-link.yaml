@@ -1,9 +1,9 @@
 time_resolution: PS
 topology: configs/traffic-engineering/single-link.xml
-events_file: configs/traffic-engineering/simple.json
-output: configs/traffic-engineering/simple.out.txt
-simulation_duration: 32.00min
-NUM_CORE: 16
+events_file: configs/traffic-engineering/fairness-single-link.json
+output: configs/traffic-engineering/fairness-single-link.out.txt
+simulation_duration: 40min
+NUM_CORE: 24
 beacon_service:
   policy: baseline
   write_beacons_directory: out/

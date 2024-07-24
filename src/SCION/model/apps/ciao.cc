@@ -84,6 +84,9 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
   active_path = rand () % num_paths;
   // active_path = 0; // TODO: For testing
 
+  // Allow override via config map
+  active_path = inputs.contains ("start_path") ? inputs["start_path"].get<uint32_t> () : active_path;
+
   std::cout << "CiaoApp " << app_id << " initialized" << std::endl;
   std::cout << "  Active path: " << active_path << std::endl;
   std::cout << "  Logging enabled: " << cfgLogging << std::endl;
