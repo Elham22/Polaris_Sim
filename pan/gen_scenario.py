@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import json
 import random
 import argparse
@@ -9,42 +11,44 @@ import bgp_load_balancing
 TOPOLOGY_FILE = "configs/traffic-engineering/toy-topology.xml"
 
 
-def generate_flows(flow_num, time_span, node_num, seed):
+def flow_generate(flow_num, time_span, node_num, seed, hybrid, diverse):
     flow_list = []
+    # all_numbers = list(range(flow_num))
+    half_n = flow_num // 2
+    # random.seed(seed)
+    # selected_numbers = random.sample(all_numbers, half_n)
+    for fl in range(flow_num):
+        seed += str(fl)
+        random.seed(seed)
+        st = random.randint(0, time_span-1)
+        seed += 'a'
+        random.seed(seed)
+        du = random.randint(min(2, time_span-st), time_span-st)
 
-    for flow_id in range(flow_num):
-        current_seed = seed + str(flow_id)
-        random.seed(current_seed)
-
-        start_time = random.randint(0, time_span - 1)
-
-        current_seed += 'a'
-        random.seed(current_seed)
-
-        duration = random.randint(
-            min(2, time_span - start_time), time_span - start_time)
-
-        source = args.src
-        destination = args.dst
-
-        if args.all_to_all:
+        if diverse:
+            seed += 'b'
+            random.seed(seed)
             source = random.randint(0, node_num - 1)
-            destination = random.randint(0, node_num - 1)
+            seed += 'b'
+            random.seed(seed)
+            dest = random.randint(0, node_num - 1)
+            tr = 0
+            while dest == source:
+                seed = seed + str(tr)
+                random.seed(seed)
+                dest = random.randint(0, node_num - 1)
+                tr += 1
+        else:
+            source = 0
+            dest = 2
+        # if fl in selected_numbers:
 
-            # Ensure source and destination are not the same
-            attempt_count = 0
-            while source == destination:
-                current_seed += str(attempt_count)
-                random.seed(current_seed)
-                destination = random.randint(0, node_num - 1)
-                attempt_count += 1
-
-        flow_type = 0  # Fixed value, can be changed to random if needed
-        app_limit = 1.2  # Fixed value, can be adjusted if needed
-
-        flow_list.append((flow_id, source, destination,
-                         app_limit, duration, start_time, flow_type))
-
+        if not hybrid or fl < half_n:
+            flow_type = 0  # Ciao
+        else:
+            flow_type = 1  # TCP
+        app_limit = 1.2  # round(random.uniform(0, 2), 1)
+        flow_list.append((fl, source, dest, app_limit, du, st, flow_type))
     return flow_list
 
 
@@ -143,11 +147,11 @@ def main():
     parser = argparse.ArgumentParser(
         description='Generate events for a JSON file.')
     parser.add_argument('-n', '--number-of-flows', type=int, default=4,
-                        help='number of events to generate (default: 4)')
+                        help='number of flows to generate (default: 4)')
     parser.add_argument('-t', '--time-slots', type=int, default=5,
                         help='number of time slots (default: 5)')
-    parser.add_argument('-s', '--slot-size', type=int, default=120,
-                        help='size of a time slot in seconds (default: 120)')
+    parser.add_argument('-s', '--slot-size', type=int, default=180,
+                        help='size of a time slot in seconds (default: 180)')
     parser.add_argument('-i', '--iterations', type=int, default=3)
     parser.add_argument('-o', '--output', default='configs/traffic-engineering/toy.json',
                         help='output path')
@@ -165,6 +169,8 @@ def main():
                         help='destination AS number')
     parser.add_argument('-a', '--all-to-all', action='store_true',
                         help='use random source and destination pairs')
+    parser.add_argument('--hybrid', action='store_true',
+                        help='use a mix of Ciao and TCP flows')
 
     args = parser.parse_args()
 
@@ -175,12 +181,12 @@ def main():
     # for a whole range of flow numbers
     if os.path.isdir(args.output):
         output_path_template = os.path.join(args.output, "scenario.json")
-        num_flows_list = [2, 4, 6, 8, 10, 15, 20, 30, 50, 70, 100]
+        num_flows_list = [2, 4, 6, 8, 10, 15, 20, 30]
 
     for num_flows in num_flows_list:
         for iteration in range(args.iterations):
-            flows = generate_flows(num_flows, time_span=args.time_slots,
-                                   node_num=4, seed=str(iteration))
+            flows = flow_generate(num_flows, time_span=args.time_slots,
+                                  node_num=4, seed=str(iteration), hybrid=args.hybrid, diverse=args.all_to_all)
 
             scenario = build_scenario(
                 flows, startup_phase_end_seconds=1800, timeslot_size_seconds=args.slot_size, path_switching=args.ciao)
