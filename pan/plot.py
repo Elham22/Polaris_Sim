@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
@@ -23,6 +24,12 @@ def parse_args():
                         help="Plot the GCC state")
     parser.add_argument("-a", "--active-flows", action="store_true",
                         help="Plot the number of active flows")
+    parser.add_argument("--latex", action="store_true",
+                        help="Output the plot in LaTeX format")
+    parser.add_argument("--avg", type=int, default=1,
+                        help="Average every n values together")
+    parser.add_argument("--min-share", action="store_true",
+                        help="Plot the minimum share")
     return parser.parse_args()
 
 
@@ -31,7 +38,59 @@ def getStateAttributeList(app: dict, attribute: str):
     return [state[attribute] for state in states]
 
 
-def plotScenarioResults(scenario: dict):
+def transformLatexLabel(label):
+    label = label.replace('TcpCubic', 'TCP')
+    label = label.replace('TcpNewReno', 'TCP')
+
+    # Escape characters for LaTeX
+    label = label.replace('#', '\\#')
+    return label
+
+
+def printLatexBasicplot(x, y, label):
+    if not args.latex:
+        return
+    label = transformLatexLabel(label)
+    coordinates = ' '.join([f'({round(xi, 2)},{round(yi, 2)})' for xi, yi in zip(x, y) if xi is not None and yi is not None])
+    print(f"\\addplot+[{label}] coordinates {{{coordinates}}};")
+
+
+def printLatexBoxplot(data, label):
+    if not args.latex:
+        return
+    median = np.median(data)
+    lower_quartile = np.percentile(data, 25)
+    upper_quartile = np.percentile(data, 75)
+    lower_whisker = np.min(data)
+    upper_whisker = np.max(data)
+
+    print(f"\\addplot+[\n"
+          f"    fill,\n"
+          f"    fill opacity=0.7,\n"
+          f"    draw=linecolor_before,\n"
+          f"    thick,\n"
+          f"    boxplot prepared={{\n"
+          f"        median={median},\n"
+          f"        upper quartile={upper_quartile},\n"
+          f"        lower quartile={lower_quartile},\n"
+          f"        upper whisker={upper_whisker},\n"
+          f"        lower whisker={lower_whisker},\n"
+          f"    }},\n"
+          f"] coordinates {{}};")
+
+
+def printLatexErrorbar(x, y, yerr, label):
+    if not args.latex:
+        return
+
+    label = transformLatexLabel(label)
+    print("\\addplot+[error bars/.cd, y dir=both, y explicit] coordinates {")
+    for xi, yi, yerri in zip(x, y, yerr):
+        print(f"({xi},{yi}) +- (0,{yerri})")
+    print("};")
+
+
+def plotSingleScenario(scenario: dict):
     # colors = sns.color_palette("tab10")
     # linestyles = cycle(['-', '--', ':', '-.'])  # Cycle through these styles
     # markers = cycle(['o', 's', '^', 'd'])  # Cycle through these markers
@@ -109,6 +168,11 @@ def plotScenarioResults(scenario: dict):
         plot_number += 1
         for app in apps:
             plt.plot(app['time'], app['loss'], label=app['name'])
+
+        if args.latex:
+            print("LaTeX Loss:")
+            for app in apps:
+                printLatexBasicplot(app['time'], app['loss'], f"label={app['name']}")
         if len(apps) <= max_apps_legend:
             plt.legend()
         plt.ylabel("Loss [%]")
@@ -121,6 +185,12 @@ def plotScenarioResults(scenario: dict):
         plot_number += 1
         for app in apps:
             plt.plot(app['time'], app['latency'], label=app['name'])
+
+        if args.latex:
+            print("LaTeX Latency:")
+            for app in apps:
+                printLatexBasicplot(app['time'], app['latency'], f"label={app['name']}")
+
         if len(apps) <= max_apps_legend:
             plt.legend()
         plt.ylabel("Latency [ms]")
@@ -148,7 +218,7 @@ def plotScenarioResults(scenario: dict):
             line_sendrate, = plt.plot(app['time'], app['sendrate'], label=app['name'], picker=5)
             lines += (line_sendrate,)
             # Plot bottleneck share and transition rates without a label to exclude them from the legend
-            if 'bottleneck_share' in app and False:
+            if 'bottleneck_share' in app:
                 line_fair_share, = plt.plot(app['time'], app['bottleneck_share'], linewidth=0.5, color='black', linestyle='--', picker=5)
                 # if not the detail app, hide the fair share line
                 if app['name'] != apps[detail_app]['name']:
@@ -165,6 +235,11 @@ def plotScenarioResults(scenario: dict):
 
             # Store references to the lines for toggling
             lines_dict[app['name']] = lines
+
+        if args.latex:
+            print("LaTeX Sendrate:")
+            for app in apps:
+                printLatexBasicplot(app['time'], app['sendrate'], f"label={app['name']}")
 
         # Print highest median send rate
         highest_median = 0
@@ -227,6 +302,11 @@ def plotScenarioResults(scenario: dict):
         if len(apps) <= max_apps_legend:
             plt.legend()
         plt.ylabel("Paths")
+
+        if args.latex:
+            print("LaTeX Active Paths:")
+            for app in apps:
+                printLatexBasicplot(app['time'], app['active_path'], f"label={app['name']}")
 
     if plot_gcc_state:
         plt.subplot(gs[plot_number], sharex=ax)
@@ -337,8 +417,16 @@ def parseScenarioResults(file, inputs: dict) -> dict:
                 if field not in app:
                     app[field] = getStateAttributeList(app, field)
 
+            if args.avg > 1:
+                for field in ['sendrate', 'loss', 'latency']:
+                    # Average args.avg many values together
+                    app[field] = [np.mean(app[field][i:i + args.avg])
+                                  for i in range(0, len(app[field]), args.avg)]
+                app['time'] = [app['time'][i] for i in range(0, len(app['time']), args.avg)]
+                app['active_path'] = [app['active_path'][i] for i in range(0, len(app['active_path']), args.avg)]
+
             if not 'name' in app:
-                app['name'] = f"{app['app_id']:2} {app['app_type']}"
+                app['name'] = f"{app['app_type']}#{app['app_id']} "
 
             #     print(f"    Bytes sent:     {app['bytes_sent']}")
             #     print(f"    Bytes received: {app['bytes_received']}")
@@ -391,6 +479,17 @@ def parseScenarioResults(file, inputs: dict) -> dict:
         for slot, results in time_slots.items():
             time_slots[slot]['median_total_sendrate'] = np.median(results['total_sendrates'])
 
+        # For each app, sum up the average sendrate in every time slot
+        for app in apps:
+            for t, s in zip(app['time'], app['sendrate']):
+                slot = int(t // settings['slot_size'])
+                if 'sendrate' not in time_slots[slot]:
+                    time_slots[slot]['sendrate'] = []
+                time_slots[slot]['sendrate'].append(s)
+        for slot, results in time_slots.items():
+            time_slots[slot]['median_sendrate'] = np.median(results['sendrate'])
+            time_slots[slot]['mean_sendrate'] = np.mean(results['sendrate'])
+
     scenario = {
         'apps': apps,
         'timestamps': timestamps,
@@ -402,28 +501,24 @@ def parseScenarioResults(file, inputs: dict) -> dict:
     return scenario
 
 
-def plotAllIterations(scenarios: list[dict]) -> None:
-    # All scenarios should have the same number of time slots
-    time_slots = scenarios[0]['settings']['time_slots']
-
-    # Map containing the global results:
-    # {flow_type:
-    #   {num_flows:
-    #       {
-    #           median_totals: list[float],
-    #           mean_total: float
-    #           ci_total: float}
-    #       }
-    #   }
-    # }
+def plotMultiScenario(scenarios: list[dict]) -> None:
+    # Map containing the global results per flow type, per number of flows
     global_results = {}
 
+    # Process only for these number of flows
+    selected_flow_nums = [4, 6, 8, 10, 15, 20, 30]
+
+    # Pre-process all scenarios by grouping all data by flow type and number of flows
     for scenario in scenarios:
+        # Use description as flow type
         flow_type = scenario['settings']['description']
         if flow_type not in global_results:
             global_results[flow_type] = {}
 
         num_flows = scenario['settings']['num_flows']
+
+        if num_flows not in selected_flow_nums:
+            continue
 
         if num_flows not in global_results[flow_type]:
             global_results[flow_type][num_flows] = {}
@@ -438,6 +533,15 @@ def plotAllIterations(scenarios: list[dict]) -> None:
 
         cumulative_avg_bandwidth = sum([app['average_bandwidth'] for app in scenario['apps']])
         global_results[flow_type][num_flows]['cumulative_avg_bandwidths'].append(cumulative_avg_bandwidth)
+
+        if 'min_shares' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['min_shares'] = []
+
+        min_share = float('inf')
+        for slot, results in scenario['time_slots'].items():
+            if results['mean_sendrate'] < min_share:
+                min_share = results['mean_sendrate']
+        global_results[flow_type][num_flows]['min_shares'].append(min_share)
 
         if 'losses' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['losses'] = []
@@ -454,7 +558,11 @@ def plotAllIterations(scenarios: list[dict]) -> None:
             # Since the actual values are recorded in 50ms intervals internally, we average over 6 values
             # Append the new list of averaged values to the global all_ list
             # Use numpy
-            average_num = 20
+            if args.avg > 1:
+                # If we already average them in results parsing, no need to do it again
+                average_num = 1
+            else:
+                average_num = 6
             losses = app['loss']
             latencies = app['latency']
             averaged_losses = [np.mean(losses[i:i+average_num]) for i in range(0, len(losses), average_num)]
@@ -476,9 +584,14 @@ def plotAllIterations(scenarios: list[dict]) -> None:
             elif args.latency:
                 results['mean_total'] = np.mean([np.mean(latency) for latency in results['latencies']])
                 results['ci_total'] = 1.96 * np.std([np.mean(latency) for latency in results['latencies']], ddof=1) / np.sqrt(len(results['latencies']))
+            elif args.min_share:
+                results['mean_total'] = np.mean(results['min_shares'])
+                results['ci_total'] = 1.96 * np.std(results['min_shares'], ddof=1) / np.sqrt(len(results['min_shares']))
             else:
                 results['mean_total'] = np.mean(results['cumulative_avg_bandwidths'])
                 results['ci_total'] = 1.96 * np.std(results['cumulative_avg_bandwidths'], ddof=1) / np.sqrt(len(results['cumulative_avg_bandwidths']))
+
+                # Alternative where we use the mean of the medians of total sendrate in every time slot
                 # results['mean_total'] = np.mean(results['median_totals'])
                 # results['ci_total'] = 1.96 * np.std(results['median_totals'], ddof=1) / np.sqrt(len(results['median_totals']))
 
@@ -489,7 +602,6 @@ def plotAllIterations(scenarios: list[dict]) -> None:
     flow_types = list(global_results.keys())
     all_num_flows = sorted(global_results[flow_types[0]].keys())
     x_mapping = {num_flows: i * 6 for i, num_flows in enumerate(all_num_flows)}
-    print(x_mapping)
 
     markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
     colors = plt.cm.tab10(np.linspace(0, 1, len(global_results)))
@@ -499,6 +611,9 @@ def plotAllIterations(scenarios: list[dict]) -> None:
     # Calculate dodge positions to avoid overlap of the boxes
     dodge_width = 0.9
     total_dodge_space = 1.0
+
+    # Use the highest number of flows for the boxplots
+    num_flows_for_boxplot = len(all_num_flows) - 2
 
     if args.loss:
         ax.set_ylabel("Loss (%)", fontsize=14)
@@ -513,6 +628,9 @@ def plotAllIterations(scenarios: list[dict]) -> None:
 
             ax.plot([], label=flow_type, color=color, marker=marker, markersize=8, linewidth=2)
 
+            if args.latex:
+                printLatexBoxplot(losses[num_flows_for_boxplot], f"label={flow_type}")
+
     elif args.latency:
         ax.set_ylabel("Latency (ms)", fontsize=14)
         for i, (flow_type, color, marker) in enumerate(zip(flow_types, colors, markers)):
@@ -526,6 +644,20 @@ def plotAllIterations(scenarios: list[dict]) -> None:
 
             ax.plot([], label=flow_type, color=color, marker=marker, markersize=8, linewidth=2)
 
+            if args.latex:
+                printLatexBoxplot(latencies[num_flows_for_boxplot], f"label={flow_type}")
+    elif args.min_share:
+        ax.set_ylabel("MinShare (MB/s)", fontsize=14)
+
+        for (flow_type, color, marker), flow_results in zip(zip(global_results.keys(), colors, markers), global_results.values()):
+            num_flows = sorted(flow_results.keys())
+            mean_totals = [flow_results[n]['mean_total'] for n in num_flows]
+            ci_totals = [flow_results[n]['ci_total'] for n in num_flows]
+
+            ax.errorbar(num_flows, mean_totals, yerr=ci_totals, fmt='-o', label=flow_type, color=color, marker=marker, markersize=8, linewidth=2, capsize=5)
+
+            if args.latex:
+                printLatexErrorbar(num_flows, mean_totals, ci_totals, f"label={flow_type}")
     else:
         ax.set_ylabel("CumAvgBW (MB/s)", fontsize=14)
 
@@ -536,6 +668,8 @@ def plotAllIterations(scenarios: list[dict]) -> None:
 
             ax.errorbar(num_flows, mean_totals, yerr=ci_totals, fmt='-o', label=flow_type, color=color, marker=marker, markersize=8, linewidth=2, capsize=5)
 
+            if args.latex:
+                printLatexErrorbar(num_flows, mean_totals, ci_totals, f"label={flow_type}")
     if args.loss or args.latency:
         ax.set_xticks(list(x_mapping.values()))
         ax.set_xticklabels(list(x_mapping.keys()))
@@ -601,9 +735,9 @@ def main():
     print("Processed a total of", len(scenarios), "scenarios")
 
     if len(scenarios) == 1:
-        plotScenarioResults(scenarios[0])
+        plotSingleScenario(scenarios[0])
     elif len(scenarios) > 1:
-        plotAllIterations(scenarios)
+        plotMultiScenario(scenarios)
 
     print("Done. Exiting.")
 
