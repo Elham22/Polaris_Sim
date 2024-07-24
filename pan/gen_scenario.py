@@ -52,13 +52,15 @@ def flow_generate(flow_num, time_span, node_num, seed, hybrid, diverse):
     return flow_list
 
 
-def build_scenario(flow: list, startup_phase_end_seconds: int, timeslot_size_seconds: int,
-                   path_switching: bool) -> dict:
+def build_scenario(flow: list, startup_phase_end_seconds: int, settings: dict,
+                   path_switching: bool = False) -> dict:
     applications = []
     events = []
 
     # Add a random offset to the startup time of flows within the same timeslot
     timeslot_offsets = {}
+
+    timeslot_size_seconds = settings["slot_size"]
 
     for f in flow:
         flow_id, src_as, dst_as, app_limit, duration, start_timeslot, flow_type = f
@@ -125,7 +127,8 @@ def build_scenario(flow: list, startup_phase_end_seconds: int, timeslot_size_sec
 
     scenario = {
         "applications": applications,
-        "events": events
+        "events": events,
+        "settings": settings
     }
 
     return scenario
@@ -139,6 +142,13 @@ def add_bgp_lb_paths_to_flows(scenario: dict, iteration: int, use_ecmp: bool) ->
         app["path"] = p
 
     # print(f"Generated BGP load balanced paths for all flows")
+
+
+def saveScenario(scenario, output_path):
+    with open(output_path, 'w') as f:
+        json.dump(scenario, f, indent=4)
+
+    print(f"Created scenario: {output_path}")
 
 
 def main():
@@ -167,55 +177,62 @@ def main():
                         help='source AS number')
     parser.add_argument('--dst', type=int, default=2,
                         help='destination AS number')
-    parser.add_argument('-a', '--all-to-all', action='store_true',
+    parser.add_argument('--all-to-all', action='store_true',
                         help='use random source and destination pairs')
     parser.add_argument('--hybrid', action='store_true',
                         help='use a mix of Ciao and TCP flows')
+    parser.add_argument('-a', '--all-types', action='store_true',
+                        help='generate all types of scenarios, equivalent\
+                        to --bgp-fd --bgp-ecmp --naive --ciao')
 
     args = parser.parse_args()
 
     num_flows_list = [args.number_of_flows]
     output_path_template = args.output
+    startup_phase_end_seconds = 1800
 
     # If output is a directory, then generate multiple scenarios
     # for a whole range of flow numbers
     if os.path.isdir(args.output):
         output_path_template = os.path.join(args.output, "scenario.json")
-        num_flows_list = [2, 4, 6, 8, 10, 15, 20, 30]
+        num_flows_list = [4, 6, 8, 10, 15, 20, 30]
 
     for num_flows in num_flows_list:
         for iteration in range(args.iterations):
             flows = flow_generate(num_flows, time_span=args.time_slots,
                                   node_num=4, seed=str(iteration), hybrid=args.hybrid, diverse=args.all_to_all)
 
-            scenario = build_scenario(
-                flows, startup_phase_end_seconds=1800, timeslot_size_seconds=args.slot_size, path_switching=args.ciao)
-
-            scenario["settings"] = {
+            settings = {
                 "time_slots": args.time_slots,
                 "slot_size": args.slot_size,
                 "num_flows": num_flows,
             }
 
-            if args.bgp_fd:
-                add_bgp_lb_paths_to_flows(scenario, iteration, use_ecmp=False)
-                scenario["settings"]["description"] = "BGP FD"
-                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_bgp_fd.json")
-            elif args.bgp_ecmp:
-                add_bgp_lb_paths_to_flows(scenario, iteration, use_ecmp=True)
-                scenario["settings"]["description"] = "BGP ECMP"
-                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_bgp_ecmp.json")
-            elif args.naive:
-                scenario["settings"]["description"] = "Naive"
-                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_naive.json")
-            else:
+            if args.ciao or args.all_types:
+                scenario = build_scenario(flows, startup_phase_end_seconds, settings, path_switching=True)
                 scenario["settings"]["description"] = "Ciao"
                 output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_ciao.json")
+                saveScenario(scenario, output_path)
+            if args.naive or args.all_types:
+                scenario = build_scenario(flows, startup_phase_end_seconds, settings)
+                scenario["settings"]["description"] = "Naive"
+                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_naive.json")
+                saveScenario(scenario, output_path)
+            if args.bgp_fd or args.all_types:
+                scenario = build_scenario(flows, startup_phase_end_seconds, settings)
+                scenario["settings"]["description"] = "BGP FD"
+                add_bgp_lb_paths_to_flows(scenario, iteration, use_ecmp=False)
+                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_bgp_fd.json")
+                saveScenario(scenario, output_path)
+            if args.bgp_ecmp or args.all_types:
+                scenario = build_scenario(flows, startup_phase_end_seconds, settings)
+                scenario["settings"]["description"] = "BGP ECMP"
+                add_bgp_lb_paths_to_flows(scenario, iteration, use_ecmp=True)
+                output_path = output_path_template.replace(".json", f"_{num_flows:02}-flows_{iteration:02}_bgp_ecmp.json")
+                saveScenario(scenario, output_path)
 
             with open(output_path, 'w') as f:
                 json.dump(scenario, f, indent=4)
-
-            print(f"Saving scenario: {num_flows:2} flows, iteration {iteration:2} to {output_path}")
 
 
 if __name__ == "__main__":
