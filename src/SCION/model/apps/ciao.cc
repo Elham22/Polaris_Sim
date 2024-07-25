@@ -58,6 +58,8 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
   cfgPathSwitching =
       inputs.contains ("path_switching") ? inputs["path_switching"].get<bool> () : cfgPathSwitching;
   path_shifting = inputs.contains ("path_shifting") ? inputs["path_shifting"].get<bool> () : false;
+  path_change_margin =
+      inputs.contains ("path_change_margin") ? inputs["path_change_margin"].get<double> () : path_change_margin;
 
   // Initialize path infos
   num_paths = paths.size ();
@@ -444,6 +446,7 @@ CiaoApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_pat
 
       double scion_pkt_total_bytes = payload_bytes + scion_header_bytes;
       path_metrics[path].in_flight_bytes += scion_pkt_total_bytes;
+      total_bytes_sent += scion_pkt_total_bytes;
 
       sent_packet.size = webrtc::DataSize::Bytes (scion_pkt_total_bytes);
       sent_packet.data_in_flight = webrtc::DataSize::Bytes (path_metrics[path].in_flight_bytes);
@@ -753,7 +756,7 @@ CiaoApp::UpdatePathCandidates ()
         }
 
       // If the promised bottleneck share is not high enough, this is not a candidate
-      if (path_metrics[i].bottleneck_share < target_sendrate * path_candidate_treshold)
+      if (path_metrics[i].bottleneck_share < target_sendrate * path_change_margin)
         {
           m->is_candidate = false;
           Log ("Excluding path switch candidate: " + std::to_string (active_path) + " to " +

@@ -103,7 +103,7 @@ protected:
   PathTransitionStrategy path_transition_strategy = PathTransitionStrategy::CUBIC;
 
   // How much better a path must be before we consider switching to it
-  const double path_candidate_treshold = 1.4;
+  double path_change_margin = 1.5;
 
   // How long we wait before switching paths again
   const Time path_switch_min_interval = Seconds (10);
