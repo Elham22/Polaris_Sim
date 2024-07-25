@@ -15,6 +15,7 @@ def flow_generate(flow_num, time_span, node_num, seed, hybrid, diverse):
     flow_list = []
     # all_numbers = list(range(flow_num))
     half_n = flow_num // 2
+    q_n = flow_num * 3 // 4
     # random.seed(seed)
     # selected_numbers = random.sample(all_numbers, half_n)
     for fl in range(flow_num):
@@ -25,7 +26,13 @@ def flow_generate(flow_num, time_span, node_num, seed, hybrid, diverse):
         random.seed(seed)
         du = random.randint(min(2, time_span-st), time_span-st)
 
-        if diverse:
+        if not hybrid or fl < half_n:
+            flow_type = 0  # Ciao
+        elif fl < q_n:
+            flow_type = 1  # GCC
+        else:
+            flow_type = 2
+        if diverse or (hybrid and flow_type):
             seed += 'b'
             random.seed(seed)
             source = random.randint(0, node_num - 1)
@@ -41,12 +48,7 @@ def flow_generate(flow_num, time_span, node_num, seed, hybrid, diverse):
         else:
             source = 0
             dest = 2
-        # if fl in selected_numbers:
 
-        if not hybrid or fl < half_n:
-            flow_type = 0  # Ciao
-        else:
-            flow_type = 1  # TCP
         app_limit = 1.2  # round(random.uniform(0, 2), 1)
         flow_list.append((fl, source, dest, app_limit, du, st, flow_type))
     return flow_list
@@ -65,7 +67,14 @@ def build_scenario(flow: list, startup_phase_end_seconds: int, settings: dict,
     for f in flow:
         flow_id, src_as, dst_as, app_limit, duration, start_timeslot, flow_type = f
 
-        app_type = "rtc" if flow_type == 0 else "TcpCubic"
+        # Use type "rtc" for all target flows (type 0) and for background flows that are GCC (type 1)
+        if flow_type == 0 or flow_type == 1:
+            app_type = "rtc"
+        elif flow_type == 2:
+            app_type = "TcpCubic"
+
+        # Path switching is only enabled for target traffic (type 0) and if the scenario is configured to do so
+        _path_switching = flow_type == 0 and path_switching
 
         # UserDefinedEvents::StartApp (std::string src_isd_number, std::string real_src_as_no,
         #                      std::string src_local_address, std::string dst_isd_number,
@@ -119,7 +128,7 @@ def build_scenario(flow: list, startup_phase_end_seconds: int, settings: dict,
             "start_time": start_time_offset_seconds,
             "end_slot": start_timeslot + duration,
             "end_time": end_time_offset_seconds,
-            "path_switching": path_switching,
+            "path_switching": _path_switching,
         })
 
         # print(f"Adding flow {flow_id:02} of type {app_type:8} sending from AS {src_as} to AS {
@@ -195,7 +204,7 @@ def main():
     # for a whole range of flow numbers
     if os.path.isdir(args.output):
         output_path_template = os.path.join(args.output, "scenario.json")
-        num_flows_list = [4, 6, 8, 10, 15, 20, 30]
+        num_flows_list = [4, 8, 16, 20, 24]
 
     for num_flows in num_flows_list:
         for iteration in range(args.iterations):
