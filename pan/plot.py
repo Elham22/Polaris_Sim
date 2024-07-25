@@ -7,6 +7,8 @@ import os
 
 import numpy as np
 
+DEFAULT_START_TIME = 1800  # When actual flows start in the simulation
+
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="SCION simulator host QOE plotter",
@@ -30,6 +32,10 @@ def parse_args():
                         help="Average every n values together")
     parser.add_argument("--min-share", action="store_true",
                         help="Plot the minimum share")
+    parser.add_argument("--total-received", action="store_true",
+                        help="Plot the total bytes received (sent & acked)")
+    parser.add_argument("--start-time", type=int, default=DEFAULT_START_TIME,
+                        help="Start time of the simulation (default: 1800)")
     return parser.parse_args()
 
 
@@ -47,22 +53,24 @@ def transformLatexLabel(label):
     return label
 
 
-def printLatexBasicplot(x, y, label):
+def printLatexBasicplot(x, y, label, sharp=False):
     if not args.latex:
         return
     label = transformLatexLabel(label)
     coordinates = ' '.join([f'({round(xi, 2)},{round(yi, 2)})' for xi, yi in zip(x, y) if xi is not None and yi is not None])
-    print(f"\\addplot+[{label}] coordinates {{{coordinates}}};")
+    extra_args = ", sharp plot" if sharp else ""
+    print(f"\\addplot+[{label}{extra_args}] coordinates {{{coordinates}}};")
 
 
 def printLatexBoxplot(data, label):
     if not args.latex:
         return
     median = np.median(data)
-    lower_quartile = np.percentile(data, 25)
-    upper_quartile = np.percentile(data, 75)
-    lower_whisker = np.min(data)
-    upper_whisker = np.max(data)
+    # TODO: This is not the standard boxplot format, just the only one that looks good so far...
+    lower_quartile = np.percentile(data, 5)
+    upper_quartile = np.percentile(data, 95)
+    lower_whisker = np.percentile(data, 1)
+    upper_whisker = np.percentile(data, 99)
 
     print(f"\\addplot+[\n"
           f"    fill,\n"
@@ -125,7 +133,7 @@ def plotSingleScenario(scenario: dict):
             size_y += 1
             ratios.append(1)
 
-    fig = plt.figure(figsize=(size_y, 1))
+    fig = plt.figure(figsize=(16, 9))
     plot_number = 0
     gs = gridspec.GridSpec(no_plots, 1, height_ratios=ratios)
 
@@ -170,7 +178,7 @@ def plotSingleScenario(scenario: dict):
             plt.plot(app['time'], app['loss'], label=app['name'])
 
         if args.latex:
-            print("LaTeX Loss:")
+            print("\nLaTeX Loss:")
             for app in apps:
                 printLatexBasicplot(app['time'], app['loss'], f"label={app['name']}")
         if len(apps) <= max_apps_legend:
@@ -187,7 +195,7 @@ def plotSingleScenario(scenario: dict):
             plt.plot(app['time'], app['latency'], label=app['name'])
 
         if args.latex:
-            print("LaTeX Latency:")
+            print("\nLaTeX Latency:")
             for app in apps:
                 printLatexBasicplot(app['time'], app['latency'], f"label={app['name']}")
 
@@ -237,7 +245,7 @@ def plotSingleScenario(scenario: dict):
             lines_dict[app['name']] = lines
 
         if args.latex:
-            print("LaTeX Sendrate:")
+            print("\nLaTeX Sendrate:")
             for app in apps:
                 printLatexBasicplot(app['time'], app['sendrate'], f"label={app['name']}")
 
@@ -304,9 +312,9 @@ def plotSingleScenario(scenario: dict):
         plt.ylabel("Paths")
 
         if args.latex:
-            print("LaTeX Active Paths:")
+            print("\nLaTeX Active Paths:")
             for app in apps:
-                printLatexBasicplot(app['time'], app['active_path'], f"label={app['name']}")
+                printLatexBasicplot(app['time'], app['active_path'], f"label={app['name']}", sharp=True)
 
     if plot_gcc_state:
         plt.subplot(gs[plot_number], sharex=ax)
@@ -384,15 +392,17 @@ def parseScenarioResults(file, inputs: dict) -> dict:
             # print(f"Found results for host {host} app {
             #       app['app_id']} type {app['app_type']}")
 
-            # if app['states'] is null
             if 'states' not in app or app['states'] is None:
                 print(f"    No states found for app {app['app_id']}")
                 print(json.dumps(app, indent=4))
                 continue
 
+            # Select only states from args.start_time onwards
+            app['states'] = [state for state in app['states'] if state['time'] >= args.start_time * 1000]
+
             # Remove startup from time and convert to seconds
             app['time'] = [state['time'] / 1000 -
-                           1800 for state in app['states']]
+                           args.start_time for state in app['states']]
 
             # Convert loss to percentage
             app['loss'] = [state['loss'] * 100 for state in app['states']]
@@ -424,6 +434,8 @@ def parseScenarioResults(file, inputs: dict) -> dict:
                                   for i in range(0, len(app[field]), args.avg)]
                 app['time'] = [app['time'][i] for i in range(0, len(app['time']), args.avg)]
                 app['active_path'] = [app['active_path'][i] for i in range(0, len(app['active_path']), args.avg)]
+                if 'bottleneck_share' in app:
+                    app['bottleneck_share'] = [app['bottleneck_share'][i] for i in range(0, len(app['bottleneck_share']), args.avg)]
 
             if not 'name' in app:
                 app['name'] = f"{app['app_type']}#{app['app_id']} "
@@ -433,6 +445,13 @@ def parseScenarioResults(file, inputs: dict) -> dict:
 
             app['total_running_time'] = app['time'][-1] - app['time'][0]
             app['average_bandwidth'] = app['bytes_received'] / app['total_running_time'] / 1e6
+
+            app['bytes_lost'] = app['bytes_sent'] - app['bytes_received']
+            if app['bytes_sent'] > 0:
+                app['total_loss_percentage'] = app['bytes_lost'] / app['bytes_sent'] * 100
+            else:
+                print(f"App {app['name']} has 0 bytes sent")
+                app['total_loss_percentage'] = -1
 
             apps.append(app)
 
@@ -458,7 +477,7 @@ def parseScenarioResults(file, inputs: dict) -> dict:
 
     median_total_sendrate = np.median([r['total_sendrate'] for r in timestamps.values()])
 
-    timestamps = {t / 1000 - 1800: r for t, r in timestamps.items()}
+    timestamps = {t / 1000 - args.start_time: r for t, r in timestamps.items()}
     timestamps = dict(sorted(timestamps.items()))
 
     settings = {}
@@ -506,7 +525,7 @@ def plotMultiScenario(scenarios: list[dict]) -> None:
     global_results = {}
 
     # Process only for these number of flows
-    selected_flow_nums = [4, 6, 8, 10, 15, 20, 30]
+    selected_flow_nums = [4, 8, 16, 20, 24]
 
     # Pre-process all scenarios by grouping all data by flow type and number of flows
     for scenario in scenarios:
@@ -517,83 +536,115 @@ def plotMultiScenario(scenarios: list[dict]) -> None:
 
         num_flows = scenario['settings']['num_flows']
 
-        if num_flows not in selected_flow_nums:
-            continue
+        # Uncomment to process only for selected flow numbers
+        # if num_flows not in selected_flow_nums:
+        #     continue
 
         if num_flows not in global_results[flow_type]:
             global_results[flow_type][num_flows] = {}
 
-        if 'median_totals' not in global_results[flow_type][num_flows]:
-            global_results[flow_type][num_flows]['median_totals'] = []
+        # Median of the total sendrate throughout the entire simulation
+        if 'median_total_sendrates' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['median_total_sendrates'] = []
+        global_results[flow_type][num_flows]['median_total_sendrates'].append(scenario['median_total_sendrate'])
 
-        global_results[flow_type][num_flows]['median_totals'].append(scenario['median_total_sendrate'])
-
+        # Compute the sum of the average bandwidths of each flow
+        # The avg bandwidth is computed as the total bytes received divided by the total running time
         if 'cumulative_avg_bandwidths' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['cumulative_avg_bandwidths'] = []
-
         cumulative_avg_bandwidth = sum([app['average_bandwidth'] for app in scenario['apps']])
         global_results[flow_type][num_flows]['cumulative_avg_bandwidths'].append(cumulative_avg_bandwidth)
 
+        # Compute the minimum share as the minimum avg sendrate of each (flow,timeslot) pair
+        # The values per timeslots are computed during individual simulation output processing
         if 'min_shares' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['min_shares'] = []
-
         min_share = float('inf')
         for slot, results in scenario['time_slots'].items():
             if results['mean_sendrate'] < min_share:
                 min_share = results['mean_sendrate']
         global_results[flow_type][num_flows]['min_shares'].append(min_share)
 
-        if 'losses' not in global_results[flow_type][num_flows]:
-            global_results[flow_type][num_flows]['losses'] = []
-
-        if 'latencies' not in global_results[flow_type][num_flows]:
-            global_results[flow_type][num_flows]['latencies'] = []
-
+        # Lists containing loss/latency piled up over all flows AND all iterations
+        # Up to n are averaged together (within a flow). Override using the --avg n argument
+        if 'all_losses' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['all_losses'] = []
+        if 'all_latencies' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['all_latencies'] = []
         all_losses = []
         all_latencies = []
         for app in scenario['apps']:
-            cumulative_avg_bandwidth += app['average_bandwidth']
-
-            # To remove noise, consider only the averages across 300ms intervals for loss and latency
-            # Since the actual values are recorded in 50ms intervals internally, we average over 6 values
-            # Append the new list of averaged values to the global all_ list
-            # Use numpy
+            # To remove noise, consider only the averages across some interval for loss and latency
+            # Since the actual values are recorded in 50ms intervals internally, we we average
+            # 6 values together to get the values within a 300ms interval. Override with --avg n
             if args.avg > 1:
-                # If we already average them in results parsing, no need to do it again
+                # If --avg was used, we already average the values in the individual results parsing
                 average_num = 1
             else:
                 average_num = 6
-            losses = app['loss']
-            latencies = app['latency']
-            averaged_losses = [np.mean(losses[i:i+average_num]) for i in range(0, len(losses), average_num)]
-            averaged_latencies = [np.mean(latencies[i:i+average_num]) for i in range(0, len(latencies), average_num)]
-            all_losses.extend(averaged_losses)
-            all_latencies.extend(averaged_latencies)
 
-        global_results[flow_type][num_flows]['losses'].extend(all_losses)
-        global_results[flow_type][num_flows]['latencies'].extend(all_latencies)
+            if args.loss:
+                losses = app['loss']
+                averaged_losses = [np.mean(losses[i:i+average_num]) for i in range(0, len(losses), average_num)]
+                all_losses.extend(averaged_losses)
 
-        # cumulative_avg_bandwidth = cumulative_bandwidth / len(scenario['apps'])
+            if args.latency:
+                latencies = app['latency']
+                averaged_latencies = [np.mean(latencies[i:i+average_num]) for i in range(0, len(latencies), average_num)]
+                all_latencies.extend(averaged_latencies)
+
+        # NOTE: Extend, not append, this is simply a flat list
+        global_results[flow_type][num_flows]['all_losses'].extend(all_losses)
+        global_results[flow_type][num_flows]['all_latencies'].extend(all_latencies)
+
+        if 'total_loss_percentages' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['total_loss_percentages'] = []
+        # List of loss percentages for each flow
+        # The loss for each flow is the percentage of (bytes_lost / bytes_sent)
+        loss_percs = []
+        for app in scenario['apps']:
+            if 'total_loss_percentage' in app:
+                loss_percs.append(app['total_loss_percentage'])
+        global_results[flow_type][num_flows]['total_loss_percentages'].append(loss_percs)
+
+        if 'latencies' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['latencies'] = []
+        # List of lists of latencies for each flow
+        lats = [app['latency'] for app in scenario['apps']]
+        global_results[flow_type][num_flows]['latencies'].append(lats)
+
+        # List of variances of latency for each flow
+        if 'latency_variances' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['latency_variances'] = []
+        lat_vars = [np.var(app['latency']) for app in scenario['apps']]
+        global_results[flow_type][num_flows]['latency_variances'].append(lat_vars)
+
+        if 'total_bytes_received' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['total_bytes_received'] = []
+        # List of total bytes received for each flow
+        tot = [app['bytes_received'] for app in scenario['apps']]
+        global_results[flow_type][num_flows]['total_bytes_received'].append(tot)
 
     # Compute the mean and the 95% confidence interval of all medians of the total send rates per flow type and per number of flows
     for flow_type, flow_results in global_results.items():
         for num_flows, results in flow_results.items():
-            if args.loss:
-                results['mean_total'] = np.mean([np.mean(loss) for loss in results['losses']])
-                results['ci_total'] = 1.96 * np.std([np.mean(loss) for loss in results['losses']], ddof=1) / np.sqrt(len(results['losses']))
-            elif args.latency:
-                results['mean_total'] = np.mean([np.mean(latency) for latency in results['latencies']])
-                results['ci_total'] = 1.96 * np.std([np.mean(latency) for latency in results['latencies']], ddof=1) / np.sqrt(len(results['latencies']))
+            if args.total_received:
+                results['mean_total'] = np.mean(results['total_bytes_received'])
+                results['ci_total'] = 1.96 * np.std(results['total_bytes_received'], ddof=1) / np.sqrt(len(results['total_bytes_received']))
             elif args.min_share:
                 results['mean_total'] = np.mean(results['min_shares'])
                 results['ci_total'] = 1.96 * np.std(results['min_shares'], ddof=1) / np.sqrt(len(results['min_shares']))
-            else:
+            else:  # CumAvgBw
                 results['mean_total'] = np.mean(results['cumulative_avg_bandwidths'])
                 results['ci_total'] = 1.96 * np.std(results['cumulative_avg_bandwidths'], ddof=1) / np.sqrt(len(results['cumulative_avg_bandwidths']))
 
                 # Alternative where we use the mean of the medians of total sendrate in every time slot
-                # results['mean_total'] = np.mean(results['median_totals'])
-                # results['ci_total'] = 1.96 * np.std(results['median_totals'], ddof=1) / np.sqrt(len(results['median_totals']))
+                # results['mean_total'] = np.mean(results['median_total_sendrates'])
+                # results['ci_total'] = 1.96 * np.std(results['median_total_sendrates'], ddof=1) / np.sqrt(len(results['median_total_sendrates']))
+
+    # Dump the global results to a file
+    # with open('global_results.json', 'w') as f:
+    #     json.dump(global_results, f, indent=4)
 
     # Plot the results
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -636,7 +687,17 @@ def plotMultiScenario(scenarios: list[dict]) -> None:
         for i, (flow_type, color, marker) in enumerate(zip(flow_types, colors, markers)):
             num_flows = sorted(global_results[flow_type].keys())
             latencies = [global_results[flow_type][n]['latencies'] for n in num_flows]
+
+            # TODO: Plot the variance of the latencies
+            # latencies = [global_results[flow_type][n]['latency_variances'] for n in num_flows]
+            # for i, ll in enumerate(latencies):
+            #     # Flatten the inner lists
+            #     latencies[i] = [item for sublist in ll for item in sublist]
+            print(latencies)
             dodge_positions = [x_mapping[n] + (i - len(flow_types)/2) * total_dodge_space for n in num_flows]
+
+            # print dimensions of both
+            print(len(latencies), len(dodge_positions))
 
             ax.boxplot(latencies, positions=dodge_positions, widths=dodge_width, showfliers=False, patch_artist=True,
                        boxprops=dict(facecolor=color, color=color), medianprops=dict(color='black'),
@@ -680,7 +741,6 @@ def plotMultiScenario(scenarios: list[dict]) -> None:
 
     ax.tick_params(axis='both', which='major', labelsize=12)
 
-    # Optionally, you can also enable the grid for better visibility of the alignment
     # ax.grid(True, which='both', axis='x', linestyle='--', linewidth=0.5)
     # ax.set_title("Average Bandwidth by Flow Type", fontsize=16)
 
