@@ -225,7 +225,7 @@ def pretty_print_path(path):
     print('['+", ".join(transformed_path)+', ]')
 
 
-def transform_path_json(path):
+def transform_path_dict(path):
     """
     Convert path into a dict of hops for easy JSON output
     Args:
@@ -241,7 +241,6 @@ def transform_path_json(path):
     return {
         "hops": hops
     }
-
 
 def get_path(input_file, source, s_host, destination, d_host, flow_id, it, use_ecmp=False):
     global TUPLE_HASH, IT
@@ -259,6 +258,11 @@ def get_path(input_file, source, s_host, destination, d_host, flow_id, it, use_e
     interface_level_path = find_interface_level_path(G, source, destination, use_ecmp)
 
     return interface_level_path
+
+
+def get_path_as_dict(input_file, source, s_host, destination, d_host, flow_id, it, use_ecmp=False):
+    path = get_path(input_file, source, s_host, destination, d_host, flow_id, it, use_ecmp)
+    return transform_path_dict(path)
 
 TUPLE_HASH = 0
 IT = 0
