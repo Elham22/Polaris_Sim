@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-import enum
-import json
-import random
 import argparse
+import enum
+import itertools
+import json
 import os
+import random
 
 from config import DEFAULT_FLOW_NUMBERS, STARTUP_PHASE_SECONDS
 import bgp_load_balancing
@@ -61,10 +62,17 @@ def flow_generate(flow_num, time_span, node_num, seed, hybrid, diverse):
 
 
 def save_scenario(scenario, output_path):
+    """
+    Save the scenario to the specified output path.
+    Only write the file if it doesn't already exist or if args.force_save is given.
+    """
+    if os.path.exists(output_path) and not args.force_save:
+        print(f"Scenario {output_path} already exists. Use --force-save to overwrite it.")
+        return
+
     with open(output_path, 'w') as f:
         json.dump(scenario, f, indent=4)
-
-    print(f"Created scenario: {output_path}")
+    print(f"Scenario {output_path} saved.")
 
 
 def create_scenario(flow: list, startup_phase_end_seconds: int, settings: dict,
@@ -162,8 +170,14 @@ def create_scenario(flow: list, startup_phase_end_seconds: int, settings: dict,
             application["path"] = bgp_load_balancing.get_path_as_dict(
                 TOPOLOGY_FILE, src_as, src_host, dst_as, dst_host, flow_id, it=0, use_ecmp=False)
 
-        if args.path_change_margin:
-            application["path_change_margin"] = args.path_change_margin
+        if 'path_change_margin' in settings:
+            application["path_change_margin"] = settings["path_change_margin"]
+
+        if "path_change_min_interval" in settings:
+            application["path_switch_min_interval"] = settings["path_change_min_interval"]
+
+        if "path_switch_min_candidacy" in settings:
+            application["path_switch_min_candidacy"] = settings["path_switch_min_candidacy"]
 
         applications.append(application)
 
@@ -178,8 +192,16 @@ def create_scenario(flow: list, startup_phase_end_seconds: int, settings: dict,
     output_path_postfix = ""
 
     if "path_change_margin" in settings:
-        scenario["settings"]["description"] += f" (margin {args.path_change_margin:.1f})"
-        output_path_postfix = f"-m{args.path_change_margin:.1f}"
+        scenario["settings"]["description"] += f" {settings['path_change_margin']:.1f}"
+        output_path_postfix += f"-m{settings['path_change_margin']:.1f}"
+
+    if "path_change_min_interval" in settings:
+        scenario["settings"]["description"] += f" {settings['path_change_min_interval']}"
+        output_path_postfix += f"-mi{settings['path_change_min_interval']:02}"
+
+    if "path_switch_min_candidacy" in settings:
+        scenario["settings"]["description"] += f" {settings['path_switch_min_candidacy']}"
+        output_path_postfix += f"-mc{settings['path_switch_min_candidacy']:02}"
 
     output_path = output_path.replace(".json", f"-f{settings['num_flows']:02}-i{settings['iteration']:02}-{scen_type.name}{output_path_postfix}.json")
     save_scenario(scenario, output_path)
@@ -232,6 +254,8 @@ def main():
     parser.add_argument('-a', '--all-types', action='store_true',
                         help='generate all types of scenarios, equivalent\
                         to --bgp-fd --bgp-ecmp --naive --ciao')
+    parser.add_argument('-f', '--force-save', action='store_true',
+                        help='overwrite existing files')
 
     args = parser.parse_args()
 
@@ -246,29 +270,38 @@ def main():
         output_path_template = args.output
         flow_numbers = [args.number_of_flows]
 
-    for num_flows in flow_numbers:
-        for iteration in range(args.iterations):
-            flows = flow_generate(num_flows, time_span=args.time_slots,
-                                  node_num=4, seed=str(iteration), hybrid=args.hybrid, diverse=args.all_to_all)
+    iterations = range(args.iterations)
 
-            settings = {
-                "time_slots": args.time_slots,
-                "slot_size": args.slot_size,
-                "num_flows": num_flows,
-                "iteration": iteration,
-            }
+    sc_cnt = 0
 
-            if args.path_change_margin:
-                settings["path_change_margin"] = args.path_change_margin
+    for num_flows, iteration in itertools.product(flow_numbers, iterations):
+        flows = flow_generate(num_flows, time_span=args.time_slots,
+                              node_num=4, seed=str(iteration), hybrid=args.hybrid, diverse=args.all_to_all)
 
-            if args.ciao or args.all_types:
-                create_scenario(flows, startup_phase_end_seconds, settings, ScenarioType.Ciao, output_path=output_path_template)
-            if args.naive or args.all_types:
-                create_scenario(flows, startup_phase_end_seconds, settings, ScenarioType.Naive, output_path=output_path_template)
-            if args.bgp_fd or args.all_types:
-                create_scenario(flows, startup_phase_end_seconds, settings, ScenarioType.BGP_FD, output_path=output_path_template)
-            if args.bgp_ecmp or args.all_types:
-                create_scenario(flows, startup_phase_end_seconds, settings, ScenarioType.BGP_ECMP, output_path=output_path_template)
+        settings = {
+            "time_slots": args.time_slots,
+            "slot_size": args.slot_size,
+            "num_flows": num_flows,
+            "iteration": iteration,
+        }
+
+        if args.path_change_margin:
+            settings["path_change_margin"] = args.path_change_margin
+
+        if args.ciao or args.all_types:
+            create_scenario(flows, startup_phase_end_seconds, settings, ScenarioType.Ciao, output_path=output_path_template)
+            sc_cnt += 1
+        if args.naive or args.all_types:
+            create_scenario(flows, startup_phase_end_seconds, settings, ScenarioType.Naive, output_path=output_path_template)
+            sc_cnt += 1
+        if args.bgp_fd or args.all_types:
+            create_scenario(flows, startup_phase_end_seconds, settings, ScenarioType.BGP_FD, output_path=output_path_template)
+            sc_cnt += 1
+        if args.bgp_ecmp or args.all_types:
+            create_scenario(flows, startup_phase_end_seconds, settings, ScenarioType.BGP_ECMP, output_path=output_path_template)
+            sc_cnt += 1
+        
+    print(f"Generated {sc_cnt} scenarios")
 
 
 if __name__ == "__main__":

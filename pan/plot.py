@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 import argparse
+import gc
+import hashlib
+import itertools
+import pickle
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import json
@@ -40,9 +44,28 @@ def parse_args():
                         help="Plot the total bytes received (sent & acked)")
     parser.add_argument("--start-time", type=int, default=STARTUP_PHASE_SECONDS,
                         help=f"Plot data from this time onward (default: {STARTUP_PHASE_SECONDS})")
-    parser.add_argument("--dump-json", type=str,
-                        help="Dump the parsed results as a JSON to the specified file")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="Do not use cached results")
     return parser.parse_args()
+
+
+def _generate_cache_filename(files: list[str]) -> str:
+    """
+    Generate a unique filename for caching based on the input parameters.
+
+    Parameters:
+    - files: List of files to include in the cache filename.
+
+    Returns:
+    - cache_filename: Generated cache filename.
+    """
+    # Create a unique key based on the input parameters
+    key = (tuple(files))
+    # Generate a hash of the key
+    key_hash = hashlib.md5(str(key).encode()).hexdigest()
+    # Create a filename using the hash
+    cache_filename = f'cache_{key_hash}.pkl'
+    return cache_filename
 
 
 def _get_state_attr_list(app: dict, attribute: str):
@@ -380,7 +403,7 @@ def plot_single_scenario(scenario: dict):
     plt.show()
 
 
-def plot_multi_scenario(scenarios: list[dict]) -> None:
+def process_multi_scenario(scenarios: list[dict]):
     # Map containing the global results per flow type, per number of flows
     global_results = {}
 
@@ -432,37 +455,37 @@ def plot_multi_scenario(scenarios: list[dict]) -> None:
                 min_share = results['mean_sendrate']
         global_results[flow_type][num_flows]['min_shares'].append(min_share)
 
-        # Lists containing loss/latency piled up over all flows AND all iterations
-        # Up to n are averaged together (within a flow). Override using the --avg n argument
-        if 'all_losses' not in global_results[flow_type][num_flows]:
-            global_results[flow_type][num_flows]['all_losses'] = []
-        if 'all_latencies' not in global_results[flow_type][num_flows]:
-            global_results[flow_type][num_flows]['all_latencies'] = []
-        all_losses = []
-        all_latencies = []
-        for app in apps:
-            # To remove noise, consider only the averages across some interval for loss and latency
-            # Since the actual values are recorded in 50ms intervals internally, we we average
-            # 6 values together to get the values within a 300ms interval. Override with --avg n
-            if args.avg > 1:
-                # If --avg was used, we already average the values in the individual results parsing
-                average_num = 1
-            else:
-                average_num = 6
+        # # Lists containing loss/latency piled up over all flows AND all iterations
+        # # Up to n are averaged together (within a flow). Override using the --avg n argument
+        # if 'all_losses' not in global_results[flow_type][num_flows]:
+        #     global_results[flow_type][num_flows]['all_losses'] = []
+        # if 'all_latencies' not in global_results[flow_type][num_flows]:
+        #     global_results[flow_type][num_flows]['all_latencies'] = []
+        # all_losses = []
+        # all_latencies = []
+        # for app in apps:
+        #     # To remove noise, consider only the averages across some interval for loss and latency
+        #     # Since the actual values are recorded in 50ms intervals internally, we we average
+        #     # 6 values together to get the values within a 300ms interval. Override with --avg n
+        #     if args.avg > 1:
+        #         # If --avg was used, we already average the values in the individual results parsing
+        #         average_num = 1
+        #     else:
+        #         average_num = 6
 
-            if args.loss:
-                losses = app['loss']
-                averaged_losses = [np.mean(losses[i:i+average_num]) for i in range(0, len(losses), average_num)]
-                all_losses.extend(averaged_losses)
+        #     if args.loss:
+        #         losses = app['loss']
+        #         averaged_losses = [np.mean(losses[i:i+average_num]) for i in range(0, len(losses), average_num)]
+        #         all_losses.extend(averaged_losses)
 
-            if args.latency:
-                latencies = app['latency']
-                averaged_latencies = [np.mean(latencies[i:i+average_num]) for i in range(0, len(latencies), average_num)]
-                all_latencies.extend(averaged_latencies)
+        #     if args.latency:
+        #         latencies = app['latency']
+        #         averaged_latencies = [np.mean(latencies[i:i+average_num]) for i in range(0, len(latencies), average_num)]
+        #         all_latencies.extend(averaged_latencies)
 
-        # NOTE: Extend, not append, this is simply a flat list
-        global_results[flow_type][num_flows]['all_losses'].extend(all_losses)
-        global_results[flow_type][num_flows]['all_latencies'].extend(all_latencies)
+        # # NOTE: Extend, not append, this is simply a flat list
+        # global_results[flow_type][num_flows]['all_losses'].extend(all_losses)
+        # global_results[flow_type][num_flows]['all_latencies'].extend(all_latencies)
 
         if 'total_loss_percentages' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['total_loss_percentages'] = []
@@ -474,17 +497,17 @@ def plot_multi_scenario(scenarios: list[dict]) -> None:
                 loss_percs.append(app['total_loss_percentage'])
         global_results[flow_type][num_flows]['total_loss_percentages'].extend(loss_percs)
 
-        if 'latencies' not in global_results[flow_type][num_flows]:
-            global_results[flow_type][num_flows]['latencies'] = []
-        lats = []
+        if 'latencies_mean' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['latencies_mean'] = []
+        if 'latencies_stddev' not in global_results[flow_type][num_flows]:
+            global_results[flow_type][num_flows]['latencies_stddev'] = []
+        lats_avg = []
+        lats_stddev = []
         for app in apps:
-            if args.mean:
-                lats.append(np.mean(app['latency']))
-            elif args.std_dev:
-                lats.append(np.std(app['latency']))
-            else:
-                lats.extend(app['latency'])
-        global_results[flow_type][num_flows]['latencies'].extend(lats)
+            lats_avg.append(np.mean(app['latency']))
+            lats_stddev.append(np.std(app['latency']))
+        global_results[flow_type][num_flows]['latencies_mean'].extend(lats_avg)
+        global_results[flow_type][num_flows]['latencies_stddev'].extend(lats_stddev)
 
         if 'total_bytes_received' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['total_bytes_received'] = []
@@ -495,29 +518,25 @@ def plot_multi_scenario(scenarios: list[dict]) -> None:
     # Compute the mean and the 95% confidence interval of all medians of the total send rates per flow type and per number of flows
     for flow_type, flow_results in global_results.items():
         for num_flows, results in flow_results.items():
-            if args.total_received:
-                results['mean_total'] = np.mean(results['total_bytes_received'])
-                results['ci_total'] = 1.96 * np.std(results['total_bytes_received'], ddof=1) / np.sqrt(len(results['total_bytes_received']))
-            elif args.min_share:
-                results['mean_total'] = np.mean(results['min_shares'])
-                results['ci_total'] = 1.96 * np.std(results['min_shares'], ddof=1) / np.sqrt(len(results['min_shares']))
-            else:  # CumAvgBw
-                results['mean_total'] = np.mean(results['cumulative_avg_bandwidths'])
-                results['ci_total'] = 1.96 * np.std(results['cumulative_avg_bandwidths'], ddof=1) / np.sqrt(len(results['cumulative_avg_bandwidths']))
+            results['mean_total_rcv'] = np.mean(results['total_bytes_received'])
+            results['ci_total_rcv'] = 1.96 * np.std(results['total_bytes_received'], ddof=1) / np.sqrt(len(results['total_bytes_received']))
 
-                # Alternative where we use the mean of the medians of total sendrate in every time slot
-                # results['mean_total'] = np.mean(results['median_total_sendrates'])
-                # results['ci_total'] = 1.96 * np.std(results['median_total_sendrates'], ddof=1) / np.sqrt(len(results['median_total_sendrates']))
+            results['mean_min_shares'] = np.mean(results['min_shares'])
+            results['ci_min_shares'] = 1.96 * np.std(results['min_shares'], ddof=1) / np.sqrt(len(results['min_shares']))
+
+            results['mean_cum_avg_bw'] = np.mean(results['cumulative_avg_bandwidths'])
+            results['ci_cum_avg_bw'] = 1.96 * np.std(results['cumulative_avg_bandwidths'], ddof=1) / np.sqrt(len(results['cumulative_avg_bandwidths']))
+
+            # Alternative where we use the mean of the medians of total sendrate in every time slot
+            # results['mean_total'] = np.mean(results['median_total_sendrates'])
+            # results['ci_total'] = 1.96 * np.std(results['median_total_sendrates'], ddof=1) / np.sqrt(len(results['median_total_sendrates']))
 
     # Clean up keys again, in case we didn't use the usual types
     global_results = {k: v for k, v in global_results.items() if v}
+    return global_results
 
-    # Dump the global results to a file
-    if args.dump_json:
-        with open(args.dump_json, 'w') as f:
-            json.dump(global_results, f, indent=4)
 
-    # Plot the results
+def plot_multi_scenario(global_results: dict) -> None:
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Create a mapping from original x values to evenly spaced integers
@@ -525,8 +544,8 @@ def plot_multi_scenario(scenarios: list[dict]) -> None:
     all_flow_nums = sorted(global_results[flow_types[0]].keys())
     x_mapping = {num_flows: i * len(all_flow_nums) for i, num_flows in enumerate(all_flow_nums)}
 
-    markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
-    colors = plt.cm.tab10(np.linspace(0, 1, len(global_results)))
+    markers = itertools.cycle(['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h'])
+    colors = itertools.cycle(plt.cm.tab10(np.linspace(0, 1, len(global_results))))
 
     ax.set_xlabel("# of Flows", fontsize=14)
 
@@ -554,8 +573,10 @@ def plot_multi_scenario(scenarios: list[dict]) -> None:
 
             if args.loss:
                 data = [global_results[flow_type][n]['total_loss_percentages'] for n in num_flows]
-            else:
-                data = [global_results[flow_type][n]['latencies'] for n in num_flows]
+            elif args.mean:
+                data = [global_results[flow_type][n]['latencies_mean'] for n in num_flows]
+            elif args.std_dev:
+                data = [global_results[flow_type][n]['latencies_stddev'] for n in num_flows]
 
             dodge_positions = [x_mapping[n] + (i - len(flow_types)/2) * total_dodge_space for n in num_flows]
 
@@ -574,22 +595,33 @@ def plot_multi_scenario(scenarios: list[dict]) -> None:
 
     else:  # Errorbar plot for CumAvgBw, MinShare, or TotalReceived
         if args.total_received:
-            label = "Total Received (MB)"
+            label = "Total Received (B)"
         elif args.min_share:
             label = "Minimum Share (MB/s)"
         else:
             label = "Cum Avg Bandwidth (MB/s)"
         ax.set_ylabel(label, fontsize=14)
 
-        for (flow_type, color, marker), flow_results in zip(zip(global_results.keys(), colors, markers), global_results.values()):
+        for i, ((flow_type, color, marker), flow_results) in enumerate(zip(zip(global_results.keys(), colors, markers), global_results.values())):
             num_flows = sorted(flow_results.keys())
-            mean_totals = [flow_results[n]['mean_total'] for n in num_flows]
-            ci_totals = [flow_results[n]['ci_total'] for n in num_flows]
 
-            ax.errorbar(num_flows, mean_totals, yerr=ci_totals, fmt='-o', label=flow_type, color=color, marker=marker, markersize=8, linewidth=2, capsize=5)
+            if args.total_received:
+                mean = [flow_results[n]['mean_total_rcv'] for n in num_flows]
+                ci = [flow_results[n]['ci_total_rcv'] for n in num_flows]
+            elif args.min_share:
+                mean = [flow_results[n]['mean_min_shares'] for n in num_flows]
+                ci = [flow_results[n]['ci_min_shares'] for n in num_flows]
+            else:
+                mean = [flow_results[n]['mean_cum_avg_bw'] for n in num_flows]
+                ci = [flow_results[n]['ci_cum_avg_bw'] for n in num_flows]
+
+            dodge_width = total_dodge_space / (len(global_results) + 1)
+            dodge_positions = [n + (i - len(global_results)/2) * dodge_width for n in num_flows]
+
+            ax.errorbar(dodge_positions, mean, yerr=ci, label=flow_type, color=color, marker=marker, markersize=8, linewidth=2, capsize=5)
 
             if args.latex:
-                latex_plot_errorbar(num_flows, mean_totals, ci_totals, f"label={flow_type}")
+                latex_plot_errorbar(num_flows, mean, ci, f"label={flow_type}")
 
         ax.set_xticks(all_flow_nums)
 
@@ -756,6 +788,10 @@ def parse_simulation_results(file, inputs: dict) -> dict:
             time_slots[slot]['median_sendrate'] = np.median(results['sendrate'])
             time_slots[slot]['mean_sendrate'] = np.mean(results['sendrate'])
 
+    # Erase the states to save memory
+    for app in apps:
+        del app['states']
+
     scenario = {
         'apps': apps,
         'timestamps': timestamps,
@@ -767,21 +803,9 @@ def parse_simulation_results(file, inputs: dict) -> dict:
     return scenario
 
 
-def main():
-    global args
-
-    args = parse_args()
-    paths = []
-    if os.path.isdir(args.filepath):
-        for file in os.listdir(args.filepath):
-            if file.endswith(".out.txt"):
-                paths.append(os.path.join(args.filepath, file))
-    else:
-        paths.append(args.filepath)
-
-    print(f"Found {len(paths)} files")
-
+def parse(paths: list[str]) -> list[dict]:
     scenarios = []
+    cnt = 0
     for filepath in paths:
         # First, load the corresponding inputs file to get meta information like time slots
         inputs_json_path = filepath.replace(".out.txt", ".json")
@@ -799,13 +823,48 @@ def main():
                     s = parse_simulation_results(file, inputs)
                     if s:
                         scenarios.append(s)
+        cnt += 1
+        if cnt % 1000 == 0:
+            print(f"Processed {cnt} files out of {len(paths)}")
+            gc.collect()
 
     print("Processed a total of", len(scenarios), "scenarios")
 
-    if len(scenarios) == 1:
+    return scenarios
+
+
+def main():
+    global args
+
+    args = parse_args()
+    paths = []
+    if os.path.isdir(args.filepath):
+        for file in os.listdir(args.filepath):
+            if file.endswith(".out.txt"):
+                paths.append(os.path.join(args.filepath, file))
+    else:
+        paths.append(args.filepath)
+
+    print(f"Found {len(paths)} files")
+
+    if len(paths) == 1:
+        scenarios = parse(paths)
         plot_single_scenario(scenarios[0])
-    elif len(scenarios) > 1:
-        plot_multi_scenario(scenarios)
+    elif len(paths) > 1:
+        cache_filename = _generate_cache_filename(paths)
+        cache_filepath = os.path.join(args.filepath, cache_filename)
+        if args.no_cache or not os.path.exists(cache_filepath):
+            scenarios = parse(paths)
+            global_results = process_multi_scenario(scenarios)
+            print(f"Caching results to {cache_filepath}")
+            with open(cache_filepath, 'wb') as f:
+                pickle.dump(global_results, f)
+
+        else:
+            print(f"Loading cached results from {cache_filepath}")
+            with open(cache_filepath, 'rb') as f:
+                global_results = pickle.load(f)
+        plot_multi_scenario(global_results)
 
     print("Done. Exiting.")
 
