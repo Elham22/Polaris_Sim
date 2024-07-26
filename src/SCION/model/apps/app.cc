@@ -86,6 +86,7 @@ App::App (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
           hop_field |= egress;
 
           seg->hops.push_back (hop_field);
+          seg->reverse = false;
         }
 
       bgp_path.push_back (seg);

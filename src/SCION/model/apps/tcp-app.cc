@@ -528,13 +528,18 @@ public:
     Config::SetDefault ("ns3::TcpSocketBase::Sack", BooleanValue (true));
 
     SetupIPStack ();
+    
+  // Choose a random path to start with
+  active_path = rand () % paths.size ();
+  // active_path = 0; // TODO: For testing
 
-    active_path = 0;
+  // Allow override via config map
+  active_path = inputs.contains ("start_path") ? inputs["start_path"].get<uint32_t> () : active_path;
 
     if (is_sink && path_override)
       {
         // As the host on the receiving end, we need to reverse the manually provided path
-        std::vector<const PathSegment *> bgp_path = all_paths[0];
+        std::vector<const PathSegment *> bgp_path = paths[0];
         PathSegment * seg = new PathSegment ();
         // Copy the hops in reverse order
         for (int i = bgp_path[0]->hops.size () - 1; i >= 0; i--)
@@ -543,8 +548,8 @@ public:
           }
         // Ingresses and egresses stay the same, but we set the reverse flag
         seg->reverse = true;
-        all_paths[0].clear ();
-        all_paths[0].push_back (seg);
+        paths[0].clear ();
+        paths[0].push_back (seg);
       }
 
     std::cout << app_type << " initialized." << std::endl;
