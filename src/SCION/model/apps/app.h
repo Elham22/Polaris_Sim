@@ -110,7 +110,7 @@ protected:
   int runtime_config = false;
 
   bool first_report_received = false;
-  Time metrics_interval = MilliSeconds (1000);
+  Time metrics_interval = MilliSeconds (50);
   u_int64_t metrics_interval_ms = metrics_interval.GetMilliSeconds ();
 
   virtual bool rescore (double active_loss);
