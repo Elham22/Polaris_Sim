@@ -1,8 +1,8 @@
 time_resolution: PS
-topology: configs/traffic-engineering/toy-topology.xml
+topology: configs/traffic-engineering/toy-topology-1mb.xml
 events_file: configs/traffic-engineering/fairness-toy-topo.json
 output: configs/traffic-engineering/fairness-toy-topo.out.txt
-simulation_duration: 40min
+simulation_duration: 1970s
 NUM_CORE: 24
 beacon_service:
   policy: baseline

@@ -2,11 +2,13 @@
   "applications": [
     {
       "app_id": 0,
-      "path_switching": true
+      "path_switching": true,
+      "start_path": 0
     },
     {
       "app_id": 1,
-      "path_switching": true
+      "path_switching": false,
+      "start_path": 0
     },
     {
       "app_id": 2,
@@ -22,34 +24,19 @@
   "events":
     [
       {
-        "time": "30min",
+        "time": "30.00min",
         "type": "start_application",
         "args": ["0", "0", "2", "0", "2", "2", "rtc", "0.0", "0", "0"]
       },
       {
-        "time": "30.03min",
+        "time": "31.34min",
         "type": "start_application",
         "args": ["0", "0", "2", "0", "2", "2", "rtc", "0.0", "1", "0"]
       },
       {
-        "time": "30.05min",
+        "time": "31.37min",
         "type": "start_application",
-        "args": ["0", "0", "2", "0", "2", "2", "rtc", "0.0", "2", "0"]
-      },
-      {
-        "time": "30.08min",
-        "type": "start_application",
-        "args": ["0", "0", "2", "0", "2", "2", "rtc", "0.0", "3", "0"]
-      },
-      {
-        "time": "30.04min",
-        "type": "start_application",
-        "args": ["0", "0", "2", "0", "2", "2", "TcpCubic", "0.0", "4", "0"]
-      },
-      {
-        "time": "30.07min",
-        "type": "start_application",
-        "args": ["0", "0", "2", "0", "2", "2", "TcpCubic", "0.0", "5", "0"]
+        "args": ["0", "0", "2", "0", "2", "2", "TcpCubic", "0.0", "2", "0"]
       }
     ]
 }
