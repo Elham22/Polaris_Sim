@@ -70,7 +70,9 @@ enum SCMPType {
   ECHO_REPLY = 129,
   TRACEROUTE_REQUEST = 130,
   TRACEROUTE_REPLY = 131,
-  LINK_CONGESTED = 132,
+  PROBE = 132,
+  PROBE_ECHO = 133,
+  CONGESTION_ALERT = 134,
 };
 
 struct PathReqFromHost
@@ -137,21 +139,6 @@ enum class AppProbeType {
   BANDWIDTH = 2,
 };
 
-struct AppProbe
-{
-  app_id_t app_id;
-  AppProbeType type;
-  app_path_id_t path_id; // identifies the sender path
-  app_packet_id_t probe_id; // identifies the probe action
-  app_packet_id_t probe_seq_no; // seq no of packets belonging to a probe
-  int64_t time_tx; // transmission time of the probe, in µs
-  int64_t time_rx; // time of arrival at the app receiver (one-way), in µs
-  double bottleneck_share; // minimum fair share bw along the path, in Gbps
-  uint32_t bottleneck_share_no_flows; // number of flows that share the minimum fair share
-  uint64_t bottleneck_hop; // link where minimum was found
-  uint64_t max_queuing_delay; // highest queuing delay along the path
-};
-
 struct AppResp
 {
   app_id_t app_id;
@@ -168,15 +155,52 @@ struct AppResp
   std::shared_ptr<PacketsReport> packets_report;
 };
 
-struct ScmpReqOrResp
+struct BottleneckProbe
+{
+  ia_t ia; // Address of bottleneck
+  int16_t id = 0; // Identifier of probe, 0 if in response to data pkt
+  int16_t seq_no = 0; // Sequence number of probe, 0 if in response to data pkt
+  int16_t interface_id =
+      -1; // Bottleneck interface, -1 indicates that no bottleneck has been identified yet
+  double bottleneck_share; // Minimum fair share bw along the path, in Gbps
+  int64_t cum_queueing_delay = 0; // Cumulative queuing delay along the path, in µs
+
+  // TODO: remove these, we can infer RTT without them
+  int64_t time_tx; // Transmission time of the probe, in µs
+  int64_t time_rx; // Time of arrival at the app receiver (one-way), in µs
+
+  // NOTE: This is field does not exist in a real C-Probe and is only part of
+  // the metrics output and used for plotting
+  uint32_t bottleneck_num_flows; // Number of flows estimate on the bottleneck link
+};
+
+struct CongestionAlert
+{
+  uint16_t id = 0; // Identifier of probe, 0 if in response to data pkt
+  uint16_t seq_no = 0; // Sequence number of probe, 0 if in response to data pkt
+  ia_t ia; // Address of C-CA originator
+  uint16_t interface_id;
+};
+
+typedef std::variant<BottleneckProbe, CongestionAlert> ScmpData;
+
+struct Scmp
 {
   SCMPType type;
   uint16_t code;
-  // Fields not implemented: Checksum, InfoBlock, DataBlock
+  ScmpData data;
+  // Fields not implemented: Checksum, InfoBlock
+
+  // TODO: We need the app id in here until every application runs on its own
+  // host because we don't really have a notion of sockets or ports in for now,
+  // so if a host receives a SCMP message, it has no idea which application it
+  // needs to inform.
+  app_id_t app_id;
+  uint32_t path_id;
 };
 
-typedef std::variant<PathReqFromHost, RegPathsFromLocalPs, ListOfAllASes, NtpReqOrResp,
-                     ScmpReqOrResp, ProbeReq, ProbeResp, AppData, AppResp, AppProbe>
+typedef std::variant<PathReqFromHost, RegPathsFromLocalPs, ListOfAllASes, NtpReqOrResp, Scmp,
+                     ProbeReq, ProbeResp, AppData, AppResp>
     Payload;
 
 /**
@@ -184,7 +208,7 @@ typedef std::variant<PathReqFromHost, RegPathsFromLocalPs, ListOfAllASes, NtpReq
  * @param path The chosen path
  * @return The overhead in bytes
  */
-uint16_t ScionPacketHeaderSize(const std::vector<const PathSegment *> &path);
+uint16_t ScionPacketHeaderSize (const std::vector<const PathSegment *> &path);
 
 struct ScionPacket
 {

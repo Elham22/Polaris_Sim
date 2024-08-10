@@ -306,61 +306,39 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
     {
       ReceiveRegisteredPathSegments (payload->seg_type, payload->src_ia, payload->dst_ia,
                                      payload->registered_path_segments);
+      packet->packet_originator->DestroyScionPacket (packet);
+      return;
     }
-  else if (auto *payload = std::get_if<ProbeReq> (&packet->payload))
-    {
-      // ReceiveProbeRequest (packet->src_ia, packet->src_host, packet->path,
-      //                      packet->payload.probe_req, receive_time);
-      ReceiveProbeRequest (packet->src_ia, packet->src_host, packet->path, *payload, receive_time);
-    }
-  else if (auto *payload = std::get_if<ProbeResp> (&packet->payload))
-    {
-      ReceiveProbeResponse (packet->src_ia, packet->src_host, *payload);
-    }
-  else if (auto *payload = std::get_if<AppData> (&packet->payload))
+
+  if (auto *payload = std::get_if<AppData> (&packet->payload))
     {
       ReceiveAppData (packet, payload);
+      packet->packet_originator->DestroyScionPacket (packet);
+      return;
     }
-  else if (auto *payload = std::get_if<AppProbe> (&packet->payload))
-    {
-      auto app_id = payload->app_id;
 
-      if (apps.find (app_id) != apps.end ())
+  if (auto *payload = std::get_if<AppResp> (&packet->payload))
+    {
+      ReceiveAppResp (*payload);
+      packet->packet_originator->DestroyScionPacket (packet);
+      return;
+    }
+
+  if (auto *scmp = std::get_if<Scmp> (&packet->payload))
+    {
+      // Probe packets are echoed back to the sender
+      if (scmp->type == PROBE)
         {
-          CiaoApp *ciao_app = dynamic_cast<CiaoApp *> (apps.at (app_id));
-          if (ciao_app != nullptr)
-            {
-              ciao_app->ReceiveProbeResponse (*payload);
-            }
-          else
-            {
-              NS_FATAL_ERROR ("App with id " << app_id << " is not an RTC app");
-            }
+          scmp->type = PROBE_ECHO;
+          ReturnScionPacket (packet);
         }
       else
         {
-          ReturnAppProbe (packet->src_ia, packet->src_host, packet->path, *payload);
+          ReceiveScmp (*scmp);
+          packet->packet_originator->DestroyScionPacket (packet);
         }
+      return;
     }
-  else if (auto *payload = std::get_if<AppResp> (&packet->payload))
-    {
-      ReceiveAppResp (*payload);
-    }
-  else if (auto *payload = std::get_if<ScmpReqOrResp> (&packet->payload))
-    {
-      // TODO: SCMP packet is just addressed to our host, we don't know which
-      // application. If we want to run many applications on one host we need a
-      // better concept here.
-      // for (auto app : apps)
-      //   {
-      //     app.second->HandleSCMP (*payload);
-      //   }
-    }
-  else
-    {
-      NS_FATAL_ERROR ("Unknown payload type: " << packet->payload_type);
-    }
-  packet->packet_originator->DestroyScionPacket (packet);
   /*
         if (packet->packet_originator == this) {
             NS_ASSERT(on_the_flight_packets.find(packet->id) != on_the_flight_packets.end());
@@ -373,25 +351,6 @@ ScionHost::ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time r
             ReturnScionPacket(packet);
         }
 */
-}
-
-void
-ScionHost::ReturnAppProbe (ia_t src_ia, host_addr_t src_addr,
-                           std::vector<const ns3::PathSegment *> path, AppProbe app_probe)
-{
-  PayloadType payload_type = PayloadType::APPLICATION_PROBE;
-
-  // Everything stays the same, we can just set the RX time and send it back
-  app_probe.time_rx = local_time.ToInteger (Time::Unit::US);
-
-  Payload payload = app_probe;
-
-  ScionPacket *packet = CreateScionPacket (payload, payload_type, src_ia, src_addr, 0, path);
-  packet->path_reversed = true;
-  packet->curr_inf = path.size () - 1;
-  packet->cur_hopf = path.at (packet->curr_inf)->hops.size () - 1;
-  SendScionPacket (packet);
-  // std::cout << "[host] Sent response to probe from " << src_ia << ":" << src_addr << std::endl;
 }
 
 void
@@ -744,6 +703,12 @@ void
 ScionHost::ReceiveAppResp (AppResp app_resp)
 {
   apps.at (app_resp.app_id)->ReceiveAppResponse (app_resp);
+}
+
+void
+ScionHost::ReceiveScmp (Scmp scmp)
+{
+  apps.at (scmp.app_id)->ReceiveScmp (scmp);
 }
 
 void

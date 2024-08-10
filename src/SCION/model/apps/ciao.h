@@ -44,7 +44,7 @@ struct PathMetric
   app_packet_id_t seq_no_ack = 0; // Highest acked package
   double latency = 0; // observed latency, in µs
   double bottleneck_share = 0; // estimated fair share in Gbps
-  double bottleneck_no_flows = 0; // number of flows at the bottleneck link
+  double bottleneck_num_flows = 0; // number of flows at the bottleneck link
   double loss = 0; // estimated loss fraction
   double sendrate = 0; // current send rate
 
@@ -52,8 +52,10 @@ struct PathMetric
   double in_flight_bytes = 0;
 
   Time probed_last = Seconds (0); // time the last probe was sent
-  AppProbe last_probe_result;
+  BottleneckProbe last_probe_echo; // last probe response
+  Time last_probe_echo_time = Seconds (0);
   bool HasFreshProbeResultsSince (Time t);
+  Time last_ciao_congestion_alert = Seconds (0); // Last time we received a C-CA
 
   app_packet_id_t probe_seq_no = 0; // probe packet seq_no
 
@@ -100,19 +102,22 @@ protected:
   bool cfgPathSwitching = true;
 
   PathChangeStrategy path_change_strategy = PathChangeStrategy::TRANSITION;
-  PathTransitionStrategy path_transition_strategy = PathTransitionStrategy::CUBIC;
+  PathTransitionStrategy path_transition_strategy = PathTransitionStrategy::SIGMOID;
 
   // How much better a path must be before we consider switching to it
   double path_change_margin = 1.5;
 
   // How long we wait before switching paths again
-  const Time path_switch_min_interval = Seconds (10);
+  Time path_switch_min_interval = Seconds (10);
 
   // How long a path needs to be a candidate before we select it
-  const Time path_switch_min_candidacy = Seconds (5);
+  Time path_switch_min_candidacy = Seconds (5);
 
   // Time since last report before we consider a path dead
   const Time path_alive_treshold = Seconds (1);
+
+  // Time after which we consider a C-CA stale
+  Time ciao_congestion_alert_timeout = Seconds (5);
 
   uint32_t num_paths;
   app_path_id_t active_path;
@@ -123,7 +128,7 @@ protected:
   // Store app timeseries data for evaluation
   std::vector<RTCAppMetric> app_metrics;
 
-  std::map<app_packet_id_t, AppProbe> in_flight_probes;
+  std::map<app_packet_id_t, BottleneckProbe> in_flight_probes;
 
   const uint16_t fps = 30;
   const Time frame_interval = Seconds (1.0 / fps); // how much time between frames
@@ -151,6 +156,7 @@ protected:
   Time last_path_change = Seconds (0);
   Time last_A_r_update = Seconds (0);
 
+  Time update_interval = Seconds (0.25);
   Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 3; // How many paths to probe at the same time
   app_packet_id_t probe_id = 0; // Identifies a probe, not the packet though, that is probe_seq_no
@@ -159,8 +165,8 @@ protected:
 
 public:
   CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
-          host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
-          uint32_t runtime_config);
+           host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
+           uint32_t runtime_config);
 
   void StartAppTraffic ();
 
@@ -170,12 +176,14 @@ public:
 
   void SendProbes ();
 
+  void Update ();
+
   /**
    * Returns a list of path indexes that are candidates for probing.
   */
   std::vector<app_path_id_t> FindProbeCandidates ();
 
-  void ProbePath (app_path_id_t path_id);
+  void SendProbeOnPath (app_path_id_t path_id);
 
   void ScheduleSend ();
 
@@ -185,9 +193,9 @@ public:
 
   void ReceiveAppResponse (AppResp app_resp);
 
-  void ReceiveProbeResponse (AppProbe probe_resp);
+  void ReceiveProbeResponse (Scmp scmp, BottleneckProbe probe_resp);
 
-  void ReceiveScmp (ScmpReqOrResp scmp);
+  void ReceiveScmp (Scmp scmp);
 
   void UpdatePathCandidates ();
 
@@ -196,6 +204,10 @@ public:
   void EndPathTransition ();
 
   void UpdateBWE ();
+
+  void ScheduleControllerProcessInterval (Time &process_interval);
+
+  void OnNetworkControlUpdate (webrtc::NetworkControlUpdate &update);
 
   /**
    * @brief Get a webrtc timestamp of the current ns3 time

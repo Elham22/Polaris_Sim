@@ -99,18 +99,18 @@ protected:
 
     if (loss > 0)
       {
-        std::cout << GetLogPrefix () << "Loss: " << loss << std::endl;
-        std::cout << GetLogPrefix () << "Should have packets from seq no " << seq_no_min << " to "
-                  << seq_no_max << std::endl;
+        // std::cout << GetLogPrefix () << "Loss: " << loss << std::endl;
+        // std::cout << GetLogPrefix () << "Should have packets from seq no " << seq_no_min << " to "
+                  // << seq_no_max << std::endl;
         // Log missing packets
         for (std::size_t i = 1; i < packet_history.size (); i++)
           {
             auto delta = packet_history[i].seq_no - packet_history[i - 1].seq_no;
             if (delta > 1)
               {
-                std::cout << GetLogPrefix () << "Missing packets between "
-                          << packet_history[i - 1].seq_no << " and " << packet_history[i].seq_no
-                          << std::endl;
+                // std::cout << GetLogPrefix () << "Missing packets between "
+                          // << packet_history[i - 1].seq_no << " and " << packet_history[i].seq_no
+                          // << std::endl;
               }
           }
       }
@@ -157,7 +157,7 @@ public:
   SetWindow (Time window)
   {
     history_window = window + MilliSeconds (100);
-    std::cout << GetLogPrefix () << "Set window to " << history_window.GetSeconds () << std::endl;
+    // std::cout << GetLogPrefix () << "Set window to " << history_window.GetSeconds () << std::endl;
   }
 
   void

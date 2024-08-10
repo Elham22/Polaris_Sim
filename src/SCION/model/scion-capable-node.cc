@@ -68,7 +68,6 @@ ScionCapableNode::Receive (uint16_t local_if, ScionPacket *packet)
     }
   Simulator::Schedule (delay, &ScionCapableNode::ProcessReceivedPacket, this, local_if, packet,
                        local_time);
-  // TODO: Should probaby implement dropping here as well, as currently it's only done when send buffer is full
 }
 
 void
@@ -101,7 +100,7 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
                 << std::endl;
     }*/
 
-  // store and update the arrival time of data packets in the map based on their app id
+  // Store and update the arrival time of data packets in the map based on their app id
   // we use this to estimate the number of flows based on active app ids
   if (packet->payload_type == PayloadType::APPLICATION_DATA)
     {
@@ -111,95 +110,28 @@ ScionCapableNode::ScheduleForSend (uint16_t local_if, ScionPacket *packet)
 
   auto new_size = transmission_queues_lengths.at (local_if) + packet->size;
   if (new_size > max_transmission_queues_lengths.at (local_if) &&
-      packet->payload_type != PayloadType::SCMP &&
-      packet->payload_type != PayloadType::QOS_PROBE_REQ &&
-      packet->payload_type != PayloadType::QOS_PROBE_RESP &&
-      packet->payload_type != PayloadType::APPLICATION_RESP)
+      packet->payload_type == PayloadType::APPLICATION_DATA)
     {
       /*std::cout << local_time.ToDouble (Time::Unit::S) << ": Node " << isd_number << ":" << as_number << ":" << local_address << ", dropping packet "
                 << packet->id << ", type " << packet->payload_type << " size " << packet->size << ", if " << local_if << ", queue length: " 
                 << new_size << "/" << max_transmission_queues_lengths.at (local_if) << std::endl;*/
       // TODO some packets are never dropped to make their transmission reliable. Handling loss of these packets should be implemented later.
-      /*if (as_number == 0 && local_address == 0)
-        {
-          std::cout << "Drop packet type " << packet->payload_type << " size " << packet->size << std::endl;
-        }*/
       current_loss_bytes.at (local_if) += packet->size;
       lost_packets.at (local_if) += 1;
 
-      // if (ia_addr == packet->src_ia && local_address == packet->src_host)
-      //   {
-      //     // We're overloading our own send buffer. Can't exactly send "back" an SCMP for this.
-      //     // TODO: Should probably signal the application somehow.
-      //   }
-      // else
-      //   // TODO: When / how often do we return an SCMP packet when dropping?
-      //   // Sending one for every dropped packet is clearly not the solution, but
-      //   // we also cannot keep too much state
-      //   if (std::rand () % 5)
-      //     {
-      //       ScmpReqOrResp scmp;
-      //       scmp.type = LINK_CONGESTED;
-      //       scmp.code = 1;
-      //       ReturnSCMPResponse (packet, scmp);
-      //     }
-
-      std::string app_id = "";
-      if (packet->payload_type == PayloadType::APPLICATION_DATA)
+      if (false) // TODO(wickip): When? How often? Do we keep state?
         {
-          app_id = std::to_string (std::get<AppData> (packet->payload).app_id);
+          ReturnCongestionAlert (packet, local_if);
         }
-
-      std::cout << GetLogPrefix () << "Dropping packet of type " << packet->payload_type << " size "
-                << packet->size << " on interface " << local_if
-                << " due to congestion: " << new_size << "/"
-                << max_transmission_queues_lengths.at (local_if) << " app_id: " << app_id
-                << std::endl;
-      Drop (packet);
+      else
+        {
+          Drop (packet);
+        }
       return;
     }
-
-  if (packet->ecn_capable && new_size > max_transmission_queues_lengths.at (local_if) / 2)
+  else if (packet->ecn_capable && new_size > max_transmission_queues_lengths.at (local_if) / 2)
     {
-
-      // NOTE: Here, tagging packets could be done probabilistically. 'ecn'
-      // could also be more than just binary, e.g., indicate queue fullness factor
       packet->ecn = 1;
-    }
-
-  // Handle bandwidth probe packets
-  if (packet->dst_ia != ia_addr && dynamic_cast<BorderRouter *> (this) &&
-      packet->payload_type == PayloadType::APPLICATION_PROBE)
-    {
-      AppProbe *probe = std::get_if<AppProbe>(&packet->payload);
-      if (probe->type == AppProbeType::BANDWIDTH)
-        {
-          int64_t transmission_delay = transmission_delays.at (local_if).ToInteger (Time::Unit::PS);
-          if (transmission_delay <= 0)
-            {
-              std::cout << "Warning: Link capacity was not defined." << std::endl;
-              transmission_delay = 20;
-            }
-          auto total_bw = 8000.0 / transmission_delay; // in Gbps
-          // Assume one extra flow for the probe because we want to know the would-be fair share if
-          // the probing application was to send a flow through this link as well
-          // TODO: this could pose a problem when probe goes through link where probing app has an active flow (paths share links)
-          auto available_fair_share = total_bw / (no_flows.at (local_if) + 1.0);
-          // std::cout << "host fair share: " << total_bw << " / " << no_flows.at (local_if) + 1.0 << " = " << available_fair_share << std::endl;
-          if (available_fair_share < probe->bottleneck_share)
-            {
-              probe->bottleneck_share = available_fair_share;
-              probe->bottleneck_hop =
-                  packet->path.at (packet->curr_inf)->hops.at (packet->cur_hopf);
-              probe->bottleneck_share_no_flows = no_flows.at (local_if) + 1;
-            }
-          uint64_t queuing_delay = transmission_queues_lengths.at (local_if) /
-                                   transmission_delays.at (local_if).ToInteger (Time::Unit::PS);
-          if (queuing_delay > probe->max_queuing_delay)
-            {
-              probe->max_queuing_delay = queuing_delay;
-            }
-        }
     }
 
   transmission_queues_lengths.at (local_if) = new_size;
@@ -233,6 +165,14 @@ void
 ScionCapableNode::Drop (ScionPacket *packet)
 {
   NS_LOG_FUNCTION (packet);
+
+  // auto app_id = packet->payload_type == PayloadType::APPLICATION_DATA
+  //                   ? std::get<AppData> (packet->payload).app_id
+  //                   : "";
+  // std::cout << GetLogPrefix () << "Dropping packet of type " << packet->payload_type << " size "
+  //           << packet->size << " on interface " << local_if << " due to congestion: " << new_size
+  //           << "/" << max_transmission_queues_lengths.at (local_if) << " app_id: " << app_id
+  //           << std::endl;
   packet->packet_originator->DestroyScionPacket (packet);
 }
 
@@ -310,7 +250,7 @@ ScionCapableNode::InitializeTransmissionQueues ()
   estimated_throughput.resize (n_devices);
   predicted_new_throughput.resize (n_devices);
   arrived_packets.resize (n_devices);
-  no_flows.resize (n_devices);
+  estimated_num_flows.resize (n_devices);
   lost_packets.resize (n_devices);
   estimated_packetloss.resize (n_devices);
   estimated_no_flows.resize (n_devices);
@@ -461,18 +401,51 @@ ScionCapableNode::CreateScionPacket (const Payload &payload, PayloadType payload
 }
 
 void
-ScionCapableNode::ReturnSCMPResponse (ScionPacket *src_packet, ScmpReqOrResp resp)
+ScionCapableNode::ReturnCongestionAlert (ScionPacket *src_packet, uint16_t local_if)
 {
-  Payload payload = ScmpReqOrResp (resp);
+  CongestionAlert alert;
+  alert.interface_id = local_if;
+  alert.ia = ia_addr;
 
-  ScionPacket *packet =
-      CreateScionPacket (payload, PayloadType::SCMP, src_packet->src_ia, src_packet->src_host,
-                         sizeof (ScmpReqOrResp), src_packet->path, src_packet->shortcut_hopfs);
-  packet->path_reversed = !src_packet->path_reversed;
-  packet->cur_hopf = src_packet->cur_hopf;
-  packet->curr_inf = src_packet->curr_inf;
+  uint32_t app_id;
+  uint32_t path_id;
+  uint16_t ca_code; // 1 for probes, 2 for data packets
 
-  SendScionPacket (packet);
+  if (src_packet->payload_type == PayloadType::SCMP &&
+      std::get<Scmp> (src_packet->payload).type == PROBE)
+    {
+      ca_code = 1;
+      Scmp scmp = std::get<Scmp> (src_packet->payload);
+      BottleneckProbe probe = std::get<BottleneckProbe> (scmp.data);
+      app_id = scmp.app_id;
+      path_id = scmp.path_id;
+
+      // When C-CA is a response to a probe, copy the fields
+      alert.seq_no = probe.seq_no;
+      alert.id = probe.id;
+    }
+  else if (src_packet->payload_type == PayloadType::APPLICATION_DATA)
+    {
+      ca_code = 2;
+      AppData data = std::get<AppData> (src_packet->payload);
+      app_id = data.app_id;
+      path_id = data.path_id;
+    }
+  else
+    {
+      src_packet->packet_originator->DestroyScionPacket (src_packet);
+      return; // Only respond with C-CA to known types
+    }
+
+  // Re-use the existing packet and return to sender
+  src_packet->payload = Scmp{.type = CONGESTION_ALERT,
+                             .code = ca_code,
+                             .data = alert,
+                             .app_id = app_id,
+                             .path_id = path_id};
+  src_packet->payload_type = PayloadType::SCMP;
+
+  ReturnScionPacket (src_packet);
 }
 
 void
@@ -561,7 +534,7 @@ ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
         }
       //std::cout << "Lost / arrived " << lost_packets.at (local_if) << "/" << arrived_packets.at (local_if) << std::endl;
 
-      estimated_no_flows.at (local_if).push_back (no_flows.at (local_if));
+      estimated_no_flows.at (local_if).push_back (estimated_num_flows.at (local_if));
 
       // remove all the app ids that have not been seen for a while
       auto app_id_last_seen_local = app_id_last_seen.at (local_if);
@@ -582,15 +555,15 @@ ScionCapableNode::UpdateInterfaceEstimation (uint16_t local_if)
         }
       app_id_last_seen.at (local_if) = app_id_last_seen_local;
 
-      if (no_flows.at (local_if) != app_id_last_seen_local.size ())
+      if (estimated_num_flows.at (local_if) != app_id_last_seen_local.size ())
         {
 
           std::cout << GetLogPrefix () << "New estimated number of flows at local iface "
                     << local_if << ": " << app_id_last_seen_local.size ()
-                    << " (before: " << no_flows.at (local_if) << ")" << std::endl;
+                    << " (before: " << estimated_num_flows.at (local_if) << ")" << std::endl;
         }
       // now the estimated number of flows is simply how many app ids we have seen in the last period
-      no_flows.at (local_if) = app_id_last_seen_local.size ();
+      estimated_num_flows.at (local_if) = app_id_last_seen_local.size ();
 
       // reset the counters
       current_loss_bytes.at (local_if) = 0;

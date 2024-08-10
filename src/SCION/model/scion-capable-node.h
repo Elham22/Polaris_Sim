@@ -110,7 +110,7 @@ protected:
   std::vector<uint64_t> current_loss_bytes;
   std::vector<uint64_t> arrived_packets;
   std::vector<uint64_t> lost_packets;
-  std::vector<uint64_t> no_flows; // the estimated number of active flows on each link
+  std::vector<uint64_t> estimated_num_flows; // the estimated number of active flows on each link
   std::vector<Time> last_update;
   std::vector<std::vector<uint64_t>> estimated_throughput; // throughput of arriving bytes
   std::vector<std::vector<uint64_t>> predicted_new_throughput;
@@ -147,7 +147,7 @@ protected:
       const std::vector<uint8_t> &shortcut_hopfs = std::vector<uint8_t> ());
 
   void ReturnScionPacket (ScionPacket *packet);
-  void ReturnSCMPResponse (ScionPacket *packet, ScmpReqOrResp resp);
+  void ReturnCongestionAlert (ScionPacket *packet, uint16_t local_if);
   void PrintPath (std::vector<const PathSegment *> the_path);
 };
 } // namespace ns3

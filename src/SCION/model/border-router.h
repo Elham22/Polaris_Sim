@@ -47,8 +47,7 @@ public:
 
 private:
   void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time receive_time) override;
-  void ProcessQosProbeReq (uint16_t local_if, ScionPacket *packet, bool isDestinationAS,
-                           uint16_t as_if_to_send, uint16_t old_hopf, uint16_t old_inf);
+  void UpdateCiaoProbe (ScionPacket *packet, uint16_t local_if);
 };
 } // namespace ns3
 #endif //SCION_SIMULATOR_BORDER_ROUTER_H

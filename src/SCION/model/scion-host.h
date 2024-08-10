@@ -107,11 +107,10 @@ protected:
                              ProbeResp probe_resp); // TODO score is just a placeholder
   void ReceiveAppData (ScionPacket *packet, AppData *data);
   void ReceiveAppResp (AppResp app_resp);
+  void ReceiveScmp (Scmp scmp);
   void SendAppResp (app_connection_key_t key);
   void SendREMB (app_connection_key_t key);
   void CheckConnectionTimeout(app_connection_key_t key);
-  void ReturnAppProbe (ia_t src_ia, host_addr_t src_addr,
-                          std::vector<const ns3::PathSegment *> path, AppProbe app_probe);
 };
 } // namespace ns3
 
