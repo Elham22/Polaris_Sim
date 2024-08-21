@@ -56,6 +56,7 @@ def main():
         return
     
     # Run the build command
+    print("Running waf build...")
     build_result = subprocess.run(["python3.11", "./waf", "build"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if build_result.returncode != 0:
         print("Build failed. Exiting.")
@@ -74,7 +75,7 @@ def main():
     completed_scenarios = 0
 
     try:
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=12) as executor:
             futures = [
                 executor.submit(run_scenario, scenario_json_path, deepcopy(config), scen, total_scenarios)
                 for scen, scenario_json_path in enumerate(scenario_jsons, start=1)

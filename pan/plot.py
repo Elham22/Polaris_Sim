@@ -61,7 +61,8 @@ def _generate_cache_filename(files: list[str]) -> str:
     - cache_filename: Generated cache filename.
     """
     # Create a unique key based on the input parameters
-    key = (tuple(files))
+    key = tuple([os.path.basename(file) for file in sorted(files)])
+
     # Generate a hash of the key
     key_hash = hashlib.md5(str(key).encode()).hexdigest()
     # Create a filename using the hash
@@ -545,6 +546,8 @@ def process_multi_scenario(scenarios: list[dict]):
 
     # Clean up keys again, in case we didn't use the usual types
     global_results = {k: v for k, v in global_results.items() if v}
+
+    gc.collect()
     return global_results
 
 
@@ -597,6 +600,9 @@ def plot_multi_scenario(global_results: dict) -> None:
                        whiskerprops=dict(color=color), capprops=dict(color=color))
 
             ax.plot([], label=flow_type, color=color, marker=marker, markersize=8, linewidth=2)
+
+            print(f"\n{flow_type}")
+            print([(n, float(np.median(data[i]))) for i, n in enumerate(num_flows)])
 
             if args.latex:
                 latex_boxplot(data[num_flows_for_boxplot], label=flow_type)
@@ -763,7 +769,7 @@ def parse_simulation_results(file, inputs: dict) -> dict:
     settings = {}
     time_slots = {}
 
-    if inputs is not None:
+    if inputs is not None and 'applications' in inputs:
         # Copy traffic type (target or background) from input file, because
         # simulation is unaware of it, and so is its output
         for app, app_input in zip(
@@ -866,7 +872,7 @@ def main():
     else:
         paths.append(args.filepath)
 
-    print(f"Found {len(paths)} files")
+    print(f"Found files of {len(paths)} simulations")
 
     if len(paths) == 1:
         scenarios = parse(paths)
@@ -877,12 +883,12 @@ def main():
         if args.no_cache or not os.path.exists(cache_filepath):
             scenarios = parse(paths)
             global_results = process_multi_scenario(scenarios)
-            print(f"Caching results to {cache_filepath}")
+            print(f"Caching pre-processed results to {cache_filepath}")
             with open(cache_filepath, 'wb') as f:
                 pickle.dump(global_results, f)
 
         else:
-            print(f"Loading cached results from {cache_filepath}")
+            print(f"Loading pre-processed results from cache {cache_filepath}")
             with open(cache_filepath, 'rb') as f:
                 global_results = pickle.load(f)
         plot_multi_scenario(global_results)
