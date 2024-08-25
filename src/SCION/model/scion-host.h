@@ -47,7 +47,7 @@ struct ConnectionInfo
   uint64_t bytes_received = 0;
   int64_t aggregated_latencies = 0;
   uint16_t ecn = 0;
-  Time last_update = Seconds(0);
+  Time last_update = Seconds (0);
   std::shared_ptr<PacketsReport> report;
 };
 
@@ -78,8 +78,8 @@ protected:
   cached_path_segs_dataset_t cached_core_path_segments;
   cached_path_segs_dataset_t cached_down_path_segments;
 
-  Time max_report_interval = MilliSeconds(50); // max time between reports
-  Time connection_timeout = MilliSeconds(1000); // time after which a connection is considered dead
+  Time max_report_interval = MilliSeconds (50); // max time between reports
+  Time connection_timeout = MilliSeconds (1000); // time after which a connection is considered dead
   std::map<std::tuple<ia_t, host_addr_t, int, app_id_t>, ConnectionInfo> connection_infos;
 
   virtual void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet,
@@ -110,7 +110,7 @@ protected:
   void ReceiveScmp (Scmp scmp);
   void SendAppResp (app_connection_key_t key);
   void SendREMB (app_connection_key_t key);
-  void CheckConnectionTimeout(app_connection_key_t key);
+  void CheckConnectionTimeout (app_connection_key_t key);
 };
 } // namespace ns3
 

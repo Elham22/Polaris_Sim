@@ -150,6 +150,16 @@ BorderRouter::ProcessReceivedPacket (uint16_t if_rcv, ScionPacket *packet, Time 
       UpdateCiaoProbe (packet, local_if_to_send);
     }
 
+  // // NOTE: Quick and dirty way demonstrate bandwidth squeezing using congestion alerts
+  // if (as_number == 0 && as_if_to_send == 1 && packet->payload_type == PayloadType::SCMP)
+  //   {
+  //     if (local_time > Seconds (1950.0) && local_time < Seconds (2100.0))
+  //       {
+  //         ReturnCongestionAlert (packet, as_if_to_send);
+  //         return;
+  //       }
+  //   }
+
   ScheduleForSend (local_if_to_send, packet);
 }
 
