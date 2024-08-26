@@ -57,6 +57,30 @@ struct PacketRecord
 };
 
 /**
+ * Comparator for PacketRecord based on receive time
+ */
+struct CompareByReceiveTime
+{
+  bool
+  operator() (const PacketRecord &a, const PacketRecord &b)
+  {
+    return a.time_received > b.time_received;
+  }
+};
+
+/**
+ * Comparator for PacketRecord based on sequence number
+ */
+struct CompareBySequenceNumber
+{
+  bool
+  operator() (const PacketRecord &a, const PacketRecord &b)
+  {
+    return a.seq_no < b.seq_no;
+  }
+};
+
+/**
  * Report of packets received by the receiver
  */
 struct PacketsReport

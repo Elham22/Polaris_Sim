@@ -76,6 +76,8 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
       path_metrics.push_back (metric);
     }
 
+  metrics = TrafficMetrics (cfgLogging);
+
   webrtc::GoogCcFactoryConfig factory_config;
   factory_config.feedback_only = true;
   factory_config.network_state_estimator_factory = nullptr;
@@ -154,13 +156,16 @@ CiaoApp::RecordMetrics ()
 
   auto metric = path_metrics[active_path];
 
+  (void) metrics.UpdateStatistics ();
+  metrics.sendrate = target_sendrate;
+
   // Capture current state of the app
   RTCAppMetric state;
   state.timestamp = Simulator::Now ();
   state.active_path = active_path;
   state.sendrate = target_sendrate;
   state.latency = metric.latency;
-  state.loss = loss_based_estimator.GetLoss ();
+  state.loss = metrics.GetFractionLoss ();
   state.A_s = A_s;
   state.A_r = A_r;
   state.bottleneck_share = metric.bottleneck_share;
@@ -472,26 +477,38 @@ CiaoApp::SendFrameData (double sendrate, app_path_id_t path)
 void
 CiaoApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_path_id_t path)
 {
-  AppData app_data;
-  app_data.app_id = app_id;
-  app_data.path_id = path;
-  app_data.seq_no = path_metrics[path].seq_no++;
-  app_data.frame_no = frame_no;
-  app_data.timestamp = Simulator::Now ().ToInteger (Time::Unit::US);
-  Payload payload = app_data;
+  AppData data{
+      .app_id = app_id,
+      .path_id = path,
+      .seq_no = path_metrics[path].seq_no++,
+      .frame_no = frame_no,
+      .timestamp = Simulator::Now ().ToInteger (Time::Unit::US),
+  };
+  Payload payload = data;
   PayloadType payload_type = PayloadType::APPLICATION_DATA;
   host->SendAppPacket (this, payload, payload_type, payload_bytes, paths[path]);
   Log ("Sending packet with frame_no " + std::to_string (frame_no) + " and seq_no " +
-       std::to_string (app_data.seq_no) + " on path " + std::to_string (path));
+       std::to_string (data.seq_no) + " on path " + std::to_string (path));
+
+  double scion_pkt_total_bytes = payload_bytes + scion_header_bytes;
+
+  PacketRecord record{
+      .time_sent = Simulator::Now (),
+      .time_received = Time::Min (),
+      .seq_no = data.seq_no,
+      .frame_no = frame_no,
+      .size = static_cast<uint16_t> (scion_pkt_total_bytes),
+  };
+
+  (void) metrics.OnSentPacket (record);
 
   // Track in-flight packets for congestion controller on active path
   if (path == active_path)
     {
       webrtc::SentPacket sent_packet;
-      sent_packet.sequence_number = app_data.seq_no;
+      sent_packet.sequence_number = data.seq_no;
       sent_packet.send_time = TimestampNow ();
 
-      double scion_pkt_total_bytes = payload_bytes + scion_header_bytes;
       path_metrics[path].in_flight_bytes += scion_pkt_total_bytes;
       total_bytes_sent += scion_pkt_total_bytes;
 
@@ -514,8 +531,9 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
 
   if (path_id != active_path)
     {
-      Log ("Receiving response on inactive (old) path: " + std::to_string (path_id));
-
+      Log ("Receiving response on inactive (old) path: " + std::to_string (path_id) +
+           " with sequence numbers " + std::to_string (report->packets.front ().seq_no) + " to " +
+           std::to_string (report->packets.back ().seq_no));
       // Don't process responses on inactive paths
       return;
     }
@@ -534,20 +552,12 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
   Time send_delay = report->packets.back ().time_received - report->packets.back ().time_sent;
   Time receive_delay = Simulator::Now () - MicroSeconds (app_resp.timestamp);
   round_trip_time = send_delay + receive_delay;
-  delay_based_estimator.SetRoundTripTime (round_trip_time);
-  loss_based_estimator.SetRoundTripTime (round_trip_time);
 
-  if (app_resp.loss < 0)
-    {
-      Log ("WARN: Loss <0 detected");
-      app_resp.loss = 0;
-    }
-  path_metrics[path_id].loss = app_resp.loss;
+  metrics.OnReceivedPackets (report->packets);
 
-  loss_based_estimator.FeedReport (report);
+  // loss_based_estimator.FeedReport (report);
   // delay_based_estimator.FeedReport (report);
-
-  path_metrics[path_id].loss = loss_based_estimator.GetLoss ();
+  // path_metrics[path_id].loss = loss_based_estimator.GetLoss ();
 
   // if report empty
   if (report->packets.empty ())
@@ -856,8 +866,8 @@ CiaoApp::SwitchToPath (uint32_t new_path)
 
   double new_rate = path_metrics[new_path].bottleneck_share;
 
-  loss_based_estimator.Reset ();
-  delay_based_estimator.SetPhase (CongestionControlPhase::STARTUP);
+  // loss_based_estimator.Reset ();
+  // delay_based_estimator.SetPhase (CongestionControlPhase::STARTUP);
 
   // Reset candidacy of all paths
   for (size_t i = 0; i < num_paths; i++)
@@ -894,6 +904,7 @@ CiaoApp::SwitchToPath (uint32_t new_path)
   (void) network_controller->OnNetworkRouteChange (route_change);
 }
 
+// Return a WebRTC timestamp with the current simulation time
 webrtc::Timestamp
 CiaoApp::TimestampNow ()
 {

@@ -26,6 +26,7 @@
 #include "src/SCION/model/apps/app.h"
 #include "src/SCION/model/webrtc-cc/delay-based-estimator.cc"
 #include "src/SCION/model/webrtc-cc/loss-based-estimator.cc"
+#include "src/SCION/model/apps/traffic-metrics.h"
 
 #include "modules/congestion_controller/goog_cc/goog_cc_network_control.h"
 #include "api/transport/network_types.h"
@@ -138,6 +139,8 @@ protected:
   CongestionControlPhase phase;
   DelayBasedController delay_based_estimator;
   LossBasedEstimator loss_based_estimator;
+
+  TrafficMetrics metrics;
 
   std::unique_ptr<webrtc::NetworkControllerInterface> network_controller;
 
