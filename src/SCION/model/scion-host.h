@@ -78,7 +78,7 @@ protected:
   cached_path_segs_dataset_t cached_core_path_segments;
   cached_path_segs_dataset_t cached_down_path_segments;
 
-  Time max_report_interval = MilliSeconds (50); // max time between reports
+  Time max_report_interval = MilliSeconds (25); // max time between reports
   Time connection_timeout = MilliSeconds (1000); // time after which a connection is considered dead
   std::map<std::tuple<ia_t, host_addr_t, int, app_id_t>, ConnectionInfo> connection_infos;
 

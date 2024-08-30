@@ -79,6 +79,89 @@ TrafficMetrics::OnReceivedPackets (const std::vector<PacketRecord> &packets)
     }
 }
 
+void
+TrafficMetrics::BufferPackets (const std::vector<PacketRecord> &packets)
+{
+  if (packets.empty ())
+    {
+      return;
+    }
+
+  // Play back all packets that had to have left the buffer by this point
+  EmitFromBuffer ();
+
+  // We maintain the packets in the jitter buffer sorted by sequence number. In most
+  // cases, the packets and the delivery feedback are received in order and we
+  // can just append without sorting
+  bool sorted = true;
+
+  // Reserve enough space before-hand, to avoid reallocations (which would make the prev pointer invalid)
+  jitter_buffer.reserve (jitter_buffer.size () + packets.size ());
+
+  // Accumulate total bytes and at the same time check if we maintain sorted order
+  PacketRecord *prev = jitter_buffer.empty () ? nullptr : &jitter_buffer.back ();
+  for (const auto &packet : packets)
+    {
+      total_bytes_received += packet.size;
+
+      // If seq no is lower than highest in delivered, drop this one
+      if (!delivered_packets.empty () && packet.seq_no < delivered_packets.back ().seq_no)
+        {
+          LOG ("Ignoring packet with seq no "
+               << packet.seq_no << ", arrived too late / too far out of order" << std::endl);
+          continue;
+        }
+
+      LOG ("Adding packet with seq no " << packet.seq_no << " to buffer" << std::endl);
+      jitter_buffer.push_back (packet);
+
+      if (prev && prev->seq_no > packet.seq_no)
+        {
+          sorted = false;
+        }
+
+      prev = &jitter_buffer.back ();
+    }
+
+  // If at any point, we broke the order, sort the vector again
+  if (!sorted)
+    {
+      std::sort (jitter_buffer.begin (), jitter_buffer.end (),
+                 [] (PacketRecord a, PacketRecord b) { return a.seq_no < b.seq_no; });
+    }
+}
+
+// Move packets from buffer to delivered packets
+void
+TrafficMetrics::EmitFromBuffer ()
+{
+
+  // Find the last element in the buffer which is older than the buffer window
+  auto rev_it = std::find_if (jitter_buffer.rbegin (), jitter_buffer.rend (),
+                              [this] (const PacketRecord &packet) {
+                                return Simulator::Now () - packet.time_received > buffer_window;
+                              });
+
+  if (rev_it == jitter_buffer.rend ())
+    {
+      return;
+    }
+
+  // Convert reverse iterator to normal iterator (Note: it now points to the
+  // element after the last one that satisfies the condition)
+  auto it = rev_it.base ();
+
+  // Process packets up to `it`
+  for (auto iter = jitter_buffer.begin (); iter != it; ++iter)
+    {
+      delivered_packets.push_back (*iter);
+      LOG ("Emitting packet with seq no " << iter->seq_no << " from buffer" << std::endl);
+    }
+
+  // Erase processed packets from the jitter buffer
+  jitter_buffer.erase (jitter_buffer.begin (), it);
+}
+
 double
 TrafficMetrics::GetJitterMs ()
 {
@@ -127,16 +210,23 @@ TrafficMetrics::UpdateStatistics ()
 {
   Time now = Simulator::Now ();
 
+  EmitFromBuffer ();
+
+  LOG (":: Updating... " << std::endl);
+
   auto it = std::find_if (delivered_packets.begin (), delivered_packets.end (),
                           [now, this] (const PacketRecord &packet) {
                             return now - packet.time_received <= tracking_window;
                           });
 
-  LOG ("Deleting from sequence number " << delivered_packets.begin ()->seq_no
-                                        << " up to and excluding " << it->seq_no << std::endl);
+  if (it != delivered_packets.end ())
+    {
+      LOG ("Deleting from sequence number " << delivered_packets.begin ()->seq_no
+                                            << " up to and excluding " << it->seq_no << std::endl);
 
-  // Erase packets up to the first one that is still within the tracking window
-  delivered_packets.erase (delivered_packets.begin (), it);
+      // Erase packets up to the first one that is still within the tracking window
+      delivered_packets.erase (delivered_packets.begin (), it);
+    }
 
   // Make sure we have at least some statistics to work with
   if (delivered_packets.size () < 2)

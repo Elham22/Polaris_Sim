@@ -46,8 +46,13 @@ struct TrafficMetrics
   double total_bytes_sent = 0;
   double total_bytes_received = 0;
 
+  // Max duration a packet is buffered before being delivered
+  Time buffer_window = MilliSeconds (100);
+  size_t buffer_max_packets = 100;
+  std::vector<PacketRecord> jitter_buffer;
+
   // Track delivered packets over a certain time window to calculate metrics like loss and jitter
-  Time tracking_window = MilliSeconds (100);
+  Time tracking_window = MilliSeconds (100) + buffer_window;
   Time min_window = MilliSeconds (0);
 
   // Vector to keep track of delivered packets, ordered by sequence numbers
@@ -61,8 +66,10 @@ struct TrafficMetrics
   void OnSentPacket (const PacketRecord &record);
   void TrackNewPacket (const PacketRecord &record);
   void OnReceivedPackets (const std::vector<PacketRecord> &packets);
+  void BufferPackets (const std::vector<PacketRecord> &packets);
   void ClearWindow ();
 
+  void EmitFromBuffer ();
   bool UpdateStatistics ();
   double GetJitterMs ();
   double GetFractionLoss ();

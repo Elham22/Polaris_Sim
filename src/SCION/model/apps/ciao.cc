@@ -480,7 +480,7 @@ CiaoApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_pat
   AppData data{
       .app_id = app_id,
       .path_id = path,
-      .seq_no = path_metrics[path].seq_no++,
+      .seq_no = sequence_number++,
       .frame_no = frame_no,
       .timestamp = Simulator::Now ().ToInteger (Time::Unit::US),
   };
@@ -529,18 +529,23 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
   std::shared_ptr<PacketsReport> report = app_resp.packets_report;
   total_bytes_arrived += report->total_bytes;
 
+  // metrics.OnReceivedPackets (report->packets);
+  metrics.BufferPackets (report->packets);
+
   if (path_id != active_path)
     {
-      Log ("Receiving response on inactive (old) path: " + std::to_string (path_id) +
-           " with sequence numbers " + std::to_string (report->packets.front ().seq_no) + " to " +
-           std::to_string (report->packets.back ().seq_no));
+      Log ("Receiving report on path: " + std::to_string (path_id) +
+           " (inactive) with sequence numbers " + std::to_string (report->packets.front ().seq_no) +
+           " to " + std::to_string (report->packets.back ().seq_no));
       // Don't process responses on inactive paths
       return;
     }
-
-  Log ("Processing report on active path " + std::to_string (path_id) + " with sequence numbers " +
-       std::to_string (report->packets.front ().seq_no) + " to " +
-       std::to_string (report->packets.back ().seq_no));
+  else
+    {
+      Log ("Receiving report on path " + std::to_string (path_id) +
+           " (active) with sequence numbers " + std::to_string (report->packets.front ().seq_no) +
+           " to " + std::to_string (report->packets.back ().seq_no));
+    }
 
   Time resp_time = MicroSeconds (app_resp.timestamp);
   path_metrics[path_id].last_report = resp_time;
@@ -552,8 +557,6 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
   Time send_delay = report->packets.back ().time_received - report->packets.back ().time_sent;
   Time receive_delay = Simulator::Now () - MicroSeconds (app_resp.timestamp);
   round_trip_time = send_delay + receive_delay;
-
-  metrics.OnReceivedPackets (report->packets);
 
   // loss_based_estimator.FeedReport (report);
   // delay_based_estimator.FeedReport (report);

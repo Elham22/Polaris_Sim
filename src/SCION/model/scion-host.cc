@@ -362,7 +362,8 @@ ScionHost::PrintPath (std::vector<const PathSegment *> the_path)
       for (uint64_t const hop : segment->hops)
         {
           std::cout << "-" << GET_HOP_ING_IF (hop) << "->{AS " << GET_HOP_AS (hop) << "}-"
-                    << GET_HOP_EG_IF (hop) << "->" << ", ";
+                    << GET_HOP_EG_IF (hop) << "->"
+                    << ", ";
         }
       std::cout << "], ";
     }
@@ -622,6 +623,19 @@ ScionHost::CheckConnectionTimeout (app_connection_key_t key)
 
   ConnectionInfo *connection = &connection_infos.at (key);
 
+  if (connection->report->Age () > max_report_interval)
+    {
+      if (!connection->report->packets.empty ())
+        {
+          SendAppResp (key);
+        }
+
+      else
+        {
+          // TODO(wickip): We could already end the connection here
+        }
+    }
+
   Time time_since_last_update = local_time - connection->last_update;
   if (time_since_last_update > connection_timeout)
     {
@@ -637,7 +651,7 @@ ScionHost::CheckConnectionTimeout (app_connection_key_t key)
       return;
     }
 
-  Simulator::Schedule (connection_timeout, &ScionHost::CheckConnectionTimeout, this, key);
+  Simulator::Schedule (max_report_interval, &ScionHost::CheckConnectionTimeout, this, key);
 }
 
 void

@@ -134,6 +134,7 @@ protected:
   const uint16_t fps = 30;
   const Time frame_interval = Seconds (1.0 / fps); // how much time between frames
   uint32_t frame_no = 0; // number of the video frame
+  uint32_t sequence_number = 0;
 
   Time round_trip_time = Seconds (0);
   CongestionControlPhase phase;
