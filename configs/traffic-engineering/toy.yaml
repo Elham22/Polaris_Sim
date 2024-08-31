@@ -19,7 +19,7 @@ border_router:
 end_user:
   number_per_as: 1
 post_eval:
-  - func: PrintAllDiscoveredPaths
+  # - func: PrintAllDiscoveredPaths
   - func: PrintHostApps
-  - func: PrintLinkStatistics
-  - func: PrintAppPathInfo
+  # - func: PrintLinkStatistics
+  # - func: PrintAppPathInfo

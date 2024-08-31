@@ -1,0 +1,42 @@
+{
+  "applications": [
+    {
+      "app_id": 0,
+      "path_switching": true,
+      "start_path": 0
+    },
+    {
+      "app_id": 1,
+      "path_switching": false,
+      "start_path": 0
+    },
+    {
+      "app_id": 2,
+      "path_switching": false,
+      "start_path": 0
+    },
+    {
+      "app_id": 3,
+      "path_switching": false,
+      "start_path": 0
+    }
+  ],
+  "events":
+    [
+      {
+        "time": "31.31min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "2", "2", "rtc", "0.0", "0", "0"]
+      },
+      {
+        "time": "30.36min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "2", "2", "rtc", "0.0", "1", "0"]
+      },
+      {
+        "time": "30.00min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "2", "2", "TcpCubic", "0.0", "2", "0"]
+      }
+    ]
+}

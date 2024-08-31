@@ -1,24 +1,60 @@
-{"events":
+{
+  "applications": [
+    {
+      "app_id": 0,
+      "path_switching": true,
+      "path_shifting": false
+    },
+    {
+      "app_id": 1,
+      "path_switching": true,
+      "logging": true,
+      "path_shifting": false
+    },
+    {
+      "app_id": 2,
+      "path_switching": true,
+      "path_shifting": false
+    },
+    {
+      "app_id": 3,
+      "path_switching": true,
+      "path_shifting": false
+    },
+    {
+      "app_id": 4,
+      "path_switching": true,
+      "path_shifting": false
+    }
+  ], 
+  
+  
+  "events":
 [
   {
     "time": "30min",
     "type": "start_application",
-    "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "0", "0"]
+    "args": ["0", "1", "2", "0", "0", "2", "rtc", "0.0", "0", "0"]
   },
   {
-    "time": "30min",
+    "time": "30.03min",
     "type": "start_application",
-    "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "0", "0"]
+    "args": ["0", "1", "2", "0", "0", "2", "rtc", "0.0", "1", "0"]
   },
   {
-    "time": "31min",
+    "time": "30.05min",
     "type": "start_application",
-    "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "0", "0"]
+    "args": ["0", "1", "2", "0", "0", "2", "rtc", "0.0", "2", "0"]
   },
   {
-    "time": "31min",
+    "time": "30.07min",
     "type": "start_application",
-    "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "0", "0"]
+    "args": ["0", "1", "2", "0", "0", "2", "rtc", "0.0", "3", "0"]
+  },
+  {
+    "time": "30.08min",
+    "type": "start_application",
+    "args": ["0", "1", "2", "0", "0", "2", "rtc", "0.0", "4", "0"]
   }
 ]
 }
