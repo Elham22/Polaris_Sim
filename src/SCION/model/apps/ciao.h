@@ -65,24 +65,6 @@ struct PathMetric
   bool is_candidate = false;
 };
 
-/**
- * @brief Struct to store application state for visualization
- */
-struct RTCAppMetric
-{
-  Time timestamp;
-  double sendrate = 0;
-  double oldrate = 0;
-  double newrate = 0;
-  bool in_transition = false;
-  double A_s = 0;
-  double A_r = 0;
-  double bottleneck_share = 0;
-  double latency = 0;
-  double loss = 0;
-  app_path_id_t active_path;
-};
-
 enum class PathChangeStrategy {
   IMMEDIATE, // instantly switch, with hint to congestion controller
   TRANSITION // enter transition phase where manual ramp up the rate
@@ -126,8 +108,10 @@ protected:
 
   // Store information on each candidate path
   std::vector<PathMetric> path_metrics;
-  // Store app timeseries data for evaluation
-  std::vector<RTCAppMetric> app_metrics;
+
+  // JSON to store results for visualization
+  nlohmann::json results_json = nlohmann::json::object ();
+  nlohmann::json results_states = nlohmann::json::array ();
 
   std::map<app_packet_id_t, BottleneckProbe> in_flight_probes;
 
@@ -155,7 +139,7 @@ protected:
 
   bool path_shifting = false; // if enabled, shift gradually between paths
   bool in_path_transition = false;
-  double prev_sendrate = 0;
+  double sendrate_prev_path = 0;
   Time path_transition_end = Seconds (0);
   Time last_path_change = Seconds (0);
   Time last_A_r_update = Seconds (0);

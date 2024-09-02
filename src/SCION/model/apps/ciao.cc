@@ -139,11 +139,12 @@ CiaoApp::RecordMetrics ()
       return;
     }
 
+  uint64_t time_ms = Simulator::Now ().GetMilliSeconds ();
+
   // Assert that time now is a multiple of metrics_interval
-  NS_ASSERT_MSG (Simulator::Now ().GetMilliSeconds () % metrics_interval_ms == 0,
-                 "Time now is not a multiple of metrics_interval: " +
-                     std::to_string (Simulator::Now ().GetMilliSeconds ()) + " % " +
-                     std::to_string (metrics_interval_ms));
+  NS_ASSERT_MSG (time_ms % metrics_interval_ms == 0,
+                 "Time now is not a multiple of metrics_interval: " + std::to_string (time_ms) +
+                     " % " + std::to_string (metrics_interval_ms));
 
   // Schedule the next metrics recording
   Simulator::Schedule (metrics_interval, &CiaoApp::RecordMetrics, this);
@@ -154,42 +155,25 @@ CiaoApp::RecordMetrics ()
       return;
     }
 
-  auto metric = path_metrics[active_path];
-
   (void) metrics.UpdateStatistics ();
-  metrics.sendrate = target_sendrate;
 
-  // Capture current state of the app
-  RTCAppMetric state;
-  state.timestamp = Simulator::Now ();
-  state.active_path = active_path;
-  state.sendrate = target_sendrate;
-  state.latency = metric.latency;
-  state.loss = metrics.GetFractionLoss ();
-  state.A_s = A_s;
-  state.A_r = A_r;
-  state.bottleneck_share = metric.bottleneck_share;
+  nlohmann::json j_state = nlohmann::json::object ();
+  j_state["time"] = time_ms;
+  j_state["sendrate"] = target_sendrate / 1e6;
+  j_state["latency"] = path_metrics[active_path].latency;
+  j_state["loss"] = metrics.GetFractionLoss ();
+  j_state["active_path"] = active_path;
+  j_state["bottleneck_share"] = path_metrics[active_path].bottleneck_share / 1e6;
+  j_state["in_transition"] = in_path_transition;
 
   if (in_path_transition)
     {
-      state.in_transition = true;
-      state.sendrate = path_metrics[previous_path].sendrate + path_metrics[active_path].sendrate;
-      state.oldrate = path_metrics[previous_path].sendrate;
-      state.newrate = path_metrics[active_path].sendrate;
+      j_state["sendrate"] = sendrate_prev_path / 1e6 + target_sendrate / 1e6;
+      j_state["oldrate"] = sendrate_prev_path / 1e6;
+      j_state["newrate"] = target_sendrate / 1e6;
     }
 
-  app_metrics.push_back (state);
-
-  Log ("Current state:");
-  for (uint32_t i = 0; i < num_paths; i++)
-    {
-      std::string prefix = (i == active_path) ? "    -> " : "       ";
-      Log ("    Path " + std::to_string (i) +
-               ", latency [ms]: " + std::to_string (path_metrics[i].latency / 1000.0) +
-               ", loss: " + std::to_string (path_metrics[i].loss) +
-               ", bottleneck_share: " + std::to_string (path_metrics[i].bottleneck_share),
-           false);
-    }
+  results_states.push_back (j_state);
 }
 
 std::vector<app_path_id_t>
@@ -381,7 +365,7 @@ CiaoApp::ScheduleSend ()
 
       NS_ASSERT_MSG (transition_progress >= 0 && transition_progress <= 1,
                      "Transition progress out of bounds: " + std::to_string (transition_progress));
-      NS_ASSERT_MSG (target_sendrate > prev_sendrate,
+      NS_ASSERT_MSG (target_sendrate > sendrate_prev_path,
                      "Target sendrate is not greater than previous sendrate");
 
       double ramp_up_rate = 0;
@@ -421,7 +405,7 @@ CiaoApp::ScheduleSend ()
 
       // Send on the old path with the remaining rate
       double maintenance_rate = target_sendrate - ramp_up_rate;
-      maintenance_rate = std::clamp (maintenance_rate, 0.0, prev_sendrate);
+      maintenance_rate = std::clamp (maintenance_rate, 0.0, sendrate_prev_path);
       // maintenance_rate = 0;
       path_metrics[previous_path].sendrate = maintenance_rate;
       if (maintenance_rate > 0)
@@ -886,10 +870,10 @@ CiaoApp::SwitchToPath (uint32_t new_path)
       Log ("Starting path transition from " + std::to_string (previous_path) + " to " +
            std::to_string (active_path) +
            ", duration: " + std::to_string (duration.GetMilliSeconds ()) + " ms");
-      prev_sendrate = target_sendrate;
+      sendrate_prev_path = target_sendrate;
       target_sendrate = path_metrics[new_path].bottleneck_share;
       path_metrics[new_path].sendrate = 0;
-      path_metrics[previous_path].sendrate = prev_sendrate;
+      path_metrics[previous_path].sendrate = sendrate_prev_path;
       target_sendrate = new_rate;
       in_path_transition = true;
       return;
@@ -937,45 +921,18 @@ CiaoApp::InfoString ()
 void
 CiaoApp::PrintResults ()
 {
-  nlohmann::json j;
-  j["app_id"] = app_id;
-  j["app_type"] = InfoString ();
-  j["src_ia"] = ia_addr;
-  j["dst_ia"] = dst_ia;
-  j["dst_host_addr"] = dst_host_addr;
-  j["bytes_sent"] = total_bytes_sent;
-  j["bytes_received"] = total_bytes_arrived;
+  results_json["app_id"] = app_id;
+  results_json["app_type"] = InfoString ();
+  results_json["src_ia"] = ia_addr;
+  results_json["dst_ia"] = dst_ia;
+  results_json["dst_host_addr"] = dst_host_addr;
+  results_json["bytes_sent"] = total_bytes_sent;
+  results_json["bytes_received"] = total_bytes_arrived;
 
-  nlohmann::json j_states;
-  for (RTCAppMetric state : app_metrics)
-    {
-      nlohmann::json j_state;
-      j_state["time"] = state.timestamp.ToInteger (Time::Unit::MS);
-      j_state["sendrate"] = state.sendrate / 1e6;
-      j_state["latency"] = state.latency / 1000.0;
-      j_state["loss"] = state.loss;
-      j_state["active_path"] = state.active_path;
-      j_state["bottleneck_share"] = state.bottleneck_share / 1e6;
-      j_state["in_transition"] = state.in_transition;
-      j_state["oldrate"] = state.oldrate / 1e6;
-      j_state["newrate"] = state.newrate / 1e6;
-      j_state["A_s"] = state.A_s / 1e6;
-      j_state["A_r"] = state.A_r / 1e6;
-      // j_state["gradient"] = state.controller_state.m;
-      // j_state["threshold_hi"] = state.controller_state.threshold_hi;
-      // j_state["threshold_lo"] = 0; // TODO
-      // j_state["gcc_state"] = state.controller_state.state;
-      // j_state["gcc_signal"] = state.controller_state.signal;
-      // j_state["kalman_gain"] = state.controller_state.kalman_gain;
-      // j_state["variance"] = state.controller_state.variance;
-      // j_state["error"] = state.controller_state.error;
-
-      j_states.push_back (j_state);
-    }
-  j["states"] = j_states;
+  results_json["states"] = results_states;
 
   // Dump JSON into a single line
-  std::cout << j.dump () << std::endl;
+  std::cout << results_json.dump () << std::endl;
 }
 
 bool
