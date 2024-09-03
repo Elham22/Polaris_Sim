@@ -68,15 +68,15 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
                                   ? Seconds (inputs["path_switch_min_candidacy"].get<double> ())
                                   : path_switch_min_candidacy;
 
-  // Initialize path infos
+  // Initialize path states
   num_paths = paths.size ();
   for (uint32_t i = 0; i < num_paths; i++)
     {
-      PathMetric metric;
-      path_metrics.push_back (metric);
+      PathState ps;
+      path_states.push_back (ps);
     }
 
-  metrics = TrafficMetrics (cfgLogging);
+  metrics = ConnectionMetrics (cfgLogging);
 
   webrtc::GoogCcFactoryConfig factory_config;
   factory_config.feedback_only = true;
@@ -113,22 +113,113 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
 void
 CiaoApp::StartAppTraffic ()
 {
+  // Send first probes
+  SendProbes ();
 
-  // Start sending probes and video frames after a random delay, to avoid synchronization
-  // Simulator::Schedule (MilliSeconds (5000) + RandomDelay (4000), &CiaoApp::ScheduleSend, this);
-  // Simulator::Schedule (MilliSeconds (2000) + RandomDelay (1500), &CiaoApp::SendProbes, this);
+  // Initiate main update loop
+  Simulator::Schedule (update_interval, &CiaoApp::Update, this);
 
   ScheduleSend ();
-  SendProbes ();
-  Update ();
 
-  // Record metrics exactly at multiples of metrics_interval absolute simulation time
+  // Record metrics exactly at multiples of metrics_interval absolute simulation time.
+  // This is ensures that timeseries data of all applications is in sync.
   uint64_t sched_abs_time_ms = Simulator::Now ().GetMilliSeconds () + metrics_interval_ms;
   sched_abs_time_ms = std::ceil (sched_abs_time_ms / metrics_interval_ms) * metrics_interval_ms;
   Time sched_rel_time = MilliSeconds (sched_abs_time_ms) - Simulator::Now ();
   std::cout << "Scheduling metrics recording at " << sched_abs_time_ms << " ms" << std::endl;
   std::cout << "Current time: " << Simulator::Now ().GetMilliSeconds () << " ms" << std::endl;
   Simulator::Schedule (sched_rel_time, &CiaoApp::RecordMetrics, this);
+}
+void
+CiaoApp::Update ()
+{
+  if (stopped)
+    {
+      return;
+    }
+
+  // Schedule the next update
+  Simulator::Schedule (update_interval, &CiaoApp::Update, this);
+
+  SendProbes ();
+
+  // TODO: This is still experimental
+  // if (WaitForInitialProbes ())
+  //   {
+  //     return;
+  //   }
+
+  // ScheduleSend ();
+
+  if (cfgPathSwitching && !in_path_transition)
+    {
+      UpdatePathCandidates ();
+    }
+}
+
+bool
+CiaoApp::WaitForInitialProbes ()
+{
+  if (initial_probe_wait_ms <= 0)
+    {
+      return false;
+    }
+
+  std::vector<app_path_id_t> paths_with_results;
+  for (size_t i = 0; i < num_paths; i++)
+    {
+      if (path_states[i].last_probe_echo_time > Seconds (0))
+        {
+          paths_with_results.push_back (i);
+        }
+    }
+
+  if (paths_with_results.size () > probe_simultaneous || paths_with_results.size () == num_paths)
+    {
+      Log ("Received sufficient probe results to start data transmission");
+    }
+  else
+    {
+      initial_probe_wait_ms -= update_interval.GetMilliSeconds ();
+
+      if (initial_probe_wait_ms > 0)
+        {
+          Log ("Still waiting for more probe results to arrive");
+          return true;
+        }
+      else
+        {
+          Log ("Timed out waiting for enough probe results.");
+        }
+    }
+
+  if (paths_with_results.size () == 0)
+    {
+      Log ("No probe results received, selecting path " + std::to_string (active_path));
+      return false;
+    }
+
+  // Find the path with the highest bottleneck share
+  double max_bottleneck_share = 0;
+  for (auto path_id : paths_with_results)
+    {
+      if (path_states[path_id].bottleneck_share > max_bottleneck_share)
+        {
+          max_bottleneck_share = path_states[path_id].bottleneck_share;
+          active_path = path_id;
+        }
+    }
+
+  Log ("Selected path " + std::to_string (active_path) + " with highest bottleneck share");
+  target_sendrate = path_states[active_path].bottleneck_share;
+
+  // Set initial rate
+  webrtc::TargetRateConstraints new_constraints;
+  new_constraints.at_time = TimestampNow ();
+  new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (target_sendrate);
+  (void) network_controller->OnTargetRateConstraints (new_constraints);
+
+  return false;
 }
 
 void
@@ -160,10 +251,10 @@ CiaoApp::RecordMetrics ()
   nlohmann::json j_state = nlohmann::json::object ();
   j_state["time"] = time_ms;
   j_state["sendrate"] = target_sendrate / 1e6;
-  j_state["latency"] = path_metrics[active_path].latency;
+  j_state["latency"] = path_states[active_path].latency;
   j_state["loss"] = metrics.GetFractionLoss ();
   j_state["active_path"] = active_path;
-  j_state["bottleneck_share"] = path_metrics[active_path].bottleneck_share / 1e6;
+  j_state["bottleneck_share"] = path_states[active_path].bottleneck_share / 1e6;
   j_state["in_transition"] = in_path_transition;
 
   if (in_path_transition)
@@ -183,18 +274,18 @@ CiaoApp::FindProbeCandidates ()
   Time probed_last_min = Simulator::Now () - Seconds (1);
   for (uint32_t i = 0; i < num_paths; i++)
     {
-      // // Don't probe active path
-      // if (i == active_path)
-      //   {
-      //     continue;
-      //   }
-      if (path_metrics[i].probed_last < probed_last_min)
+      // Active path is always probed in main update loop
+      if (i == active_path)
+        {
+          continue;
+        }
+      if (path_states[i].last_probe_sent < probed_last_min)
         {
           candidates.clear ();
           candidates.push_back (i);
-          probed_last_min = path_metrics[i].probed_last;
+          probed_last_min = path_states[i].last_probe_sent;
         }
-      else if (path_metrics[i].probed_last == probed_last_min)
+      else if (path_states[i].last_probe_sent == probed_last_min)
         {
           candidates.push_back (i);
         }
@@ -229,7 +320,7 @@ CiaoApp::SendProbeOnPath (app_path_id_t path_id)
   probe.interface_id = -1; // Indicates no results contained yet
   probe.ia = ia_addr;
   probe.id = probe_id++;
-  probe.seq_no = path_metrics[path_id].probe_seq_no++;
+  probe.seq_no = path_states[path_id].probe_seq_no++;
 
   Scmp scmp;
   scmp.type = SCMPType::PROBE;
@@ -237,7 +328,7 @@ CiaoApp::SendProbeOnPath (app_path_id_t path_id)
   scmp.code = 1; // Traffic class, video conferencing
 
   // Technically we'll have to live without these two fields, but there's no
-  // good way around it for now
+  // good way around it for now as there is no implementation of ports
   scmp.app_id = app_id;
   scmp.path_id = path_id;
 
@@ -247,54 +338,19 @@ CiaoApp::SendProbeOnPath (app_path_id_t path_id)
   Payload payload = scmp;
   host->SendAppPacket (this, payload, payload_type, sizeof (Scmp) + sizeof (BottleneckProbe),
                        paths[path_id]);
+  path_states[path_id].last_probe_sent = Simulator::Now ();
 }
 
 void
 CiaoApp::SendProbes ()
 {
-  if (stopped)
-    {
-      return;
-    }
-
   auto candidates = FindProbeCandidates ();
-  if (!candidates.empty ())
+  candidates.push_back (active_path);
+
+  for (app_path_id_t candidate : candidates)
     {
-      Time now = Simulator::Now ();
-      for (app_path_id_t candidate : candidates)
-        // for (app_path_id_t candidate = 0; candidate < num_paths; candidate++) // TODO: remove
-        {
-          SendProbeOnPath (candidate);
-
-          // NOTE: Set probed_last to the exact same time for all candidates
-          // we probe now. This way, when we find candidates in the future
-          // with the oldest probed_last, it's actually likely to find a set,
-          // and not just a single oldest one.
-          path_metrics[candidate].probed_last = now;
-        }
+      SendProbeOnPath (candidate);
     }
-
-  // Schedule the next round of probing
-  Simulator::Schedule (probe_interval +
-                           RandomDelay ((probe_interval / 2).ToInteger (Time::Unit::MS)),
-                       &CiaoApp::SendProbes, this);
-}
-
-void
-CiaoApp::Update ()
-{
-  if (stopped)
-    {
-      return;
-    }
-
-  if (cfgPathSwitching && !in_path_transition)
-    {
-      UpdatePathCandidates ();
-    }
-
-  // Schedule the next update
-  Simulator::Schedule (update_interval, &CiaoApp::Update, this);
 }
 
 void
@@ -312,7 +368,7 @@ CiaoApp::ReceiveScmp (Scmp scmp)
            std::to_string (alert.interface_id));
 
       // TODO(wickip): Do this for all paths that share this bottleneck
-      path_metrics[scmp.path_id].last_ciao_congestion_alert = Simulator::Now ();
+      path_states[scmp.path_id].last_ciao_congestion_alert = Simulator::Now ();
     }
   else
     {
@@ -391,23 +447,24 @@ CiaoApp::ScheduleSend ()
 
       // If a new probe result comes back during the transition with a bottleneck share lower than
       // our ramp-up rate, clamp the rate and finish the transition early
-      if (path_metrics[active_path].bottleneck_share < ramp_up_rate)
+      if (path_states[active_path].bottleneck_share < ramp_up_rate)
         {
-          Log ("Bottleneck share from new probe result lower than ramp-up rate. Exiting transition "
+          Log ("Bottleneck share from new probe result lower than ramp-up rate. Exiting "
+               "transition "
                "early.");
-          ramp_up_rate = path_metrics[active_path].bottleneck_share;
+          ramp_up_rate = path_states[active_path].bottleneck_share;
           target_sendrate = ramp_up_rate;
           EndPathTransition ();
         }
 
-      path_metrics[active_path].sendrate = ramp_up_rate;
+      path_states[active_path].sendrate = ramp_up_rate;
       SendFrameData (ramp_up_rate, active_path);
 
       // Send on the old path with the remaining rate
       double maintenance_rate = target_sendrate - ramp_up_rate;
       maintenance_rate = std::clamp (maintenance_rate, 0.0, sendrate_prev_path);
       // maintenance_rate = 0;
-      path_metrics[previous_path].sendrate = maintenance_rate;
+      path_states[previous_path].sendrate = maintenance_rate;
       if (maintenance_rate > 0)
         {
           SendFrameData (maintenance_rate, previous_path);
@@ -493,13 +550,13 @@ CiaoApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_pat
       sent_packet.sequence_number = data.seq_no;
       sent_packet.send_time = TimestampNow ();
 
-      path_metrics[path].in_flight_bytes += scion_pkt_total_bytes;
+      path_states[path].in_flight_bytes += scion_pkt_total_bytes;
       total_bytes_sent += scion_pkt_total_bytes;
 
       sent_packet.size = webrtc::DataSize::Bytes (scion_pkt_total_bytes);
-      sent_packet.data_in_flight = webrtc::DataSize::Bytes (path_metrics[path].in_flight_bytes);
+      sent_packet.data_in_flight = webrtc::DataSize::Bytes (path_states[path].in_flight_bytes);
       // sent_packet.prior_unacked_data // TODO
-      path_metrics[path].in_flight_packets.push_back (sent_packet);
+      path_states[path].in_flight_packets.push_back (sent_packet);
       // Update the network controller with the sent packet
       (void) network_controller->OnSentPacket (sent_packet);
     }
@@ -532,10 +589,10 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
     }
 
   Time resp_time = MicroSeconds (app_resp.timestamp);
-  path_metrics[path_id].last_report = resp_time;
+  path_states[path_id].last_report = resp_time;
 
-  path_metrics[path_id].ecn = app_resp.ecn;
-  path_metrics[path_id].latency = app_resp.avg_latency;
+  path_states[path_id].ecn = app_resp.ecn;
+  path_states[path_id].latency = app_resp.avg_latency;
 
   // RTT update
   Time send_delay = report->packets.back ().time_received - report->packets.back ().time_sent;
@@ -544,7 +601,7 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
 
   // loss_based_estimator.FeedReport (report);
   // delay_based_estimator.FeedReport (report);
-  // path_metrics[path_id].loss = loss_based_estimator.GetLoss ();
+  // path_states[path_id].loss = loss_based_estimator.GetLoss ();
 
   // if report empty
   if (report->packets.empty ())
@@ -563,7 +620,7 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
   uint32_t highest_seq_no = report->packets.back ().seq_no;
 
   // Create a PacketResult for each in-flight packet
-  for (webrtc::SentPacket packet : path_metrics[path_id].in_flight_packets)
+  for (webrtc::SentPacket packet : path_states[path_id].in_flight_packets)
     {
       if (packet.sequence_number <= highest_seq_no)
         {
@@ -592,23 +649,23 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
     }
 
   // Clean up in-flight packets
-  path_metrics[path_id].in_flight_packets.erase (
-      std::remove_if (path_metrics[path_id].in_flight_packets.begin (),
-                      path_metrics[path_id].in_flight_packets.end (),
+  path_states[path_id].in_flight_packets.erase (
+      std::remove_if (path_states[path_id].in_flight_packets.begin (),
+                      path_states[path_id].in_flight_packets.end (),
                       [this, path_id, highest_seq_no] (webrtc::SentPacket packet) {
                         if (packet.sequence_number <= highest_seq_no)
                           {
-                            path_metrics[path_id].in_flight_bytes -= packet.size.bytes ();
+                            path_states[path_id].in_flight_bytes -= packet.size.bytes ();
                             return true;
                           }
                         return false;
                       }),
-      path_metrics[path_id].in_flight_packets.end ());
+      path_states[path_id].in_flight_packets.end ());
 
   webrtc::TransportPacketsFeedback feedback;
   feedback.feedback_time = TimestampNow ();
   feedback.packet_feedbacks = std::move (packet_feedbacks);
-  feedback.data_in_flight = webrtc::DataSize::Bytes (path_metrics[path_id].in_flight_bytes);
+  feedback.data_in_flight = webrtc::DataSize::Bytes (path_states[path_id].in_flight_bytes);
 
   webrtc::NetworkControlUpdate update =
       network_controller->OnTransportPacketsFeedback (std::move (feedback));
@@ -700,9 +757,9 @@ CiaoApp::ReceiveProbeResponse (Scmp scmp, BottleneckProbe probe)
     }
 
   auto &path_id = scmp.path_id;
-  auto &path_m = path_metrics[path_id];
+  auto &path_m = path_states[path_id];
 
-  // Store the probe result in the path metric
+  // Store the probe result in the path state
   path_m.last_probe_echo = probe;
   path_m.last_probe_echo_time = Simulator::Now ();
 
@@ -737,9 +794,9 @@ void
 CiaoApp::UpdatePathCandidates ()
 {
   bool is_active_path_usable =
-      path_metrics[active_path].last_report > Simulator::Now () - path_alive_treshold &&
-      path_metrics[active_path].loss < 0.9 &&
-      path_metrics[active_path].last_ciao_congestion_alert <
+      path_states[active_path].last_report > Simulator::Now () - path_alive_treshold &&
+      path_states[active_path].loss < 0.9 &&
+      path_states[active_path].last_ciao_congestion_alert <
           Simulator::Now () - ciao_congestion_alert_timeout;
 
   // Choose as candidates all paths that have a significantly higher
@@ -753,7 +810,7 @@ CiaoApp::UpdatePathCandidates ()
   std::vector<uint32_t> final_candidates;
   for (uint32_t i = 0; i < num_paths; i++)
     {
-      PathMetric &path_m = path_metrics[i];
+      PathState &path_m = path_states[i];
 
       // The active path itself is always a candidate unless it becomes unusable
       if (i == active_path && is_active_path_usable)
@@ -848,10 +905,10 @@ CiaoApp::SwitchToPath (uint32_t new_path)
   previous_path = active_path;
   active_path = new_path;
 
-  path_metrics[active_path].in_flight_bytes = 0;
-  path_metrics[active_path].in_flight_packets.clear ();
+  path_states[active_path].in_flight_bytes = 0;
+  path_states[active_path].in_flight_packets.clear ();
 
-  double new_rate = path_metrics[new_path].bottleneck_share;
+  double new_rate = path_states[new_path].bottleneck_share;
 
   // loss_based_estimator.Reset ();
   // delay_based_estimator.SetPhase (CongestionControlPhase::STARTUP);
@@ -859,7 +916,7 @@ CiaoApp::SwitchToPath (uint32_t new_path)
   // Reset candidacy of all paths
   for (size_t i = 0; i < num_paths; i++)
     {
-      path_metrics[i].is_candidate = false;
+      path_states[i].is_candidate = false;
     }
 
   if (path_shifting)
@@ -871,24 +928,24 @@ CiaoApp::SwitchToPath (uint32_t new_path)
            std::to_string (active_path) +
            ", duration: " + std::to_string (duration.GetMilliSeconds ()) + " ms");
       sendrate_prev_path = target_sendrate;
-      target_sendrate = path_metrics[new_path].bottleneck_share;
-      path_metrics[new_path].sendrate = 0;
-      path_metrics[previous_path].sendrate = sendrate_prev_path;
+      target_sendrate = path_states[new_path].bottleneck_share;
+      path_states[new_path].sendrate = 0;
+      path_states[previous_path].sendrate = sendrate_prev_path;
       target_sendrate = new_rate;
       in_path_transition = true;
       return;
     }
 
-  // Update congestion controller
-  webrtc::TargetRateConstraints new_constraints;
-  webrtc::NetworkRouteChange route_change;
-  new_constraints.at_time = TimestampNow ();
-  new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (new_rate);
-  // new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
-  route_change.at_time = TimestampNow ();
-  route_change.constraints = new_constraints;
+  // // Update congestion controller
+  // webrtc::TargetRateConstraints new_constraints;
+  // webrtc::NetworkRouteChange route_change;
+  // new_constraints.at_time = TimestampNow ();
+  // new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (new_rate);
+  // // new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
+  // route_change.at_time = TimestampNow ();
+  // route_change.constraints = new_constraints;
 
-  (void) network_controller->OnNetworkRouteChange (route_change);
+  // (void) network_controller->OnNetworkRouteChange (route_change);
 }
 
 // Return a WebRTC timestamp with the current simulation time
@@ -933,15 +990,6 @@ CiaoApp::PrintResults ()
 
   // Dump JSON into a single line
   std::cout << results_json.dump () << std::endl;
-}
-
-bool
-PathMetric::HasFreshProbeResultsSince (Time t)
-{
-  // For the result to be fresh, it must be from a probe initiated after t +
-  // latency to account for any potential changes to the bottleneck share
-  // incurred by a path switch
-  return last_probe_echo_time > t + MicroSeconds (latency);
 }
 
 /**

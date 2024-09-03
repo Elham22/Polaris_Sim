@@ -18,52 +18,20 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#ifndef SCION_CIAO_APP_H
-#define SCION_CIAO_APP_H
+#pragma once
 
 #include "src/SCION/model/externs.h"
 #include "src/SCION/model/scion-core-as.h"
 #include "src/SCION/model/apps/app.h"
 #include "src/SCION/model/webrtc-cc/delay-based-estimator.cc"
 #include "src/SCION/model/webrtc-cc/loss-based-estimator.cc"
-#include "src/SCION/model/apps/traffic-metrics.h"
+#include "src/SCION/model/apps/connection-metrics.h"
+#include "src/SCION/model/apps/path-state.h"
 
 #include "modules/congestion_controller/goog_cc/goog_cc_network_control.h"
 #include "api/transport/network_types.h"
 
 namespace ns3 {
-
-/**
- * @brief Struct to store path information
- */
-struct PathMetric
-{
-  uint16_t ecn;
-  Time last_report; // time of last ecn mark
-  Time last_scmp; // time of last scmp congestion response
-  app_packet_id_t seq_no = 1; // Next seq no to send
-  app_packet_id_t seq_no_ack = 0; // Highest acked package
-  double latency = 0; // observed latency, in µs
-  double bottleneck_share = 0; // estimated fair share in Gbps
-  double bottleneck_num_flows = 0; // number of flows at the bottleneck link
-  double loss = 0; // estimated loss fraction
-  double sendrate = 0; // current send rate
-
-  std::vector<webrtc::SentPacket> in_flight_packets;
-  double in_flight_bytes = 0;
-
-  Time probed_last = Seconds (0); // time the last probe was sent
-  BottleneckProbe last_probe_echo; // last probe response
-  Time last_probe_echo_time = Seconds (0);
-  bool HasFreshProbeResultsSince (Time t);
-  Time last_ciao_congestion_alert = Seconds (0); // Last time we received a C-CA
-
-  app_packet_id_t probe_seq_no = 0; // probe packet seq_no
-
-  // Earliest point in time since which path has continously been a switching candidate
-  Time is_candidate_since = Time::Max ();
-  bool is_candidate = false;
-};
 
 enum class PathChangeStrategy {
   IMMEDIATE, // instantly switch, with hint to congestion controller
@@ -102,12 +70,15 @@ protected:
   // Time after which we consider a C-CA stale
   Time ciao_congestion_alert_timeout = Seconds (5);
 
+  // Wait at most this long before initiating data transfer
+  int32_t initial_probe_wait_ms = 250;
+
   uint32_t num_paths;
   app_path_id_t active_path;
   app_path_id_t previous_path;
 
   // Store information on each candidate path
-  std::vector<PathMetric> path_metrics;
+  std::vector<PathState> path_states;
 
   // JSON to store results for visualization
   nlohmann::json results_json = nlohmann::json::object ();
@@ -125,7 +96,7 @@ protected:
   DelayBasedController delay_based_estimator;
   LossBasedEstimator loss_based_estimator;
 
-  TrafficMetrics metrics;
+  ConnectionMetrics metrics;
 
   std::unique_ptr<webrtc::NetworkControllerInterface> network_controller;
 
@@ -144,12 +115,13 @@ protected:
   Time last_path_change = Seconds (0);
   Time last_A_r_update = Seconds (0);
 
-  Time update_interval = Seconds (0.25);
-  Time probe_interval = Seconds (0.25); // How often new probes are sent out
+  const Time update_interval = Seconds (0.25);
+  const Time probe_interval = Seconds (0.25); // How often new probes are sent out
   uint16_t probe_simultaneous = 3; // How many paths to probe at the same time
   app_packet_id_t probe_id = 0; // Identifies a probe, not the packet though, that is probe_seq_no
 
   void Log (std::string msg, bool with_prefix = true);
+  bool WaitForInitialProbes ();
 
 public:
   CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
@@ -218,5 +190,3 @@ public:
 };
 
 } // namespace ns3
-
-#endif // SCION_CIAO_APP_H

@@ -26,7 +26,7 @@
 
 namespace ns3 {
 
-struct TrafficMetrics
+struct ConnectionMetrics
 {
   bool logging = false;
 
@@ -61,7 +61,7 @@ struct TrafficMetrics
   // Index of the active path
   int32_t active_path;
 
-  TrafficMetrics (bool logging = false);
+  ConnectionMetrics (bool logging = false);
 
   void OnSentPacket (const PacketRecord &record);
   void TrackNewPacket (const PacketRecord &record);

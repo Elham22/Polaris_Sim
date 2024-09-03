@@ -18,7 +18,7 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#include "traffic-metrics.h"
+#include "connection-metrics.h"
 
 #include <algorithm>
 #include <numeric>
@@ -28,18 +28,18 @@
 
 namespace ns3 {
 
-TrafficMetrics::TrafficMetrics (bool logging) : logging (logging)
+ConnectionMetrics::ConnectionMetrics (bool logging) : logging (logging)
 {
 }
 
 void
-TrafficMetrics::OnSentPacket (const PacketRecord &record)
+ConnectionMetrics::OnSentPacket (const PacketRecord &record)
 {
   total_bytes_sent += record.size;
 }
 
 void
-TrafficMetrics::OnReceivedPackets (const std::vector<PacketRecord> &packets)
+ConnectionMetrics::OnReceivedPackets (const std::vector<PacketRecord> &packets)
 {
   if (packets.empty ())
     {
@@ -80,7 +80,7 @@ TrafficMetrics::OnReceivedPackets (const std::vector<PacketRecord> &packets)
 }
 
 void
-TrafficMetrics::BufferPackets (const std::vector<PacketRecord> &packets)
+ConnectionMetrics::BufferPackets (const std::vector<PacketRecord> &packets)
 {
   if (packets.empty ())
     {
@@ -133,7 +133,7 @@ TrafficMetrics::BufferPackets (const std::vector<PacketRecord> &packets)
 
 // Move packets from buffer to delivered packets
 void
-TrafficMetrics::EmitFromBuffer ()
+ConnectionMetrics::EmitFromBuffer ()
 {
 
   // Find the last element in the buffer which is older than the buffer window
@@ -163,7 +163,7 @@ TrafficMetrics::EmitFromBuffer ()
 }
 
 double
-TrafficMetrics::GetJitterMs ()
+ConnectionMetrics::GetJitterMs ()
 {
   if (delivered_packets.size () < 2)
     {
@@ -195,7 +195,7 @@ TrafficMetrics::GetJitterMs ()
 }
 
 void
-TrafficMetrics::ClearWindow ()
+ConnectionMetrics::ClearWindow ()
 {
   delivered_packets.clear ();
 }
@@ -206,7 +206,7 @@ TrafficMetrics::ClearWindow ()
    * @return true if the statistics were updated successfully
    */
 bool
-TrafficMetrics::UpdateStatistics ()
+ConnectionMetrics::UpdateStatistics ()
 {
   Time now = Simulator::Now ();
 
@@ -278,13 +278,13 @@ TrafficMetrics::UpdateStatistics ()
 }
 
 double
-TrafficMetrics::GetFractionLoss ()
+ConnectionMetrics::GetFractionLoss ()
 {
   return loss;
 }
 
 double
-TrafficMetrics::GetVmafScore ()
+ConnectionMetrics::GetVmafScore ()
 {
   /*
   VMAF (0-100) scores for loss (in %) with 50% correlation, Threema low bandwidth profile:
