@@ -253,6 +253,7 @@ CiaoApp::RecordMetrics ()
   j_state["sendrate"] = target_sendrate / 1e6;
   j_state["latency"] = path_states[active_path].latency;
   j_state["loss"] = metrics.GetFractionLoss ();
+  j_state["jitter"] = metrics.GetJitterMs ();
   j_state["active_path"] = active_path;
   j_state["bottleneck_share"] = path_states[active_path].bottleneck_share / 1e6;
   j_state["in_transition"] = in_path_transition;
@@ -936,16 +937,16 @@ CiaoApp::SwitchToPath (uint32_t new_path)
       return;
     }
 
-  // // Update congestion controller
-  // webrtc::TargetRateConstraints new_constraints;
-  // webrtc::NetworkRouteChange route_change;
-  // new_constraints.at_time = TimestampNow ();
-  // new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (new_rate);
-  // // new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
-  // route_change.at_time = TimestampNow ();
-  // route_change.constraints = new_constraints;
+  // Update congestion controller
+  webrtc::TargetRateConstraints new_constraints;
+  webrtc::NetworkRouteChange route_change;
+  new_constraints.at_time = TimestampNow ();
+  new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (new_rate * initial_bandwidth_factor);
+  // new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
+  route_change.at_time = TimestampNow ();
+  route_change.constraints = new_constraints;
 
-  // (void) network_controller->OnNetworkRouteChange (route_change);
+  (void) network_controller->OnNetworkRouteChange (route_change);
 }
 
 // Return a WebRTC timestamp with the current simulation time

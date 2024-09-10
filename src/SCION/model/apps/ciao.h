@@ -58,6 +58,8 @@ protected:
   // How much better a path must be before we consider switching to it
   double path_change_margin = 1.5;
 
+  double initial_bandwidth_factor = 0.5;
+
   // How long we wait before switching paths again
   Time path_switch_min_interval = Seconds (10);
 

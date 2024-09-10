@@ -1,3 +1,4 @@
+<!-- Topology with AS 0 and 1, and 4 links connecting them -->
 <topology linkdefault="directed">
   <property name="name" type="string" />
   <property name="type" type="string">test</property>
