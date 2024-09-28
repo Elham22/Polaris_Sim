@@ -71,9 +71,10 @@ struct ConnectionMetrics
 
   void EmitFromBuffer ();
   bool UpdateStatistics ();
+
   double GetJitterMs ();
   double GetFractionLoss ();
-
+  double GetLatencyMs ();
   double GetVmafScore ();
 };
 

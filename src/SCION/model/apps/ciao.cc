@@ -57,7 +57,8 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
   cfgLogging = inputs.contains ("logging") ? inputs["logging"].get<bool> () : cfgLogging;
   cfgPathSwitching =
       inputs.contains ("path_switching") ? inputs["path_switching"].get<bool> () : cfgPathSwitching;
-  path_shifting = inputs.contains ("path_shifting") ? inputs["path_shifting"].get<bool> () : false;
+  path_shifting =
+      inputs.contains ("path_shifting") ? inputs["path_shifting"].get<bool> () : path_shifting;
   path_change_margin = inputs.contains ("path_change_margin")
                            ? inputs["path_change_margin"].get<double> ()
                            : path_change_margin;
@@ -251,7 +252,7 @@ CiaoApp::RecordMetrics ()
   nlohmann::json j_state = nlohmann::json::object ();
   j_state["time"] = time_ms;
   j_state["sendrate"] = target_sendrate / 1e6;
-  j_state["latency"] = path_states[active_path].latency;
+  j_state["latency"] = metrics.GetLatencyMs ();
   j_state["loss"] = metrics.GetFractionLoss ();
   j_state["jitter"] = metrics.GetJitterMs ();
   j_state["active_path"] = active_path;
@@ -260,9 +261,10 @@ CiaoApp::RecordMetrics ()
 
   if (in_path_transition)
     {
-      j_state["sendrate"] = sendrate_prev_path / 1e6 + target_sendrate / 1e6;
-      j_state["oldrate"] = sendrate_prev_path / 1e6;
-      j_state["newrate"] = target_sendrate / 1e6;
+      j_state["sendrate"] =
+          path_states[previous_path].sendrate / 1e6 + path_states[active_path].sendrate / 1e6;
+      j_state["oldrate"] = path_states[previous_path].sendrate / 1e6;
+      j_state["newrate"] = path_states[active_path].sendrate / 1e6;
     }
 
   results_states.push_back (j_state);
@@ -384,21 +386,6 @@ CiaoApp::EndPathTransition ()
   in_path_transition = false;
   Log ("Finished transition from path from " + std::to_string (previous_path) + " to " +
        std::to_string (active_path));
-
-  // webrtc::TargetRateConstraints new_constraints;
-  // webrtc::NetworkRouteChange route_change;
-  // new_constraints.at_time = TimestampNow ();
-  // new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (target_sendrate);
-  // route_change.at_time = TimestampNow ();
-  // route_change.constraints = new_constraints;
-
-  // (void) network_controller->OnNetworkRouteChange (route_change);
-  // // (void) network_controller->OnNetworkRouteChange (route_change);
-
-  // webrtc::NetworkStateEstimate estimate;
-  // estimate.update_time = TimestampNow ();
-  // estimate.link_capacity = webrtc::DataRate::BytesPerSec(target_sendrate);
-  // (void) network_controller->OnNetworkStateEstimate(estimate);
 }
 
 void
@@ -422,8 +409,15 @@ CiaoApp::ScheduleSend ()
 
       NS_ASSERT_MSG (transition_progress >= 0 && transition_progress <= 1,
                      "Transition progress out of bounds: " + std::to_string (transition_progress));
-      NS_ASSERT_MSG (target_sendrate > sendrate_prev_path,
+      NS_ASSERT_MSG (target_sendrate > previous_sendrate,
                      "Target sendrate is not greater than previous sendrate");
+
+      // If losses are too bad after starting the transition, we can abort and switch back to standard congestion control.
+      if (transition_progress > 0.25 && path_states[active_path].loss > 0.75)
+        {
+          Log ("Losses too high, aborting path transition");
+          EndPathTransition ();
+        }
 
       double ramp_up_rate = 0;
 
@@ -446,25 +440,12 @@ CiaoApp::ScheduleSend ()
           ramp_up_rate = target_sendrate * transition_progress;
         }
 
-      // If a new probe result comes back during the transition with a bottleneck share lower than
-      // our ramp-up rate, clamp the rate and finish the transition early
-      if (path_states[active_path].bottleneck_share < ramp_up_rate)
-        {
-          Log ("Bottleneck share from new probe result lower than ramp-up rate. Exiting "
-               "transition "
-               "early.");
-          ramp_up_rate = path_states[active_path].bottleneck_share;
-          target_sendrate = ramp_up_rate;
-          EndPathTransition ();
-        }
-
       path_states[active_path].sendrate = ramp_up_rate;
       SendFrameData (ramp_up_rate, active_path);
 
       // Send on the old path with the remaining rate
-      double maintenance_rate = target_sendrate - ramp_up_rate;
-      maintenance_rate = std::clamp (maintenance_rate, 0.0, sendrate_prev_path);
-      // maintenance_rate = 0;
+      double maintenance_rate = previous_sendrate - ramp_up_rate;
+      maintenance_rate = std::max (maintenance_rate, 0.0);
       path_states[previous_path].sendrate = maintenance_rate;
       if (maintenance_rate > 0)
         {
@@ -574,20 +555,9 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
   // metrics.OnReceivedPackets (report->packets);
   metrics.BufferPackets (report->packets);
 
-  if (path_id != active_path)
-    {
-      Log ("Receiving report on path: " + std::to_string (path_id) +
-           " (inactive) with sequence numbers " + std::to_string (report->packets.front ().seq_no) +
-           " to " + std::to_string (report->packets.back ().seq_no));
-      // Don't process responses on inactive paths
-      return;
-    }
-  else
-    {
-      Log ("Receiving report on path " + std::to_string (path_id) +
-           " (active) with sequence numbers " + std::to_string (report->packets.front ().seq_no) +
-           " to " + std::to_string (report->packets.back ().seq_no));
-    }
+  Log ("Receiving report on path " + std::to_string (path_id) + " with sequence numbers " +
+       std::to_string (report->packets.front ().seq_no) + " to " +
+       std::to_string (report->packets.back ().seq_no));
 
   Time resp_time = MicroSeconds (app_resp.timestamp);
   path_states[path_id].last_report = resp_time;
@@ -784,11 +754,15 @@ CiaoApp::ReceiveProbeResponse (Scmp scmp, BottleneckProbe probe)
   // were to also start sending via this path. But if we ARE already sending
   // through this path, the fair share is actually 1Gbps / (2) = 500Mbps, so
   // we need account for this ourselves.
-  // if (path_id == active_path && probe.bottleneck_num_flows > 1 && Simulator::Now() > last_path_change + MilliSeconds(100))
-  //   {
-  //     auto correction = probe.bottleneck_num_flows / (probe.bottleneck_num_flows - 1);
-  //     path_m.bottleneck_share *= correction;
-  //   }
+  // In a practical scenario, the addition of one more flow would not matter
+  // that much as there are likely many more active flows going through
+  // bottleneck links.
+  if (path_id == active_path && probe.bottleneck_num_flows > 1 &&
+      Simulator::Now () > last_path_change + MilliSeconds (100))
+    {
+      auto correction = probe.bottleneck_num_flows / (probe.bottleneck_num_flows - 1);
+      path_m.bottleneck_share *= correction;
+    }
 }
 
 void
@@ -796,7 +770,7 @@ CiaoApp::UpdatePathCandidates ()
 {
   bool is_active_path_usable =
       path_states[active_path].last_report > Simulator::Now () - path_alive_treshold &&
-      path_states[active_path].loss < 0.9 &&
+      path_states[active_path].loss < 0.75 &&
       path_states[active_path].last_ciao_congestion_alert <
           Simulator::Now () - ciao_congestion_alert_timeout;
 
@@ -895,6 +869,14 @@ CiaoApp::UpdatePathCandidates ()
 void
 CiaoApp::SwitchToPath (uint32_t new_path)
 {
+  // // NOTE: Quick hack to demonstrate path switching nicely
+  // // Force app 1 to stay on path 1 first the first 31 minutes, and then stick to path 0
+  // if (app_id == 1)
+  //   {
+  //     if (Simulator::Now ().GetMinutes () < 31 || active_path == 0)
+  //       return;
+  //   }
+
   last_path_change = Simulator::Now ();
   if (new_path == active_path)
     {
@@ -922,17 +904,14 @@ CiaoApp::SwitchToPath (uint32_t new_path)
 
   if (path_shifting)
     {
-      Time duration = MilliSeconds (200) + 2 * round_trip_time; // TODO: use RTT of new path
-      path_transition_end = Simulator::Now () + duration;
-      // path_transition_end = Simulator::Now () + Seconds (10); // TODO: For testing
+      path_transition_end = Simulator::Now () + Seconds (5);
       Log ("Starting path transition from " + std::to_string (previous_path) + " to " +
-           std::to_string (active_path) +
-           ", duration: " + std::to_string (duration.GetMilliSeconds ()) + " ms");
-      sendrate_prev_path = target_sendrate;
+           std::to_string (active_path));
+      previous_sendrate = target_sendrate;
       target_sendrate = path_states[new_path].bottleneck_share;
       path_states[new_path].sendrate = 0;
-      path_states[previous_path].sendrate = sendrate_prev_path;
-      target_sendrate = new_rate;
+      path_states[previous_path].sendrate = previous_sendrate;
+      target_sendrate = new_rate * initial_bandwidth_factor;
       in_path_transition = true;
       return;
     }
@@ -941,8 +920,9 @@ CiaoApp::SwitchToPath (uint32_t new_path)
   webrtc::TargetRateConstraints new_constraints;
   webrtc::NetworkRouteChange route_change;
   new_constraints.at_time = TimestampNow ();
-  new_constraints.starting_rate = webrtc::DataRate::BytesPerSec (new_rate * initial_bandwidth_factor);
-  // new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
+  new_constraints.starting_rate =
+      webrtc::DataRate::BytesPerSec (new_rate * initial_bandwidth_factor);
+  new_constraints.min_data_rate = webrtc::DataRate::KilobitsPerSec (300);
   route_change.at_time = TimestampNow ();
   route_change.constraints = new_constraints;
 
@@ -965,7 +945,7 @@ CiaoApp::StopAppTraffic ()
 std::string
 CiaoApp::InfoString ()
 {
-  std::string info = "Ciao";
+  std::string info = "Polaris";
 
   // Ciao without path switching is basically GCC
   if (!cfgPathSwitching)
@@ -1061,6 +1041,24 @@ CiaoApp::OnNetworkControlUpdate (webrtc::NetworkControlUpdate &update)
       double alpha = 0.5;
       target_sendrate = alpha * target_sendrate + (1 - alpha) * estimate;
     }
+}
+
+void
+CiaoApp::ResetController (double target_rate)
+{
+  webrtc::GoogCcFactoryConfig factory_config;
+  factory_config.feedback_only = true;
+  factory_config.network_state_estimator_factory = nullptr;
+
+  webrtc::GoogCcNetworkControllerFactory factory =
+      webrtc::GoogCcNetworkControllerFactory (std::move (factory_config));
+  webrtc::Environment default_env = webrtc::EnvironmentFactory ().Create ();
+  webrtc::NetworkControllerConfig config (default_env);
+
+  config.constraints.at_time = TimestampNow ();
+  config.constraints.starting_rate = webrtc::DataRate::BytesPerSec (target_sendrate);
+
+  network_controller = factory.Create (config);
 }
 
 } // namespace ns3

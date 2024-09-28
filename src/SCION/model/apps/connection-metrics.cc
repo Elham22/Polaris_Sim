@@ -191,7 +191,53 @@ ConnectionMetrics::GetJitterMs ()
     }
 
   jitter /= arrival_deltas.size ();
+
+  // For debugging: If jitter is more than 150 ms, print a warning and print all sequence numbers + arrival time deltas for debugging
+  if (jitter > 150)
+    {
+      std::string seq_nos = "";
+      std::string arrival_times = "";
+      std::string deltas = "";
+      logging = true;
+      for (size_t i = 0; i < delivered_packets.size (); ++i)
+        {
+          seq_nos += std::to_string (delivered_packets[i].seq_no) + ", ";
+          arrival_times +=
+              std::to_string (delivered_packets[i].time_received.GetMilliSeconds ()) + ", ";
+          if (i > 0)
+            {
+              deltas += std::to_string (arrival_deltas[i - 1]) + ", ";
+            }
+        }
+
+      LOG ("High jitter detected: " << jitter << " ms" << std::endl);
+      LOG ("Sequence numbers: " << seq_nos << std::endl);
+      LOG ("Arrival times: " << arrival_times << std::endl);
+      LOG ("Arrival time deltas: " << deltas << std::endl);
+    }
+
+  // Print time now in ms
+  LOG ("Time now: " << Simulator::Now ().GetMilliSeconds () << std::endl);
+
   return jitter;
+}
+
+double
+ConnectionMetrics::GetLatencyMs ()
+{
+  if (delivered_packets.empty ())
+    {
+      return 0.0;
+    }
+
+  // Compute average latency
+  double sum_latency = 0.0;
+  for (const auto &packet : delivered_packets)
+    {
+      sum_latency += (packet.time_received - packet.time_sent).GetMilliSeconds ();
+    }
+
+  return sum_latency / delivered_packets.size ();
 }
 
 void
@@ -226,6 +272,11 @@ ConnectionMetrics::UpdateStatistics ()
 
       // Erase packets up to the first one that is still within the tracking window
       delivered_packets.erase (delivered_packets.begin (), it);
+    }
+  else
+    {
+      LOG ("No recent packet in window" << std::endl);
+      delivered_packets.clear ();
     }
 
   // Make sure we have at least some statistics to work with

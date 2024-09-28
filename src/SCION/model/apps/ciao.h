@@ -58,16 +58,18 @@ protected:
   // How much better a path must be before we consider switching to it
   double path_change_margin = 1.5;
 
-  double initial_bandwidth_factor = 0.5;
+  double initial_bandwidth_factor = 0.85;
+
+  bool path_shifting = false; // if enabled, shift gradually between paths
 
   // How long we wait before switching paths again
   Time path_switch_min_interval = Seconds (10);
 
   // How long a path needs to be a candidate before we select it
-  Time path_switch_min_candidacy = Seconds (5);
+  Time path_switch_min_candidacy = Seconds (1);
 
   // Time since last report before we consider a path dead
-  const Time path_alive_treshold = Seconds (1);
+  const Time path_alive_treshold = Seconds (5);
 
   // Time after which we consider a C-CA stale
   Time ciao_congestion_alert_timeout = Seconds (5);
@@ -104,15 +106,13 @@ protected:
 
   double A_r = 0; // send rate estimate by the receiver side loss based controller
   double A_s = 0; // send rate estimate by the sender side loss based controller
-  double target_sendrate = 300'000 / 8; // 300 Kbps
-  double previous_sendrate = 0; // used to limit rate on old path while shifting
+  double target_sendrate = 300'000 / 8; // in Bytes per second
+  double previous_sendrate = 0; // Sendrate right before starting path shift, used to compute maintenance rate on old path
 
   double total_bytes_sent = 0; // total of app packets sent
   double total_bytes_arrived = 0; // total of app packets arrived
 
-  bool path_shifting = false; // if enabled, shift gradually between paths
   bool in_path_transition = false;
-  double sendrate_prev_path = 0;
   Time path_transition_end = Seconds (0);
   Time last_path_change = Seconds (0);
   Time last_A_r_update = Seconds (0);
@@ -168,6 +168,8 @@ public:
   void UpdateBWE ();
 
   void ScheduleControllerProcessInterval (Time &process_interval);
+
+  void ResetController (double new_target_rate);
 
   void OnNetworkControlUpdate (webrtc::NetworkControlUpdate &update);
 

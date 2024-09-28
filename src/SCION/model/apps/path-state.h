@@ -34,12 +34,10 @@ struct PathState
 {
   uint16_t ecn;
   Time last_report; // time of last ecn mark
-  Time last_scmp; // time of last scmp congestion response
-  app_packet_id_t seq_no = 1; // Next seq no to send
-  app_packet_id_t seq_no_ack = 0; // Highest acked package
   double latency = 0; // observed latency, in µs
   double bottleneck_share = 0; // estimated fair share in Gbps
   double bottleneck_num_flows = 0; // number of flows at the bottleneck link
+  // TODO queueing delay
   double loss = 0; // estimated loss fraction
   double sendrate = 0; // current send rate
 
