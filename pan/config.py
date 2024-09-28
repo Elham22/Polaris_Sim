@@ -6,3 +6,6 @@ DEFAULT_SCENARIO_TYPES = ['Ciao', 'Naive', 'BGP_FD', 'BGP_ECMP']
 
 # Time at which target flows start sending data
 STARTUP_PHASE_SECONDS = 1800
+
+DATARATE_UNIT = "Mbps"
+DATARATE_UNIT_FACTOR = 8 # 8 for Mbps, 1 for MB/s
