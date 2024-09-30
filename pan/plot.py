@@ -519,10 +519,7 @@ def process_multi_scenario(scenarios: list[dict]):
         # The values per timeslots are computed during individual simulation output processing
         if 'min_shares' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['min_shares'] = []
-        min_share = float('inf')
-        for _, slot in scenario['time_slots'].items():
-            if slot['min_sendrate'] < min_share:
-                min_share = slot['min_sendrate']
+        min_share = min([app['min_share'] for app in target_apps])
         global_results[flow_type][num_flows]['min_shares'].append(min_share)
 
         # # Lists containing loss/latency piled up over all flows AND all iterations
@@ -613,6 +610,9 @@ def plot_multi_scenario(global_results: dict) -> None:
     Plot the results of multiple scenarios in a single plot for the final evaluation
     """
     fig, ax = plt.subplots(figsize=(10, 6))
+
+    # For legacy simulation results: Replace "Ciao" string with "Polaris" in all flow_type keys of global_results
+    global_results = {k.replace("Ciao", "Polaris"): v for k, v in global_results.items()}
 
     # Create a mapping from original x values to evenly spaced integers
     flow_types = list(global_results.keys())
@@ -985,8 +985,10 @@ def compute_vmaf_score(latency: float, jitter: float, loss: float, sendrate: flo
     bandwidth_values = [0.2, 0.3, 0.5, 1, 2, 3]
     bandwidth_scores = [16.76, 37.07, 48.75, 58.49, 59.30, 59.51]
 
-    # To scale the bandwidth_values
-    # bandwidth_values = [x * 4 for x in bandwidth_values]
+    # Bandwidth scores to demonstrate how VMAF scores would behave
+    # in situations with higher bandwidth demand
+    # bandwidth_values = [0.5,    1,    2,      3,    5,    8,    12]
+    # bandwidth_scores = [12.76, 20,  32.49, 45.30, 68.51, 88,   93]
 
     # Interpolate
     loss_score = np.interp(loss, loss_values, loss_scores)
@@ -1154,6 +1156,30 @@ def parse_simulation_results(file, inputs: dict) -> dict:
             settings = inputs['settings']
 
             time_slots = {}
+
+            # Compute the min share as the smallest average sendrate
+            # encoutered by any target traffic flow in any time slot
+            target_traffic_min_share = {}
+
+            for app in apps:
+                if app.get('traffic_type') != 'target':
+                    continue
+                app_sendrates_per_slot = {}
+                for t, s in zip(app['time'], app['sendrate']):
+                    slot = int((t / 1000 - args.start_time) // settings['slot_size'])
+                    if slot not in app_sendrates_per_slot:
+                        app_sendrates_per_slot[slot] = []
+                    app_sendrates_per_slot[slot].append(s)
+
+                # Compute average sendrate per slot for the app
+                avg_sendrates_per_slot = {slot: np.mean(sendrates) for slot, sendrates in app_sendrates_per_slot.items()}
+
+                # Find the minimum average sendrate
+                min_avg_sendrate = min(avg_sendrates_per_slot.values())
+
+                target_traffic_min_share[app['app_id']] = min_avg_sendrate
+                app['min_share'] = min_avg_sendrate
+
             for t, r in timestamps.items():
                 slot = int(t // settings['slot_size'])
                 if slot not in time_slots:
@@ -1175,7 +1201,6 @@ def parse_simulation_results(file, inputs: dict) -> dict:
             for slot, results in time_slots.items():
                 time_slots[slot]['median_sendrate'] = np.median(results['sendrate'])
                 time_slots[slot]['mean_sendrate'] = np.mean(results['sendrate'])
-                time_slots[slot]['min_sendrate'] = np.min(results['sendrate'])
     else:
         print("Some processing skipped due to missing inputs file")
 
@@ -1262,7 +1287,7 @@ def main():
             print(f"Loading pre-processed results from cache {cache_filepath}")
             with open(cache_filepath, 'rb') as f:
                 global_results = pickle.load(f)
-        
+
         # plot_parameter_comparison(global_results)
         plot_multi_scenario(global_results)
 
