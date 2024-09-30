@@ -9,6 +9,9 @@ from copy import deepcopy
 
 
 TEMPLATE_CONFIG_YAML = path.join("configs", "traffic-engineering/toy.yaml")
+TOPO_FILE = "configs/traffic-engineering/toy-topology.xml"  # 10 MB/s links
+# TOPO_FILE = "configs/traffic-engineering/toy-topology-10Mbps.xml"
+
 
 def render_progress_bar(completed, total, bar_length=40):
     progress = completed / total
@@ -16,9 +19,11 @@ def render_progress_bar(completed, total, bar_length=40):
     bar = "▓" * block + "░" * (bar_length - block)
     print(f"\r{bar} {completed}/{total} ({progress:.2%})", end='')
 
+
 def run_scenario(scenario_json_path, config, scen, total_scenarios):
     config['events_file'] = f"{scenario_json_path}"
     config['output'] = f"{scenario_json_path.replace('.json', '.out.txt')}"
+    config['topology'] = TOPO_FILE
 
     # Set the simulation duration according to time slots
     with open(scenario_json_path, "r") as f:
@@ -54,7 +59,7 @@ def main():
     if not scenario_dir:
         print("Missing argument: scenario directory")
         return
-    
+
     # Run the build command
     print("Running waf build...")
     build_result = subprocess.run(["python3.11", "./waf", "build"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -69,13 +74,23 @@ def main():
         config = yaml.safe_load(f)
 
     # Find all json files inside scenario_dir
-    scenario_jsons = [path.join(scenario_dir, f) for f in listdir(scenario_dir) if f.endswith(".json") and "." in f]
+    scenario_jsons = []
+    for f in listdir(scenario_dir):
+        if f.endswith(".json"):
+            # Used to filter which scenarios to (re-)run
+            flows = int(f.split('-')[1][1:])
+            iteration = int(f.split('-')[2][1:])
+            # if iteration < 5:
+            #     continue
+            # if flows > 24:
+            #     continue
+            scenario_jsons.append(path.join(scenario_dir, f))
 
     total_scenarios = len(scenario_jsons)
     completed_scenarios = 0
 
     try:
-        with ThreadPoolExecutor(max_workers=12) as executor:
+        with ThreadPoolExecutor(max_workers=16) as executor:
             futures = [
                 executor.submit(run_scenario, scenario_json_path, deepcopy(config), scen, total_scenarios)
                 for scen, scenario_json_path in enumerate(scenario_jsons, start=1)

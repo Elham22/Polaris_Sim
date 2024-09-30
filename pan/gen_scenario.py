@@ -271,10 +271,19 @@ def main():
         flow_numbers = [args.number_of_flows]
 
     iterations = range(args.iterations)
-
     sc_cnt = 0
 
+    # Uncomment to generate cartesian product of different parameters
+    # flow_numbers = [24]
+    # margins = [1.2, 1.5, 2.0, 2.5, 3, 3.5] # 6
+    # min_intervals = [1, 2, 3, 5, 8, 10, 12, 15, 20] # 6
+    # min_candidacies = [0, 1, 2, 3, 4, 5] # 6
+
+    # for num_flows, iteration, margin, min_interval in itertools.product(
+    #         flow_numbers, iterations, margins, min_intervals):
+
     for num_flows, iteration in itertools.product(flow_numbers, iterations):
+
         flows = flow_generate(num_flows, time_span=args.time_slots,
                               node_num=4, seed=str(iteration), hybrid=args.hybrid, diverse=args.all_to_all)
 
@@ -287,6 +296,10 @@ def main():
 
         if args.path_change_margin:
             settings["path_change_margin"] = args.path_change_margin
+
+        # Uncomment these as well when testing the cartesian product of parameters
+        # settings["path_change_min_interval"] = min_interval
+        # settings["path_change_margin"] = margin
 
         if args.ciao or args.all_types:
             create_scenario(flows, startup_phase_end_seconds, settings, ScenarioType.Ciao, output_path=output_path_template)
