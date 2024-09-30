@@ -11,9 +11,10 @@ import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
-from config import (DEFAULT_FLOW_NUMBERS, DEFAULT_SCENARIO_TYPES,
-                    STARTUP_PHASE_SECONDS, DATARATE_UNIT, DATARATE_UNIT_FACTOR)
+from config import (DATARATE_UNIT, DATARATE_UNIT_FACTOR, DEFAULT_FLOW_NUMBERS,
+                    DEFAULT_SCENARIO_TYPES, STARTUP_PHASE_SECONDS)
 from matplotlib import gridspec
+from matplotlib.colors import rgb_to_hsv
 
 
 def parse_args():
@@ -35,6 +36,8 @@ def parse_args():
                         help="Plot the number of active flows")
     parser.add_argument("--boxplot", action="store_true",
                         help="Plot the loss/latency/VMAF score as a boxplot")
+    parser.add_argument("--heatmap", action="store_true",
+                        help="Plot heatmaps")
     parser.add_argument("--latex", action="store_true",
                         help="Output the plot in LaTeX format")
     parser.add_argument("--avg", type=int, default=1,
@@ -517,9 +520,9 @@ def process_multi_scenario(scenarios: list[dict]):
         if 'min_shares' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['min_shares'] = []
         min_share = float('inf')
-        for slot, results in scenario['time_slots'].items():
-            if results['mean_sendrate'] < min_share:
-                min_share = results['mean_sendrate']
+        for _, slot in scenario['time_slots'].items():
+            if slot['min_sendrate'] < min_share:
+                min_share = slot['min_sendrate']
         global_results[flow_type][num_flows]['min_shares'].append(min_share)
 
         # # Lists containing loss/latency piled up over all flows AND all iterations
@@ -577,7 +580,7 @@ def process_multi_scenario(scenarios: list[dict]):
             global_results[flow_type][num_flows]['vmaf_scores'] = []
         lats_avg = []
         lats_stddev = []
-        jitters = [] # Stddev of deltas between consecutive latencies
+        jitters = []  # Stddev of deltas between consecutive latencies
         avg_bws = []
         vmaf_scores = []
         for app in target_apps:
@@ -592,7 +595,6 @@ def process_multi_scenario(scenarios: list[dict]):
         global_results[flow_type][num_flows]['avg_bws'].extend(avg_bws)
         global_results[flow_type][num_flows]['vmaf_scores'].extend(vmaf_scores)
 
-
         if 'total_bytes_received' not in global_results[flow_type][num_flows]:
             global_results[flow_type][num_flows]['total_bytes_received'] = []
         # List of total bytes received for each flow
@@ -606,63 +608,10 @@ def process_multi_scenario(scenarios: list[dict]):
     return global_results
 
 
-def compute_vmaf_score(latency: float, jitter: float, loss: float, sendrate: float):
-    """
-    Compute the VMAF score based on the given QoE metrics
-
-    Parameters:
-    - latency: Latency value in ms
-    - jitter: Jitter value in ms
-    - loss: Packet loss percentage
-    - sendrate: Bandwidth in DATARATE_UNIT
-
-    Returns:
-    - vmaf_score: Computed VMAF score
-    """
-
-    """
-    VMAF (0-100) scores for loss (in %) with 50% correlation, Threema low bandwidth profile:
-    0%: 59.83, 10%: 57.96, 15%: 57.53, 20%: 58.53, 30%: 53.55, 35%: 6.82, 40%: 6.13
-
-    VMAF scores (0-100) for varying levels of uncorrelated, normally distributed jitter (in ms) with 150 ms added network latency under the Threema high bandwidth profile:
-    0ms: 68.34, 5ms: 64.91, 10ms: 62.58, 15ms: 46.91, 20ms: 32.78, 30ms: 5.545542
-
-    VMAF scores (0-100) for bandwidth in Mbps, with Threema Balanced Setting defaulting to the Low Bandwidth Profile in a Cellular Network:
-    0.2Mbps: 16.76, 0.3Mbps: 37.07, 0.5Mbps: 48.75, 1Mbps: 58.49, 2Mbps: 59.30, 3Mbps: 59.51
-    """
-    
-    # Convert sendrate to Mbps
-    if DATARATE_UNIT == 'Mbps':
-        Mbps = sendrate
-    elif DATARATE_UNIT == 'MB/s':
-        Mbps = sendrate * 8
-    else:
-        raise ValueError(f"Unknown DATARATE_UNIT: {DATARATE_UNIT}")
-
-    loss_values = [0, 10, 15, 20, 30, 35, 40]
-    loss_scores = [59.83, 57.96, 57.53, 58.53, 53.55, 6.82, 6.13]
-
-    jitter_values = [0, 5, 10, 15, 20, 30]
-    jitter_scores = [68.34, 64.91, 62.58, 46.91, 32.78, 5.545542]
-
-    bandwidth_values = [0.2, 0.3, 0.5, 1, 2, 3]
-    bandwidth_scores = [16.76, 37.07, 48.75, 58.49, 59.30, 59.51]
-
-
-    # To scale the bandwidth_values
-    # bandwidth_values = [x * 4 for x in bandwidth_values]
-
-    # Interpolate
-    loss_score = np.interp(loss, loss_values, loss_scores)
-    jitter_score = np.interp(jitter, jitter_values, jitter_scores)
-    bandwidth_score = np.interp(Mbps, bandwidth_values, bandwidth_scores)
-
-    vmaf_score = np.mean([loss_score, jitter_score, bandwidth_score])
-
-    return vmaf_score
-
-
 def plot_multi_scenario(global_results: dict) -> None:
+    """
+    Plot the results of multiple scenarios in a single plot for the final evaluation
+    """
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Create a mapping from original x values to evenly spaced integers
@@ -673,7 +622,7 @@ def plot_multi_scenario(global_results: dict) -> None:
     markers = itertools.cycle(['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h'])
     colors = itertools.cycle(plt.cm.tab10(np.linspace(0, 1, len(global_results))))
 
-    ax.set_xlabel("# of Flows", fontsize=14)
+    ax.set_xlabel("# of Flows")
 
     # Calculate dodge positions to avoid overlap of the boxes
     dodge_width = 0.9
@@ -681,6 +630,23 @@ def plot_multi_scenario(global_results: dict) -> None:
 
     # Use the highest number of flows for the boxplots
     num_flows_for_boxplot = len(all_flow_nums) - 1
+
+    if args.vmaf:
+        for flow_type, flow_results in global_results.items():
+            for num_flows, results in flow_results.items():
+                print(f"{flow_type} with {num_flows} flows:")
+                print(f"  Latency:   Mean: {np.mean(results['latencies_mean']):>8.4f}, Min: {min(results['latencies_mean']):>8.4f}, Max: {
+                      max(results['latencies_mean']):>8.4f}, Median: {np.median(results['latencies_mean']):>8.4f}")
+                print(f"  LatStdDev: Mean: {np.mean(results['latencies_stddev']):>8.4f}, Min: {min(results['latencies_stddev']):>8.4f}, Max: {
+                      max(results['latencies_stddev']):>8.4f}, Median: {np.median(results['latencies_stddev']):>8.4f}")
+                print(f"  Jitter:    Mean: {np.mean(results['jitters']):>8.4f}, Min: {min(results['jitters']):>8.4f}, Max: {
+                      max(results['jitters']):>8.4f}, Median: {np.median(results['jitters']):>8.4f}")
+                print(f"  Loss:      Mean: {np.mean(results['total_loss_percentages']):>8.4f}, Min: {min(results['total_loss_percentages']):>8.4f}, Max: {
+                      max(results['total_loss_percentages']):>8.4f}, Median: {np.median(results['total_loss_percentages']):>8.4f}")
+                print(f"  Mbps:      Mean: {np.mean(results['avg_bandwidths']):>8.4f}, Min: {min(results['avg_bandwidths']):>8.4f}, Max: {
+                      max(results['avg_bandwidths']):>8.4f}, Median: {np.median(results['avg_bandwidths']):>8.4f}")
+                print(f"  VMAF:      Mean: {np.mean(results['vmaf_scores']):>8.4f}, Min: {min(results['vmaf_scores']):>8.4f}, Max: {
+                      max(results['vmaf_scores']):>8.4f}, Median: {np.median(results['vmaf_scores']):>8.4f}")
 
     # Boxplot for loss, latency or VMAF score
     if args.boxplot:
@@ -695,7 +661,7 @@ def plot_multi_scenario(global_results: dict) -> None:
         else:  # args.vmaf
             label = "VMAF Score"
 
-        ax.set_ylabel(label, fontsize=14)
+        ax.set_ylabel(label)
 
         for i, (flow_type, color, marker) in enumerate(zip(flow_types, colors, markers)):
             num_flows = sorted(global_results[flow_type].keys())
@@ -735,7 +701,7 @@ def plot_multi_scenario(global_results: dict) -> None:
             label = "VMAF Score"
         else:
             label = f"Cum Avg Bandwidth ({DATARATE_UNIT})"
-        ax.set_ylabel(label, fontsize=14)
+        ax.set_ylabel(label)
 
         for i, ((flow_type, color, marker), flow_results) in enumerate(zip(zip(global_results.keys(), colors, markers), global_results.values())):
             num_flows = sorted(flow_results.keys())
@@ -754,7 +720,7 @@ def plot_multi_scenario(global_results: dict) -> None:
                 key = 'total_loss_percentages'
             else:
                 key = 'cumulative_avg_bandwidths'
-            
+
             mean = [np.mean(flow_results[n][key]) for n in num_flows]
             ci = [1.96 * np.std(flow_results[n][key], ddof=1) / np.sqrt(len(flow_results[n][key])) for n in num_flows]
 
@@ -778,6 +744,258 @@ def plot_multi_scenario(global_results: dict) -> None:
     plt.tight_layout()  # Adjust the layout to make room for the legend
 
     plt.show()
+
+
+def plot_parameter_comparison(global_results: dict) -> None:
+    """
+    Plot the results for a multi-scenario that compares different margin and min_interval parameters choices
+    The heatmap is the one that's ultimately used in the thesis.
+    """
+    keys = ['latencies_mean', 'total_loss_percentages', 'avg_bandwidths', 'vmaf_scores']
+    ylabels = {'latencies_mean': 'Avg Latency (ms)', 'total_loss_percentages': 'Avg Loss (%)', 'avg_bandwidths': 'Avg Bandwidth (Mbps)',
+               'vmaf_scores': 'Avg VMAF Score', 'jitters': 'Jitter (ms)'}
+    reverse_colors = {'latencies_mean', 'total_loss_percentages', 'jitters'}
+
+    data = {key: {'margin': {}, 'interval': {}} for key in keys}
+
+    for flow_type, flow_results in global_results.items():
+        margin = float(flow_type.split()[1])
+        min_interval = int(flow_type.split()[2])
+
+        for _, results in flow_results.items():
+            for key in keys:
+                data[key]['margin'][margin] = data[key]['margin'].get(margin, [])
+                data[key]['margin'][margin].append(np.mean(results[key]))
+
+                data[key]['interval'][min_interval] = data[key]['interval'].get(min_interval, [])
+                data[key]['interval'][min_interval].append(np.mean(results[key]))
+
+    if args.heatmap:
+        fig, axes = plt.subplots(2, 2, figsize=(8, 10))
+
+        for idx, key in enumerate(keys):
+            margins = sorted(data[key]['margin'].keys())
+            intervals = sorted(data[key]['interval'].keys())
+            heatmap_data = np.zeros((len(margins), len(intervals)))
+
+            for i, margin in enumerate(margins):
+                for j, interval in enumerate(intervals):
+                    margin_data = data[key]['margin'][margin]
+                    interval_data = data[key]['interval'][interval]
+                    combined_data = [val for val in margin_data if val in interval_data]
+                    heatmap_data[i, j] = np.mean(combined_data) if combined_data else 0
+
+            # Clip the data to the 25th and 75th percentiles
+            vmin, vmax = np.percentile(heatmap_data, [25, 75])
+
+            # Transpose the heatmap data to swap x and y axes
+            heatmap_data = heatmap_data.T
+
+            # Options: Greens, summer, RdYlGn, RdYlBu, YlGn, coolwarm, viridis, plasma, inferno, magma, BuGn
+            cmap = 'YlGn'
+
+            if key in reverse_colors:
+                cmap = cmap + '_r'
+
+            ax = axes[idx // 2, idx % 2]
+            im = ax.imshow(heatmap_data, cmap=cmap, vmin=vmin, vmax=vmax, aspect='auto')
+
+            ax.set_xticks(np.arange(len(margins)))
+            ax.set_yticks(np.arange(len(intervals)))
+            ax.set_xticklabels(margins)
+            ax.set_yticklabels(intervals)
+            ax.invert_yaxis()
+
+            if idx % 2 == 0:
+                ax.set_ylabel('Minimum Interval')
+
+            if idx < 2:
+                ax.xaxis.set_ticks_position('bottom')
+                ax.set_xlabel('Path Change Margin')
+            else:
+                ax.xaxis.set_ticks_position('top')
+
+            for i in range(len(intervals)):
+                for j in range(len(margins)):
+                    value = heatmap_data[i, j]
+                    color = im.cmap(im.norm(value))
+                    luminance = rgb_to_hsv(color[:3])[2]
+                    text_color = 'white' if luminance < 0.6 else 'black'
+                    text = ax.text(j, i, round(value, 2), ha='center', va='center', color=text_color)
+
+            if idx < 2:
+                ax.set_title(ylabels[key], loc='center')
+            else:
+                ax.set_title(ylabels[key], loc='center', y=-0.08)
+
+        fig.tight_layout()
+        plt.show()
+
+    elif args.latex:
+        latex_code = "\\begin{figure}[h!]\n\\centering\n"
+
+        def add_plot_section(latex_code, key, data_key, sorted_values, axis_type, axis_coords):
+            latex_code += "\\begin{tikzpicture} [scale=0.8]\n"
+            latex_code += "\\begin{axis}[\n"
+
+            x = axis_coords[0]
+            y = axis_coords[1]
+            if x == 0:
+                title = "Path Change Margin" if data_key == 'margin' else "Minimum Interval"
+            else:
+                title = ""
+            ylabel = ylabels[key]
+            latex_code += f"title={title},\n"
+            latex_code += f"xlabel=\\empty,\n"
+            latex_code += f"ylabel={ylabel},\n"
+            latex_code += "boxplot/draw direction=y,\n"
+
+            if args.boxplot:
+                latex_code += "xtick={"
+                latex_code += ",".join(str(i) for i in range(1, len(sorted_values) + 1))
+                latex_code += "},\n"
+
+            latex_code += "xticklabels={"
+            latex_code += ",".join([str(val) for val in sorted_values])
+            latex_code += "},\n"
+
+            latex_code += f"name=x{x}y{y},\n"
+
+            if y > 0:
+                latex_code += f"at={{(x{x}y{y-1}.east)}},\n"
+            elif x > 0:
+                latex_code += f"at={{(x{x-1}y{y}.south)}},\n"
+
+            latex_code += "]\n"
+
+            if args.boxplot:
+
+                # https://en.wikipedia.org/wiki/Box_plot#Whiskers
+                # iqr = upper_quartile - lower_quartile
+                # upper_whisker = data[data <= upper_quartile + 1.5 * iqr].max()
+                # lower_whisker = data[data >= lower_quartile - 1.5 * iqr].min()
+
+                for val in sorted_values:
+                    latex_code += "\\addplot+[\nboxplot prepared={\n"
+                    array = np.array(data[key][data_key][val])
+                    upper_quartile = np.percentile(array, 75)
+                    lower_quartile = np.percentile(array, 25)
+                    iqr = upper_quartile - lower_quartile
+                    upper_whisker = array[array <= upper_quartile + 1.5 * iqr].max()
+                    lower_whisker = array[array >= lower_quartile - 1.5 * iqr].min()
+
+                    # latex_code += f"lower whisker={np.min(data[key][data_key][val])},\n"
+                    latex_code += f"lower whisker={lower_whisker},\n"
+                    latex_code += f"lower quartile={lower_quartile},\n"
+                    latex_code += f"median={np.median(array)},\n"
+                    latex_code += f"upper quartile={upper_quartile},\n"
+                    # latex_code += f"upper whisker={np.max(data[key][data_key][val])}\n"
+                    latex_code += f"upper whisker={upper_whisker},\n"
+                    latex_code += "},] coordinates {};\n"
+            else:
+                latex_code += "\\addplot+[\nerror bars/.cd,\n"
+                latex_code += "y dir=both,\ny explicit\n]\n"
+                latex_code += "coordinates {\n"
+                for val in sorted_values:
+                    mean = np.mean(data[key][data_key][val])
+                    error = 1.96 * np.std(data[key][data_key][val], ddof=1) / np.sqrt(len(data[key][data_key][val]))
+                    latex_code += f"({val},{mean}) +- (0,{error})\n"
+                latex_code += "};\n"
+            latex_code += "\\end{axis}\n\\end{tikzpicture}\n"
+            return latex_code
+
+        for i, key in enumerate(keys):
+            sorted_margins = sorted(data[key]['margin'].keys())
+            latex_code = add_plot_section(latex_code, key, 'margin', sorted_margins, 'Margin', (i, 0))
+
+            sorted_intervals = sorted(data[key]['interval'].keys())
+            latex_code = add_plot_section(latex_code, key, 'interval', sorted_intervals, 'Interval', (i, 1))
+
+        latex_code += "\\end{figure}"
+
+        print(latex_code)
+
+    else:  # Errbars
+        fig, axes = plt.subplots(len(keys), 2, figsize=(10, 5 * len(keys)))
+
+        for i, key in enumerate(keys):
+            # Plot margin
+            sorted_margins = sorted(data[key]['margin'].keys())
+            if args.boxplot:
+                axes[i, 0].boxplot([data[key]['margin'][m] for m in sorted_margins], positions=sorted_margins)
+            else:
+                axes[i, 0].errorbar(sorted_margins, [np.mean(data[key]['margin'][m]) for m in sorted_margins], yerr=[
+                                    1.96 * np.std(data[key]['margin'][m], ddof=1) / np.sqrt(len(data[key]['margin'][m])) for m in sorted_margins])
+            axes[i, 0].set_ylabel(key)
+            axes[i, 0].set_xlabel('Margin')
+
+            # Plot interval
+            sorted_intervals = sorted(data[key]['interval'].keys())
+            if args.boxplot:
+                axes[i, 1].boxplot([data[key]['interval'][intv] for intv in sorted_intervals], positions=sorted_intervals)
+            else:
+                axes[i, 1].errorbar(sorted_intervals, [np.mean(data[key]['interval'][intv]) for intv in sorted_intervals], yerr=[
+                                    1.96 * np.std(data[key]['interval'][intv], ddof=1) / np.sqrt(len(data[key]['interval'][intv])) for intv in sorted_intervals])
+            axes[i, 1].set_ylabel(key)
+            axes[i, 1].set_xlabel('Interval')
+
+        plt.tight_layout()
+        plt.show()
+
+
+def compute_vmaf_score(latency: float, jitter: float, loss: float, sendrate: float):
+    """
+    Compute the VMAF score based on the given QoE metrics
+
+    Parameters:
+    - latency: Latency value in ms
+    - jitter: Jitter value in ms
+    - loss: Packet loss percentage
+    - sendrate: Bandwidth in DATARATE_UNIT
+
+    Returns:
+    - vmaf_score: Computed VMAF score
+    """
+
+    """
+    VMAF (0-100) scores for loss (in %) with 50% correlation, Threema low bandwidth profile:
+    0%: 59.83, 10%: 57.96, 15%: 57.53, 20%: 58.53, 30%: 53.55, 35%: 6.82, 40%: 6.13
+
+    VMAF scores (0-100) for varying levels of uncorrelated, normally distributed jitter (in ms) with 150 ms added network latency under the Threema high bandwidth profile:
+    0ms: 68.34, 5ms: 64.91, 10ms: 62.58, 15ms: 46.91, 20ms: 32.78, 30ms: 5.545542
+
+    VMAF scores (0-100) for bandwidth in Mbps, with Threema Balanced Setting defaulting to the Low Bandwidth Profile in a Cellular Network:
+    0.2Mbps: 16.76, 0.3Mbps: 37.07, 0.5Mbps: 48.75, 1Mbps: 58.49, 2Mbps: 59.30, 3Mbps: 59.51
+    """
+
+    # Convert sendrate to Mbps
+    if DATARATE_UNIT == 'Mbps':
+        Mbps = sendrate
+    elif DATARATE_UNIT == 'MB/s':
+        Mbps = sendrate * 8
+    else:
+        raise ValueError(f"Unknown DATARATE_UNIT: {DATARATE_UNIT}")
+
+    loss_values = [0, 10, 15, 20, 30, 35, 40]
+    loss_scores = [59.83, 57.96, 57.53, 58.53, 53.55, 6.82, 6.13]
+
+    jitter_values = [0, 5, 10, 15, 20, 30]
+    jitter_scores = [68.34, 64.91, 62.58, 46.91, 32.78, 5.545542]
+
+    bandwidth_values = [0.2, 0.3, 0.5, 1, 2, 3]
+    bandwidth_scores = [16.76, 37.07, 48.75, 58.49, 59.30, 59.51]
+
+    # To scale the bandwidth_values
+    # bandwidth_values = [x * 4 for x in bandwidth_values]
+
+    # Interpolate
+    loss_score = np.interp(loss, loss_values, loss_scores)
+    jitter_score = np.interp(jitter, jitter_values, jitter_scores)
+    bandwidth_score = np.interp(Mbps, bandwidth_values, bandwidth_scores)
+
+    vmaf_score = np.mean([loss_score, jitter_score, bandwidth_score])
+
+    return vmaf_score
 
 
 def parse_simulation_results(file, inputs: dict) -> dict:
@@ -957,6 +1175,7 @@ def parse_simulation_results(file, inputs: dict) -> dict:
             for slot, results in time_slots.items():
                 time_slots[slot]['median_sendrate'] = np.median(results['sendrate'])
                 time_slots[slot]['mean_sendrate'] = np.mean(results['sendrate'])
+                time_slots[slot]['min_sendrate'] = np.min(results['sendrate'])
     else:
         print("Some processing skipped due to missing inputs file")
 
@@ -1043,6 +1262,8 @@ def main():
             print(f"Loading pre-processed results from cache {cache_filepath}")
             with open(cache_filepath, 'rb') as f:
                 global_results = pickle.load(f)
+        
+        # plot_parameter_comparison(global_results)
         plot_multi_scenario(global_results)
 
     print("Done. Exiting.")
