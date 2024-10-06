@@ -33,17 +33,12 @@
 
 namespace ns3 {
 
-enum class PathChangeStrategy {
-  IMMEDIATE, // instantly switch, with hint to congestion controller
-  TRANSITION // enter transition phase where manual ramp up the rate
-};
-
 enum class PathTransitionStrategy { LINEAR, SIGMOID, CUBIC };
 
 /**
  * Application with WebRTC congestion control and smart path selection
 */
-class CiaoApp : public App
+class PolarisSender : public App
 {
 protected:
   // App config
@@ -52,7 +47,6 @@ protected:
   bool cfgDelayBwe = true;
   bool cfgPathSwitching = true;
 
-  PathChangeStrategy path_change_strategy = PathChangeStrategy::TRANSITION;
   PathTransitionStrategy path_transition_strategy = PathTransitionStrategy::SIGMOID;
 
   // How much better a path must be before we consider switching to it
@@ -72,7 +66,7 @@ protected:
   const Time path_alive_treshold = Seconds (5);
 
   // Time after which we consider a C-CA stale
-  Time ciao_congestion_alert_timeout = Seconds (5);
+  Time congestion_alert_timeout = Seconds (5);
 
   // Wait at most this long before initiating data transfer
   int32_t initial_probe_wait_ms = 250;
@@ -126,7 +120,7 @@ protected:
   bool WaitForInitialProbes ();
 
 public:
-  CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
+  PolarisSender (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
            host_addr_t app_dst_host_addr, std::vector<std::vector<const PathSegment *>> all_paths,
            uint32_t runtime_config);
 

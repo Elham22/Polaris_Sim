@@ -147,7 +147,7 @@ BorderRouter::ProcessReceivedPacket (uint16_t if_rcv, ScionPacket *packet, Time 
   // Update probe packets that pass through
   if (packet->payload_type == PayloadType::SCMP && std::get<Scmp> (packet->payload).type == PROBE)
     {
-      UpdateCiaoProbe (packet, local_if_to_send);
+      UpdatePolarisProbe (packet, local_if_to_send);
     }
 
   // // NOTE: Quick and dirty way demonstrate bandwidth squeezing using congestion alerts
@@ -164,7 +164,7 @@ BorderRouter::ProcessReceivedPacket (uint16_t if_rcv, ScionPacket *packet, Time 
 }
 
 void
-BorderRouter::UpdateCiaoProbe (ScionPacket *packet, uint16_t local_if)
+BorderRouter::UpdatePolarisProbe (ScionPacket *packet, uint16_t local_if)
 {
   Scmp &scmp = std::get<Scmp> (packet->payload);
   BottleneckProbe &probe = std::get<BottleneckProbe> (scmp.data);

@@ -18,7 +18,7 @@
  * Author: Patrick Wicki <patrick.wicki@inf.ethz.ch>
  */
 
-#include "ciao.h"
+#include "polaris.h"
 
 #include "api/environment/environment_factory.h"
 #include "api/transport/goog_cc_factory.h"
@@ -26,7 +26,7 @@
 namespace ns3 {
 
 void
-CiaoApp::Log (std::string msg, bool with_prefix)
+PolarisSender::Log (std::string msg, bool with_prefix)
 {
   if (!cfgLogging)
     {
@@ -42,7 +42,7 @@ CiaoApp::Log (std::string msg, bool with_prefix)
   std::cout << prefix << msg << std::endl;
 }
 
-CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
+PolarisSender::PolarisSender (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_ia,
                   host_addr_t app_dst_host_addr,
                   std::vector<std::vector<const PathSegment *>> all_paths, uint32_t runtime_config)
     : App (host, app_id, ia_addr, app_dst_ia, app_dst_host_addr, all_paths, runtime_config)
@@ -104,7 +104,7 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
   active_path =
       inputs.contains ("start_path") ? inputs["start_path"].get<uint32_t> () : active_path;
 
-  std::cout << "CiaoApp " << app_id << " initialized" << std::endl;
+  std::cout << "PolarisSender " << app_id << " initialized" << std::endl;
   std::cout << "  Active path: " << active_path << std::endl;
   std::cout << "  Logging enabled: " << cfgLogging << std::endl;
   std::cout << "  Path switching enabled: " << cfgPathSwitching << std::endl;
@@ -112,13 +112,13 @@ CiaoApp::CiaoApp (ScionHost *host, uint32_t app_id, ia_t ia_addr, ia_t app_dst_i
 }
 
 void
-CiaoApp::StartAppTraffic ()
+PolarisSender::StartAppTraffic ()
 {
   // Send first probes
   SendProbes ();
 
   // Initiate main update loop
-  Simulator::Schedule (update_interval, &CiaoApp::Update, this);
+  Simulator::Schedule (update_interval, &PolarisSender::Update, this);
 
   ScheduleSend ();
 
@@ -129,10 +129,10 @@ CiaoApp::StartAppTraffic ()
   Time sched_rel_time = MilliSeconds (sched_abs_time_ms) - Simulator::Now ();
   std::cout << "Scheduling metrics recording at " << sched_abs_time_ms << " ms" << std::endl;
   std::cout << "Current time: " << Simulator::Now ().GetMilliSeconds () << " ms" << std::endl;
-  Simulator::Schedule (sched_rel_time, &CiaoApp::RecordMetrics, this);
+  Simulator::Schedule (sched_rel_time, &PolarisSender::RecordMetrics, this);
 }
 void
-CiaoApp::Update ()
+PolarisSender::Update ()
 {
   if (stopped)
     {
@@ -140,7 +140,7 @@ CiaoApp::Update ()
     }
 
   // Schedule the next update
-  Simulator::Schedule (update_interval, &CiaoApp::Update, this);
+  Simulator::Schedule (update_interval, &PolarisSender::Update, this);
 
   SendProbes ();
 
@@ -158,8 +158,12 @@ CiaoApp::Update ()
     }
 }
 
+/***
+ * Returns true if we still need to wait for (more) probe results to arrive
+ * and false if data transmission can start.
+ */
 bool
-CiaoApp::WaitForInitialProbes ()
+PolarisSender::WaitForInitialProbes ()
 {
   if (initial_probe_wait_ms <= 0)
     {
@@ -224,7 +228,7 @@ CiaoApp::WaitForInitialProbes ()
 }
 
 void
-CiaoApp::RecordMetrics ()
+PolarisSender::RecordMetrics ()
 {
   if (stopped)
     {
@@ -239,7 +243,7 @@ CiaoApp::RecordMetrics ()
                      " % " + std::to_string (metrics_interval_ms));
 
   // Schedule the next metrics recording
-  Simulator::Schedule (metrics_interval, &CiaoApp::RecordMetrics, this);
+  Simulator::Schedule (metrics_interval, &PolarisSender::RecordMetrics, this);
 
   // Wait until we have received at least one report
   if (!first_report_received)
@@ -271,7 +275,7 @@ CiaoApp::RecordMetrics ()
 }
 
 std::vector<app_path_id_t>
-CiaoApp::FindProbeCandidates ()
+PolarisSender::FindProbeCandidates ()
 {
   std::vector<app_path_id_t> candidates;
   Time probed_last_min = Simulator::Now () - Seconds (1);
@@ -317,7 +321,7 @@ CiaoApp::FindProbeCandidates ()
 }
 
 void
-CiaoApp::SendProbeOnPath (app_path_id_t path_id)
+PolarisSender::SendProbeOnPath (app_path_id_t path_id)
 {
   BottleneckProbe probe;
   probe.interface_id = -1; // Indicates no results contained yet
@@ -345,7 +349,7 @@ CiaoApp::SendProbeOnPath (app_path_id_t path_id)
 }
 
 void
-CiaoApp::SendProbes ()
+PolarisSender::SendProbes ()
 {
   auto candidates = FindProbeCandidates ();
   candidates.push_back (active_path);
@@ -357,7 +361,7 @@ CiaoApp::SendProbes ()
 }
 
 void
-CiaoApp::ReceiveScmp (Scmp scmp)
+PolarisSender::ReceiveScmp (Scmp scmp)
 {
   if (scmp.type == SCMPType::PROBE_ECHO)
     {
@@ -371,7 +375,7 @@ CiaoApp::ReceiveScmp (Scmp scmp)
            std::to_string (alert.interface_id));
 
       // TODO(wickip): Do this for all paths that share this bottleneck
-      path_states[scmp.path_id].last_ciao_congestion_alert = Simulator::Now ();
+      path_states[scmp.path_id].last_congestion_alert = Simulator::Now ();
     }
   else
     {
@@ -380,7 +384,7 @@ CiaoApp::ReceiveScmp (Scmp scmp)
 }
 
 void
-CiaoApp::EndPathTransition ()
+PolarisSender::EndPathTransition ()
 {
   last_path_change = Simulator::Now ();
   in_path_transition = false;
@@ -389,7 +393,7 @@ CiaoApp::EndPathTransition ()
 }
 
 void
-CiaoApp::ScheduleSend ()
+PolarisSender::ScheduleSend ()
 {
   if (stopped)
     {
@@ -461,11 +465,11 @@ CiaoApp::ScheduleSend ()
 
   // Introduce a random offset of up to 1ms when scheduling the next frame
   auto rand_offset = RandomDelay (1000);
-  Simulator::Schedule (frame_interval + rand_offset, &CiaoApp::ScheduleSend, this);
+  Simulator::Schedule (frame_interval + rand_offset, &PolarisSender::ScheduleSend, this);
 }
 
 void
-CiaoApp::SendFrameData (double sendrate, app_path_id_t path)
+PolarisSender::SendFrameData (double sendrate, app_path_id_t path)
 {
   // sendrate / fps == (payload_data + header_overhead) * no_pkts
 
@@ -483,14 +487,14 @@ CiaoApp::SendFrameData (double sendrate, app_path_id_t path)
 
   while (available_bytes > max_payload_bytes)
     {
-      Simulator::Schedule (packet_schedule_delay, &CiaoApp::SendPacket, this, max_payload_bytes,
+      Simulator::Schedule (packet_schedule_delay, &PolarisSender::SendPacket, this, max_payload_bytes,
                            scion_header_bytes, path);
       packet_schedule_delay += packet_interval;
       available_bytes -= max_payload_bytes;
     }
   if (available_bytes > 0)
     {
-      Simulator::Schedule (packet_schedule_delay, &CiaoApp::SendPacket, this, max_payload_bytes,
+      Simulator::Schedule (packet_schedule_delay, &PolarisSender::SendPacket, this, max_payload_bytes,
                            scion_header_bytes, path);
     }
 
@@ -498,7 +502,7 @@ CiaoApp::SendFrameData (double sendrate, app_path_id_t path)
 }
 
 void
-CiaoApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_path_id_t path)
+PolarisSender::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_path_id_t path)
 {
   AppData data{
       .app_id = app_id,
@@ -545,7 +549,7 @@ CiaoApp::SendPacket (double payload_bytes, u_int16_t scion_header_bytes, app_pat
 }
 
 void
-CiaoApp::ReceiveAppResponse (AppResp app_resp)
+PolarisSender::ReceiveAppResponse (AppResp app_resp)
 {
   first_report_received = true;
   auto path_id = app_resp.path_id;
@@ -651,7 +655,7 @@ CiaoApp::ReceiveAppResponse (AppResp app_resp)
 }
 
 void
-CiaoApp::UpdateBWE ()
+PolarisSender::UpdateBWE ()
 {
 
   A_r = delay_based_estimator.GetRate ();
@@ -708,7 +712,7 @@ CiaoApp::UpdateBWE ()
 }
 
 void
-CiaoApp::ReceiveProbeResponse (Scmp scmp, BottleneckProbe probe)
+PolarisSender::ReceiveProbeResponse (Scmp scmp, BottleneckProbe probe)
 {
 
   // Find the corresponding probe
@@ -766,13 +770,13 @@ CiaoApp::ReceiveProbeResponse (Scmp scmp, BottleneckProbe probe)
 }
 
 void
-CiaoApp::UpdatePathCandidates ()
+PolarisSender::UpdatePathCandidates ()
 {
   bool is_active_path_usable =
       path_states[active_path].last_report > Simulator::Now () - path_alive_treshold &&
       path_states[active_path].loss < 0.75 &&
-      path_states[active_path].last_ciao_congestion_alert <
-          Simulator::Now () - ciao_congestion_alert_timeout;
+      path_states[active_path].last_congestion_alert <
+          Simulator::Now () - congestion_alert_timeout;
 
   // Choose as candidates all paths that have a significantly higher
   // bottleneck_share than what is our current send rate. We also include the active
@@ -795,7 +799,7 @@ CiaoApp::UpdatePathCandidates ()
         }
 
       // If we saw a recent C-CA on this path, exclude it from candidacy
-      if (path_m.last_ciao_congestion_alert > Simulator::Now () - ciao_congestion_alert_timeout)
+      if (path_m.last_congestion_alert > Simulator::Now () - congestion_alert_timeout)
         {
           path_m.is_candidate = false;
           Log ("Excluding path switch candidate: " + std::to_string (active_path) + " (from " +
@@ -867,7 +871,7 @@ CiaoApp::UpdatePathCandidates ()
 }
 
 void
-CiaoApp::SwitchToPath (uint32_t new_path)
+PolarisSender::SwitchToPath (uint32_t new_path)
 {
   // // NOTE: Quick hack to demonstrate path switching nicely
   // // Force app 1 to stay on path 1 first the first 31 minutes, and then stick to path 0
@@ -931,23 +935,23 @@ CiaoApp::SwitchToPath (uint32_t new_path)
 
 // Return a WebRTC timestamp with the current simulation time
 webrtc::Timestamp
-CiaoApp::TimestampNow ()
+PolarisSender::TimestampNow ()
 {
   return webrtc::Timestamp::Micros (Simulator::Now ().GetMicroSeconds ());
 }
 
 void
-CiaoApp::StopAppTraffic ()
+PolarisSender::StopAppTraffic ()
 {
   stopped = true;
 }
 
 std::string
-CiaoApp::InfoString ()
+PolarisSender::InfoString ()
 {
   std::string info = "Polaris";
 
-  // Ciao without path switching is basically GCC
+  // Polaris without path switching can be considered just a GCC sender
   if (!cfgPathSwitching)
     {
       info = "GCC";
@@ -957,7 +961,7 @@ CiaoApp::InfoString ()
 }
 
 void
-CiaoApp::PrintResults ()
+PolarisSender::PrintResults ()
 {
   results_json["app_id"] = app_id;
   results_json["app_type"] = InfoString ();
@@ -977,24 +981,24 @@ CiaoApp::PrintResults ()
    * Override to throw error, we don't use probes but keep the existing code
   */
 void
-CiaoApp::ReceiveProbeResponse (ProbeResp probe_resp)
+PolarisSender::ReceiveProbeResponse (ProbeResp probe_resp)
 {
-  NS_FATAL_ERROR ("[ciao] legacy probe response not supported");
+  NS_FATAL_ERROR ("[polaris] legacy probe response not supported");
 }
 
 /**
    * @return a random time between -N and N where N is an integer parameter in ps
    */
 Time
-CiaoApp::RandomDelay (int N)
+PolarisSender::RandomDelay (int N)
 {
   return PicoSeconds (rand () % (2 * N) - N);
 }
 
 void
-CiaoApp::ScheduleControllerProcessInterval (Time &process_interval)
+PolarisSender::ScheduleControllerProcessInterval (Time &process_interval)
 {
-  Simulator::Schedule (process_interval, &CiaoApp::ScheduleControllerProcessInterval, this,
+  Simulator::Schedule (process_interval, &PolarisSender::ScheduleControllerProcessInterval, this,
                        process_interval);
 
   if (!first_report_received)
@@ -1009,7 +1013,7 @@ CiaoApp::ScheduleControllerProcessInterval (Time &process_interval)
 }
 
 void
-CiaoApp::OnNetworkControlUpdate (webrtc::NetworkControlUpdate &update)
+PolarisSender::OnNetworkControlUpdate (webrtc::NetworkControlUpdate &update)
 {
   // Don't use the controller estimate during path transition
   if (in_path_transition)
@@ -1044,7 +1048,7 @@ CiaoApp::OnNetworkControlUpdate (webrtc::NetworkControlUpdate &update)
 }
 
 void
-CiaoApp::ResetController (double target_rate)
+PolarisSender::ResetController (double target_rate)
 {
   webrtc::GoogCcFactoryConfig factory_config;
   factory_config.feedback_only = true;

@@ -29,7 +29,7 @@
 #include "apps/app.h"
 #include "apps/general-traffic-app.h"
 #include "apps/video-conference-app.h"
-#include "apps/ciao.h"
+#include "apps/polaris.h"
 #include "apps/tcp-app.cc"
 
 namespace ns3 {
@@ -465,7 +465,7 @@ ScionHost::StartApplication (std::string app_type, uint32_t app_id, ia_t dst_ia,
         }
       else if (app_type == "rtc")
         {
-          app = new CiaoApp (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
+          app = new PolarisSender (this, app_id, ia_addr, dst_ia, dst_host, all_paths, runtime_config);
         }
       else if (app_type.find ("Tcp") == 0)
         {

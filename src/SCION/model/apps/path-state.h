@@ -48,7 +48,7 @@ struct PathState
   BottleneckProbe last_probe_echo; // last probe response
   Time last_probe_echo_time = Seconds (0);
   bool HasFreshProbeResultsSince (Time t);
-  Time last_ciao_congestion_alert = Seconds (0); // Last time we received a C-CA
+  Time last_congestion_alert = Seconds (0); // Last time we received a C-CA
 
   app_packet_id_t probe_seq_no = 0; // probe packet seq_no
 

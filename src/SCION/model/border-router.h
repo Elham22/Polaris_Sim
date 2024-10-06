@@ -47,7 +47,7 @@ public:
 
 private:
   void ProcessReceivedPacket (uint16_t local_if, ScionPacket *packet, Time receive_time) override;
-  void UpdateCiaoProbe (ScionPacket *packet, uint16_t local_if);
+  void UpdatePolarisProbe (ScionPacket *packet, uint16_t local_if);
 };
 } // namespace ns3
 #endif //SCION_SIMULATOR_BORDER_ROUTER_H
