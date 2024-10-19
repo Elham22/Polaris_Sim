@@ -1,8 +1,9 @@
 # WebRTC
 
-This directory containers some (adapted) copies of headers and sources of the
+This directory containers some copies of headers and sources of the
 WebRTC source code and is thus intended to be used when linking against a static
-build of WebRTC.
+build of WebRTC. `fetch` and `gclient` commands are provided by depot_tools:
+<https://commondatastorage.googleapis.com/chrome-infra-docs/flat/depot_tools/docs/html/depot_tools_tutorial.html#_setting_up>
 
 ## Static build
 

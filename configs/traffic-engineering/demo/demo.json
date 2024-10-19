@@ -1,0 +1,54 @@
+{
+    "applications": [
+        {
+            "app_id": 0,
+            "start_path": 0,
+            "path_switching": true,
+            "traffic_type": "target",
+            "logging": false
+        },
+        {
+            "app_id": 1,
+            "start_path": 0,
+            "path_switching": true,
+            "traffic_type": "target",
+            "logging": false
+        },
+        {
+            "app_id": 2,
+            "start_path": 0,
+            "path_switching": true,
+            "traffic_type": "target",
+            "logging": false
+        },
+        {
+            "app_id": 3,
+            "start_path": 0,
+            "path_switching": true,
+            "traffic_type": "target",
+            "logging": false
+        }
+    ],
+    "events": [
+        {
+        "time": "30min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "0", "1"]
+        },
+        {
+        "time": "30.13min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "1", "1"]
+        },
+        {
+        "time": "30.17min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "2", "1"]
+        },
+        {
+        "time": "30.31min",
+        "type": "start_application",
+        "args": ["0", "0", "2", "0", "1", "2", "rtc", "0.0", "3", "1"]
+        }
+    ]
+}
