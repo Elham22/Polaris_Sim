@@ -1,0 +1,42 @@
+time_resolution: PS
+topology: /cluster/home/tabaeias/scion-simulator/topology/timesync/2000_geo_rel_5pmalas_5.xml
+output: /cluster/scratch/tabaeias/time_sync_5pmalas_5short_results_5.txt
+simulation_duration: 45d
+NUM_CORE: 128
+beacon_service:
+        policy: baseline
+        period: 10min
+        expiration_period: 45d
+        first_beaconing: 0min
+        last_beaconing: 60min
+path_service: True
+border_router:
+        truly_random_malicious: 1
+        percent_of_ASes_with_malicious_br: 5
+        malicious_action: asymmetric_delay
+        delay: 150ms
+time_service:
+        alg_version_printing_instances: V4
+        alg_version_non_printing_instances: V4
+        max_initial_drift: 0ms
+        max_drift_per_day: 27us
+        jitter_in_drift: 0
+        max_drift_coefficient: 1
+        global_cut_off: 1ms
+        first_event: 60min
+        last_event: 45d
+        snapshot_period: 12h
+        snapshot_type: LOCAL_SNAPSHOT
+        list_of_ases_req_period: 45d
+        time_sync_period: 1h
+        G: 24
+        number_of_paths_to_use_for_global_sync: 5
+        path_selection: short
+        time_service_output_path: /cluster/scratch/tabaeias/
+        read_disjoint_paths: NO_R_NO_W
+        reference_clk: ON
+        percent_of_malicious_time_references: 0
+        percent_of_malicious_time_servers: 0
+        truly_random_malicious: 0
+        malcious_response_minimum_offset: 0s
+

@@ -1,0 +1,643 @@
+<?xml version="1.0"?>
+<topology>
+  <property name="name" type="string">scionlab_core_topology</property>
+  <property name="type" type="string">scionlab_topology</property>
+  <property name="capacity_unit" type="string">Units</property>
+  <node id="5633" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4609" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="5121" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4100" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4102" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4103" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4098" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4099" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4101" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4097" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4360" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4353" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="5377" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4875" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4866" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="4865" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="8194" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="8195" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="8196" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="8193" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <node id="6402" id.type="int">
+    <property name="type" type="str">core</property>
+    <property name="latency_coef" type="float">0</property>
+    <property name="bandwidth_coef" type="float">0</property>
+    <property name="AS_level_diversity_coef" type="float">0</property>
+    <property name="link_level_diversity_coef" type="float">0</property>
+  </node>
+  <link>
+    <from type="int">4097</from>
+    <to type="int">4098</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">5</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4098</from>
+    <to type="int">4099</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">5</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4097</from>
+    <to type="int">4100</to>
+    <from_if_id type="int">5</from_if_id>
+    <to_if_id type="int">3</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4099</from>
+    <to type="int">4100</to>
+    <from_if_id type="int">2</from_if_id>
+    <to_if_id type="int">4</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4099</from>
+    <to type="int">4101</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">4</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4100</from>
+    <to type="int">4101</to>
+    <from_if_id type="int">2</from_if_id>
+    <to_if_id type="int">5</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4101</from>
+    <to type="int">4102</to>
+    <from_if_id type="int">2</from_if_id>
+    <to_if_id type="int">7</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4101</from>
+    <to type="int">4103</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">3</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4097</from>
+    <to type="int">4353</to>
+    <from_if_id type="int">1</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4098</from>
+    <to type="int">4353</to>
+    <from_if_id type="int">1</from_if_id>
+    <to_if_id type="int">2</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4353</from>
+    <to type="int">4360</to>
+    <from_if_id type="int">7</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4353</from>
+    <to type="int">4360</to>
+    <from_if_id type="int">8</from_if_id>
+    <to_if_id type="int">2</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4099</from>
+    <to type="int">4609</to>
+    <from_if_id type="int">1</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4100</from>
+    <to type="int">4609</to>
+    <from_if_id type="int">1</from_if_id>
+    <to_if_id type="int">2</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4353</from>
+    <to type="int">4609</to>
+    <from_if_id type="int">5</from_if_id>
+    <to_if_id type="int">4</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4097</from>
+    <to type="int">4865</to>
+    <from_if_id type="int">2</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4098</from>
+    <to type="int">4865</to>
+    <from_if_id type="int">2</from_if_id>
+    <to_if_id type="int">2</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4609</from>
+    <to type="int">4865</to>
+    <from_if_id type="int">5</from_if_id>
+    <to_if_id type="int">3</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4353</from>
+    <to type="int">4865</to>
+    <from_if_id type="int">6</from_if_id>
+    <to_if_id type="int">4</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4102</from>
+    <to type="int">5121</to>
+    <from_if_id type="int">1</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4353</from>
+    <to type="int">5121</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">2</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4609</from>
+    <to type="int">5121</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">5</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4102</from>
+    <to type="int">5377</to>
+    <from_if_id type="int">2</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">5121</from>
+    <to type="int">5377</to>
+    <from_if_id type="int">4</from_if_id>
+    <to_if_id type="int">3</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4102</from>
+    <to type="int">5633</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">5377</from>
+    <to type="int">5633</to>
+    <from_if_id type="int">2</from_if_id>
+    <to_if_id type="int">3</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4103</from>
+    <to type="int">6402</to>
+    <from_if_id type="int">6</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">6402</from>
+    <to type="int">5121</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">8</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">6402</from>
+    <to type="int">5633</to>
+    <from_if_id type="int">4</from_if_id>
+    <to_if_id type="int">4</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4100</from>
+    <to type="int">4102</to>
+    <from_if_id type="int">5</from_if_id>
+    <to_if_id type="int">8</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4099</from>
+    <to type="int">4102</to>
+    <from_if_id type="int">4</from_if_id>
+    <to_if_id type="int">9</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4100</from>
+    <to type="int">4098</to>
+    <from_if_id type="int">6</from_if_id>
+    <to_if_id type="int">4</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4098</from>
+    <to type="int">4103</to>
+    <from_if_id type="int">6</from_if_id>
+    <to_if_id type="int">5</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4097</from>
+    <to type="int">4103</to>
+    <from_if_id type="int">4</from_if_id>
+    <to_if_id type="int">2</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4097</from>
+    <to type="int">4101</to>
+    <from_if_id type="int">6</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4866</from>
+    <to type="int">4875</to>
+    <from_if_id type="int">4</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4875</from>
+    <to type="int">4865</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">9</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4866</from>
+    <to type="int">4875</to>
+    <from_if_id type="int">1</from_if_id>
+    <to_if_id type="int">2</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4866</from>
+    <to type="int">4360</to>
+    <from_if_id type="int">2</from_if_id>
+    <to_if_id type="int">5</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4866</from>
+    <to type="int">4360</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">6</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4865</from>
+    <to type="int">4866</to>
+    <from_if_id type="int">7</from_if_id>
+    <to_if_id type="int">9</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">8195</from>
+    <to type="int">8193</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">8195</from>
+    <to type="int">8193</to>
+    <from_if_id type="int">4</from_if_id>
+    <to_if_id type="int">2</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">5121</from>
+    <to type="int">8193</to>
+    <from_if_id type="int">9</from_if_id>
+    <to_if_id type="int">3</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">8194</from>
+    <to type="int">8196</to>
+    <from_if_id type="int">1</from_if_id>
+    <to_if_id type="int">1</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">8194</from>
+    <to type="int">8196</to>
+    <from_if_id type="int">4</from_if_id>
+    <to_if_id type="int">2</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">8194</from>
+    <to type="int">8193</to>
+    <from_if_id type="int">2</from_if_id>
+    <to_if_id type="int">4</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">8194</from>
+    <to type="int">8193</to>
+    <from_if_id type="int">3</from_if_id>
+    <to_if_id type="int">5</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+  <link>
+    <from type="int">4102</from>
+    <to type="int">4103</to>
+    <from_if_id type="int">5</from_if_id>
+    <to_if_id type="int">4</to_if_id>
+    <property name="rel" type="string">core</property>
+    <property name="capacity" type="int">1000</property>
+    <property name="latitude" type="float">0</property>
+    <property name="longitude" type="float">0</property>
+  </link>
+</topology>

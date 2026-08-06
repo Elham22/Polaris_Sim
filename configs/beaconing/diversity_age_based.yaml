@@ -1,0 +1,16 @@
+time_resolution: NS
+topology: /cluster/home/tabaeias/scion-simulator/topology/500_geo_rel_on_demand_lat_one_group.xml
+output: /cluster/scratch/tabaeias/baseline_results.txt
+simulation_duration: 370min
+NUM_CORE: 128
+beacon_service:
+  policy: diversity_age_based
+  #br_br_energy_file: /cluster/scratch/tabaeias/br_br_energy.txt
+  write_beacons_directory: /cluster/scratch/tabaeias/
+  period: 10min
+  expiration_period: 6h
+  first_beaconing: 0min
+  last_beaconing: 360min
+post_eval:
+  - func: PrintAllDiscoveredPaths
+  - func: PrintNoBeaconsPerInterfacePerDstOrOpt

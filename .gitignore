@@ -1,0 +1,7 @@
+/.idea
+/fnss-ns3/
+/ns3/
+/build/
+/cmake-build-debug/
+/CMakeLists.txt
+/.clang-format

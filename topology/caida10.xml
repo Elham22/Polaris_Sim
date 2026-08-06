@@ -1,0 +1,239 @@
+<topology linkdefault="undirected">
+  <property name="name" type="string" />
+  <property name="type" type="string">caida_as_relationships</property>
+  <node id="6939" id.type="int" />
+  <node id="1103" id.type="int" />
+  <node id="1267" id.type="int" />
+  <node id="3267" id.type="int" />
+  <node id="6661" id.type="int" />
+  <node id="7713" id.type="int" />
+  <node id="8283" id.type="int" />
+  <node id="8426" id.type="int" />
+  <node id="8447" id.type="int" />
+  <node id="8487" id.type="int" />
+  <link>
+    <from type="int">6939</from>
+    <to type="int">1103</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6939</from>
+    <to type="int">1267</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6939</from>
+    <to type="int">3267</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6939</from>
+    <to type="int">6661</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6939</from>
+    <to type="int">7713</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6939</from>
+    <to type="int">8283</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6939</from>
+    <to type="int">8426</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6939</from>
+    <to type="int">8447</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6939</from>
+    <to type="int">8487</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1103</from>
+    <to type="int">1267</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1103</from>
+    <to type="int">3267</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1103</from>
+    <to type="int">6661</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1103</from>
+    <to type="int">7713</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1103</from>
+    <to type="int">8283</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1103</from>
+    <to type="int">8426</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1103</from>
+    <to type="int">8447</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1103</from>
+    <to type="int">8487</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1267</from>
+    <to type="int">3267</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1267</from>
+    <to type="int">6661</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1267</from>
+    <to type="int">7713</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1267</from>
+    <to type="int">8283</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1267</from>
+    <to type="int">8426</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1267</from>
+    <to type="int">8447</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">1267</from>
+    <to type="int">8487</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">3267</from>
+    <to type="int">6661</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">3267</from>
+    <to type="int">7713</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">3267</from>
+    <to type="int">8283</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">3267</from>
+    <to type="int">8426</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">3267</from>
+    <to type="int">8447</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">3267</from>
+    <to type="int">8487</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6661</from>
+    <to type="int">7713</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6661</from>
+    <to type="int">8283</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6661</from>
+    <to type="int">8426</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6661</from>
+    <to type="int">8447</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">6661</from>
+    <to type="int">8487</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">7713</from>
+    <to type="int">8283</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">7713</from>
+    <to type="int">8426</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">7713</from>
+    <to type="int">8447</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">7713</from>
+    <to type="int">8487</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">8283</from>
+    <to type="int">8426</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">8283</from>
+    <to type="int">8447</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">8283</from>
+    <to type="int">8487</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">8426</from>
+    <to type="int">8447</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">8426</from>
+    <to type="int">8487</to>
+    <property name="type" type="string">peer</property>
+  </link>
+  <link>
+    <from type="int">8447</from>
+    <to type="int">8487</to>
+    <property name="type" type="string">peer</property>
+  </link>
+</topology>
